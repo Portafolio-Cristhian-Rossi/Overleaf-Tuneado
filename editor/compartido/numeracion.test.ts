@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leerFixture } from '../pruebas/ayudas/temporales';
 import { analizar } from './analizador';
-import { numerarTitulos } from './numeracion';
+import { numerarObjetos, numerarTitulos, objetoEn } from './numeracion';
 
 // Devuelve [texto del título, número] en orden de aparición.
 function numerar(texto: string, numeroCapitulo: string | null): [string, string | null][] {
@@ -47,5 +47,77 @@ describe('numerarTitulos', () => {
   it('las claves del mapa son el inicio de cada título', () => {
     const elementos = analizar('x\n\\section{A}');
     expect([...numerarTitulos(elementos, '1').keys()]).toEqual([2]);
+  });
+});
+
+describe('numerarObjetos', () => {
+  const objetos = (t: string, cap: string | null) => numerarObjetos(t, analizar(t), cap);
+  const numeros = (t: string, cap: string | null = '2') => objetos(t, cap).map((o) => [o.clase, o.tramos.map((x) => x.numero)]);
+
+  it('cada clase cuenta por separado', () => {
+    const fig = '\\begin{figure}\\caption{x}\\end{figure}';
+    const tab = '\\begin{table}\\caption{x}\\end{table}';
+    const ec = '\\begin{equation}a\\end{equation}';
+    expect(numeros([fig, ec, tab, fig, ec].join('\n'))).toEqual([
+      ['figura', ['2.1']], ['ecuacion', ['2.1']], ['tabla', ['2.1']], ['figura', ['2.2']], ['ecuacion', ['2.2']],
+    ]);
+  });
+
+  it('sin epígrafe no lleva número', () => {
+    expect(numeros('\\begin{figure}\\includegraphics{a}\\end{figure}')).toEqual([['figura', []]]);
+  });
+
+  it('las variantes sin número no cuentan', () => {
+    expect(numeros('\\[a\\] $$b$$ \\begin{equation*}c\\end{equation*} \\begin{align*}d\\end{align*} \\begin{equation}e\\end{equation}'))
+      .toEqual([['ecuacion', []], ['ecuacion', []], ['ecuacion', []], ['ecuacion', []], ['ecuacion', ['2.1']]]);
+  });
+
+  it('la matemática en línea, tabular y el código no son objetos', () => {
+    expect(numeros('$a$ \\(b\\) \\begin{tabular}{l}x\\end{tabular}\n\\begin{lstlisting}\nx\n\\end{lstlisting}')).toEqual([]);
+  });
+
+  it('align numera cada fila, menos las marcadas', () => {
+    expect(numeros('\\begin{align}a &= b \\\\ c &= d \\nonumber \\\\ e &= f\\end{align}')).toEqual([['ecuacion', ['2.1', '2.2']]]);
+    expect(numeros('\\begin{align}a \\notag \\\\ b\\end{align}')).toEqual([['ecuacion', ['2.1']]]);
+  });
+
+  it('un \\\\ dentro de llaves no separa filas de align', () => {
+    expect(numeros('\\begin{align}a &= \\text{uno \\\\ dos} \\\\ b\\end{align}')).toEqual([['ecuacion', ['2.1', '2.2']]]);
+  });
+
+  it('el epígrafe de la tabla no numera a la figura que la rodea', () => {
+    const t = '\\begin{figure}\\includegraphics{a}\\begin{table}\\caption{x}\\end{table}\\end{figure}';
+    expect(numeros(t)).toEqual([['figura', []], ['tabla', ['2.1']]]);
+  });
+
+  it('capítulo sin número: nadie lleva número', () => {
+    expect(numeros('\\begin{equation}a\\end{equation}', null)).toEqual([['ecuacion', []]]);
+  });
+
+  it('los tramos de figura, tabla y equation cubren todo el objeto', () => {
+    const t = 'x \\begin{equation}a\\end{equation} y';
+    expect(objetos(t, '1')).toEqual([{ clase: 'ecuacion', desde: 2, hasta: t.length - 2, tramos: [{ desde: 2, hasta: t.length - 2, numero: '1.1' }] }]);
+  });
+
+  it('objetoEn da la clase y el número del tramo', () => {
+    const t = 'x \\begin{align}a \\label{eq:1} \\\\ b \\label{eq:2}\\end{align} y';
+    const o = objetos(t, 'A');
+    expect(objetoEn(o, t.indexOf('eq:1'))).toEqual({ clase: 'ecuacion', numero: 'A.1' });
+    expect(objetoEn(o, t.indexOf('eq:2'))).toEqual({ clase: 'ecuacion', numero: 'A.2' });
+    expect(objetoEn(o, 0)).toBeNull();
+    expect(objetoEn(o, t.length - 1)).toBeNull();
+  });
+
+  it('objetoEn elige el objeto más interno y da null si no tiene número', () => {
+    const t = '\\begin{figure}\\caption{x}\\begin{equation*}a \\label{e}\\end{equation*}\\end{figure}';
+    expect(objetoEn(objetos(t, '3'), t.indexOf('\\label'))).toEqual({ clase: 'ecuacion', numero: null });
+    expect(objetoEn(objetos(t, '3'), t.indexOf('\\caption'))).toEqual({ clase: 'figura', numero: '3.1' });
+  });
+
+  it('el fixture de bloques', () => {
+    expect(numeros(leerFixture('Bloques.tex'), '7')).toEqual([
+      ['ecuacion', ['7.1']], ['ecuacion', ['7.2']], ['ecuacion', []],
+      ['figura', ['7.1']], ['figura', []], ['tabla', ['7.1']],
+    ]);
   });
 });
