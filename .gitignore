@@ -1,0 +1,7 @@
+informe/
+build/
+node_modules/
+editor/dist/
+editor/config.prueba.json
+editor/.entorno-prueba/
+.superpowers/
