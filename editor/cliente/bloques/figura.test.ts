@@ -36,6 +36,15 @@ describe('figuras', () => {
     }
   });
 
+  it('al verse el código, todos sus comandos se resaltan como comando', () => {
+    const comandos = (t: string, cursor: number) => decos(t, cursor, ctx).filter((x) => x.clase === 'cm-comando').map((x) => t.slice(x.desde, x.hasta));
+    expect(comandos(T, T.indexOf('\\centering'))).toEqual(['\\begin', '\\centering', '\\includegraphics', '\\textwidth', '\\caption', '\\end']);
+    const suelta = 'a\n\\includegraphics{figs/b.png}\nc';
+    expect(comandos(suelta, 5)).toEqual(['\\includegraphics']);
+    const tabla = '\\begin{table}\n\\begin{tabular}{l}\nx\n\\end{tabular}\n\\end{table}\n';
+    expect(comandos(tabla, 0)).toEqual(['\\begin', '\\begin', '\\end', '\\end']);
+  });
+
   it('una selección que sale del epígrafe muestra el código', () => {
     expect(decos(T, EPIGRAFE - 1, ctx).some((x) => x.reemplaza)).toBe(false);
     expect(decos(T, FIN_EPIGRAFE + 1, ctx).some((x) => x.reemplaza)).toBe(false);

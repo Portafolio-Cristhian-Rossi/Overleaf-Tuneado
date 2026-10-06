@@ -1,6 +1,6 @@
 import { StateEffect, StateField, type EditorState, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
-import { analizar, type Rango } from '../compartido/analizador';
+import { analizar, type Elemento, type Rango } from '../compartido/analizador';
 import { numerarObjetos, numerarTitulos } from '../compartido/numeracion';
 import { decorarCodigo, esCodigo } from './bloques/codigo';
 import { decorarEcuaciones, esMatematica } from './bloques/ecuacion';
@@ -15,6 +15,8 @@ const BLOQUES: Decorador[] = [decorarCodigo, decorarEcuaciones, decorarFiguras];
 
 const CLASE_DE_ESTILO = { negrita: 'cm-negrita', cursiva: 'cm-cursiva', mono: 'cm-mono' } as const;
 const COMANDO = /\\[a-zA-Z@]+\*?/g;
+// Elementos cuyo comando, cuando queda a la vista, se muestra como cualquier otro código.
+const SIN_DIBUJO_PROPIO = new Set<Elemento['tipo']>(['preambulo', 'comentario', 'entorno', 'imagen', 'epigrafe']);
 
 // Solo dibuja: el documento sigue siendo el LaTeX literal. Un elemento que la selección
 // toca queda sin reemplazos, para que se vea y se pueda editar su código; sin foco en el
@@ -42,7 +44,7 @@ export function decorar(estado: EditorState, ctx: ContextoVista, conFoco = true)
   const sinComandos: Rango[] = elementos.filter((e) => esCodigo(e) || esMatematica(e));
 
   for (const e of elementos) {
-    if (e.tipo !== 'preambulo' && e.tipo !== 'comentario') reconocidos.add(e.desde);
+    if (!SIN_DIBUJO_PROPIO.has(e.tipo)) reconocidos.add(e.desde);
     switch (e.tipo) {
       case 'titulo': {
         rangos.push(Decoration.line({ class: `cm-titulo-${e.nivel}` }).range(estado.doc.lineAt(e.desde).from));
