@@ -1,0 +1,74 @@
+import { describe, expect, it } from 'vitest';
+import { avisoDeCompilacion, avisoDeEnviar, avisoDeTraer, ubicacionDe } from './mensajes';
+
+describe('avisoDeTraer', () => {
+  it.each([
+    [[], 'Ya estabas al día'],
+    [['Cap4.tex'], 'Se actualizó 1 archivo'],
+    [['Cap4.tex', 'main.tex', 'Cap1.tex'], 'Se actualizaron 3 archivos'],
+  ])('%j → %s', (archivosCambiados, texto) => {
+    expect(avisoDeTraer({ tipo: 'ok', archivosCambiados })).toEqual({ texto, tipo: 'info' });
+  });
+
+  it('el conflicto no genera aviso: lo muestra el bloqueo', () => {
+    expect(avisoDeTraer({ tipo: 'conflicto', archivos: ['Cap4.tex'] })).toBeNull();
+  });
+
+  it('errores de red', () => {
+    expect(avisoDeTraer({ tipo: 'error', motivo: 'autenticacion', mensaje: 'fatal: 403' })).toEqual({
+      tipo: 'error',
+      texto: 'Git no pudo autenticarse con Overleaf. Abrí una terminal en la carpeta informe, ejecutá git pull e ingresá el token.',
+    });
+    expect(avisoDeTraer({ tipo: 'error', motivo: 'sin-conexion', mensaje: 'x' })).toEqual({
+      tipo: 'error',
+      texto: 'No hay conexión con Overleaf. Tus cambios están guardados en esta máquina.',
+    });
+    expect(avisoDeTraer({ tipo: 'error', motivo: 'otro', mensaje: 'fatal: algo raro' })).toEqual({
+      tipo: 'error',
+      texto: 'Overleaf rechazó la operación:\nfatal: algo raro',
+    });
+  });
+});
+
+describe('avisoDeEnviar', () => {
+  it('enviado y sin nada para enviar', () => {
+    expect(avisoDeEnviar({ tipo: 'ok', enviado: true })).toEqual({ texto: 'Cambios enviados a Overleaf', tipo: 'info' });
+    expect(avisoDeEnviar({ tipo: 'ok', enviado: false })).toEqual({ texto: 'No había cambios para enviar', tipo: 'info' });
+  });
+
+  it('rechazo de Overleaf con su mensaje original', () => {
+    expect(avisoDeEnviar({ tipo: 'rechazado', mensaje: 'remote: invalid files' })).toEqual({
+      tipo: 'error', texto: 'Overleaf rechazó la operación:\nremote: invalid files',
+    });
+  });
+
+  it('conflicto y errores de red como en traer', () => {
+    expect(avisoDeEnviar({ tipo: 'conflicto', archivos: ['a.tex'] })).toBeNull();
+    expect(avisoDeEnviar({ tipo: 'error', motivo: 'sin-conexion', mensaje: 'x' })?.texto)
+      .toBe('No hay conexión con Overleaf. Tus cambios están guardados en esta máquina.');
+  });
+});
+
+describe('avisoDeCompilacion', () => {
+  it('sin LaTeX y tiempo vencido', () => {
+    expect(avisoDeCompilacion({ tipo: 'sin-latex' }))
+      .toBe('Para ver el PDF hace falta instalar MiKTeX. Los pasos están en INSTALACION.md.');
+    expect(avisoDeCompilacion({ tipo: 'vencido' }))
+      .toBe('La compilación tardó demasiado y se canceló. Si es la primera vez, MiKTeX puede estar descargando paquetes: probá de nuevo.');
+  });
+
+  it('una compilación que terminó no lleva aviso', () => {
+    expect(avisoDeCompilacion({ tipo: 'ok', problemas: [], pdfActualizado: true })).toBeNull();
+    expect(avisoDeCompilacion({ tipo: 'con-errores', problemas: [], pdfActualizado: false })).toBeNull();
+  });
+});
+
+describe('ubicacionDe', () => {
+  const base = { gravedad: 'error' as const, mensaje: 'm', original: 'o' };
+  it('archivo y línea, solo línea, o nada', () => {
+    expect(ubicacionDe({ ...base, ruta: 'Cap2.tex', linea: 12 })).toBe('Cap2.tex, línea 12');
+    expect(ubicacionDe({ ...base, ruta: 'Cap2.tex', linea: null })).toBe('Cap2.tex');
+    expect(ubicacionDe({ ...base, ruta: null, linea: 8 })).toBe('línea 8');
+    expect(ubicacionDe({ ...base, ruta: null, linea: null })).toBe('');
+  });
+});

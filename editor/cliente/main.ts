@@ -6,8 +6,11 @@ import { crearEditor } from './editor';
 import { titulosDelIndice } from './indice';
 import { extensionMenu } from './menuBarra';
 import { crearBarra } from './pantalla/barra';
+import { crearBloqueoConflicto } from './pantalla/bloqueoConflicto';
 import { el, preguntar } from './pantalla/dom';
 import { crearLateral } from './pantalla/lateral';
+import { crearPanelPdf } from './pantalla/panelPdf';
+import { crearSincronizacion } from './pantalla/sincronizacion';
 import { contextoCambiado, extensionVista } from './vista';
 
 const CLAVE_ULTIMO = 'editor-informe:ultimo-archivo';
@@ -27,6 +30,7 @@ function ultimoRecordado(): string | null {
 let proyecto: Proyecto = { capitulos: [], etiquetas: [], paquetes: [], bibliografia: null };
 let etiquetas = new Map<string, Etiqueta>();
 let principal = 'main.tex';
+let compilarAlGuardar = false;
 
 function tomarProyecto(nuevo: Proyecto): void {
   proyecto = nuevo;
@@ -142,7 +146,11 @@ const editor = crearEditor(porId('editor'), {
     if (estado !== 'guardado') return;
     // Los títulos y etiquetas pueden haber cambiado: se refresca la lista de capítulos.
     clearTimeout(relojProyecto);
-    relojProyecto = setTimeout(() => { void recargarProyecto().catch(() => undefined); }, 500);
+    relojProyecto = setTimeout(() => {
+      void recargarProyecto().catch(() => undefined);
+      void sincronizacion.revisar();
+      if (compilarAlGuardar) void panelPdf.compilar();
+    }, 500);
   },
   alCambiarDocumento: (texto) => actualizarIndice(texto),
   preguntarConflicto: () => preguntar('Este archivo cambió por fuera del editor.', [
@@ -166,6 +174,33 @@ const editor = crearEditor(porId('editor'), {
   },
 });
 
+// Después de traer, cancelar o resolver, el disco puede haber cambiado por completo.
+async function actualizarTodo(): Promise<void> {
+  await editor.recargar();
+  await recargarProyecto();
+}
+
+const bloqueo = crearBloqueoConflicto(zonaEditor, {
+  editor,
+  alResolver: async () => {
+    await actualizarTodo();
+    await sincronizacion.revisar();
+  },
+});
+
+const sincronizacion = crearSincronizacion(barra, {
+  editor,
+  alActualizar: actualizarTodo,
+  alConflicto: (archivos) => bloqueo.mostrar(archivos),
+});
+
+const panelPdf = crearPanelPdf(porId('panel'), {
+  alElegirProblema: async (ruta, linea) => {
+    if (editor.rutaAbierta() !== ruta) await abrir(ruta);
+    if (editor.rutaAbierta() === ruta) editor.irALinea(linea);
+  },
+});
+
 async function abrir(ruta: string): Promise<void> {
   try {
     await editor.abrir(ruta);
@@ -184,7 +219,7 @@ function rutaInicial(): string | null {
 // Al volver a la pestaña se comprueba si el disco cambió; al dejarla, se guarda de inmediato.
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') void editor.guardarAhora(true);
-  else void editor.recargar().then(recargarProyecto).catch(() => undefined);
+  else void actualizarTodo().then(() => sincronizacion.revisar()).catch(() => undefined);
 });
 window.addEventListener('pagehide', () => { void editor.guardarAhora(true); });
 window.addEventListener('beforeunload', (e) => {
@@ -198,12 +233,13 @@ setInterval(latir, INTERVALO_DE_LATIDO_MS);
 
 async function iniciar(): Promise<void> {
   try {
-    principal = (await api.config()).principal;
+    ({ principal, compilarAlGuardar } = await api.config());
     tomarProyecto(await api.proyecto());
     lateral.mostrarProyecto(proyecto, null);
     const ruta = rutaInicial();
     if (ruta) await abrir(ruta);
     else barra.avisar('No se encontraron archivos .tex en la carpeta del informe.', 'error');
+    await sincronizacion.revisar();
   } catch (e) {
     barra.avisar((e as Error).message, 'error');
   }
