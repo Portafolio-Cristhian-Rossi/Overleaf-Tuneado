@@ -24,7 +24,7 @@ function decos(texto: string, cursor: number, ctx: ContextoVista): Deco[] {
   return salida;
 }
 
-const etiqueta: Etiqueta = { nombre: 'sec:CAP2_IA', ruta: 'Cap2.tex', linea: 15, titulo: 'Inteligencia Artificial', numero: '2.1' };
+const etiqueta: Etiqueta = { nombre: 'sec:CAP2_IA', ruta: 'Cap2.tex', linea: 15, clase: 'seccion', titulo: 'Inteligencia Artificial', numero: '2.1' };
 const ctx: ContextoVista = { numeroCapitulo: '2', etiquetas: new Map([[etiqueta.nombre, etiqueta]]) };
 
 describe('decorar', () => {
@@ -104,6 +104,20 @@ describe('decorar', () => {
   it('referencia a una etiqueta sin número muestra solo el título', () => {
     const sinNumero: ContextoVista = { numeroCapitulo: null, etiquetas: new Map([['a', { ...etiqueta, nombre: 'a', numero: null }]]) };
     expect(decos('x \\ref{a} y', 0, sinNumero)).toContainEqual(expect.objectContaining({ widget: 'Inteligencia Artificial' }));
+  });
+
+  it('referencia a una figura, tabla o ecuación muestra solo su número', () => {
+    const figura: Etiqueta = { nombre: 'fig:a', ruta: 'Cap2.tex', linea: 3, clase: 'figura', titulo: '', numero: '2.1' };
+    const conFigura: ContextoVista = { ...ctx, etiquetas: new Map([['fig:a', figura]]) };
+    expect(decos('ver \\ref{fig:a} x', 0, conFigura)).toContainEqual(
+      { desde: 4, hasta: 15, reemplaza: true, widget: '2.1', clase: 'cm-ref' });
+  });
+
+  it('referencia a un objeto sin número muestra la clave, sin marcarla rota', () => {
+    const tabla: Etiqueta = { nombre: 'tab:a', ruta: 'Cap2.tex', linea: 3, clase: 'tabla', titulo: '', numero: null };
+    const conTabla: ContextoVista = { ...ctx, etiquetas: new Map([['tab:a', tabla]]) };
+    expect(decos('ver \\ref{tab:a} x', 0, conTabla)).toContainEqual(
+      expect.objectContaining({ widget: 'tab:a', clase: 'cm-ref' }));
   });
 
   it('cita muestra las claves', () => {

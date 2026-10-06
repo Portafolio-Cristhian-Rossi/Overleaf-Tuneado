@@ -24,11 +24,17 @@ export function filtrarPlantillas(consulta: string): Plantilla[] {
   return PLANTILLAS.filter((p) => normalizar(p.nombre).split(/\s+/).some((palabra) => palabra.startsWith(buscado)));
 }
 
-const descripcion = (e: Etiqueta) => [e.numero, e.titulo].filter(Boolean).join(' ');
+const NOMBRE_DE_CLASE = { figura: 'Figura', tabla: 'Tabla', ecuacion: 'Ecuación' } as const;
+
+// Cómo se le presenta una etiqueta a quien escribe: "2.1 Título" o "Figura 2.1".
+export function describirEtiqueta(e: Etiqueta): string {
+  if (e.clase === 'seccion') return [e.numero, e.titulo].filter(Boolean).join(' ');
+  return e.numero ? `${NOMBRE_DE_CLASE[e.clase]} ${e.numero}` : '';
+}
 
 export function filtrarEtiquetas(etiquetas: Etiqueta[], consulta: string): Etiqueta[] {
   const buscado = normalizar(consulta);
-  return etiquetas.filter((e) => normalizar(`${e.nombre} ${descripcion(e)}`).includes(buscado));
+  return etiquetas.filter((e) => normalizar(`${e.nombre} ${describirEtiqueta(e)}`).includes(buscado));
 }
 
 export function extensionMenu(ctx: ContextoMenu): Extension {
@@ -67,7 +73,7 @@ export function extensionMenu(ctx: ContextoMenu): Extension {
       from: desde,
       filter: false,
       options: filtrarEtiquetas(ctx.etiquetas(), c.state.sliceDoc(desde, c.pos)).map((e): Completion => ({
-        label: descripcion(e) || e.nombre,
+        label: describirEtiqueta(e) || e.nombre,
         detail: e.nombre,
         apply: e.nombre,
       })),

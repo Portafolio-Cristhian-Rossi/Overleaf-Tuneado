@@ -2,7 +2,8 @@ import { snippet } from '@codemirror/autocomplete';
 import { EditorState, type Transaction } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
 import { analizar } from '../compartido/analizador';
-import { detectarBarra, filtrarEtiquetas, filtrarPlantillas } from './menuBarra';
+import type { Etiqueta } from '../compartido/tipos';
+import { describirEtiqueta, detectarBarra, filtrarEtiquetas, filtrarPlantillas } from './menuBarra';
 import { CONFIG_LISTINGS, PLANTILLAS } from './plantillas';
 
 // Texto que queda en el documento al insertar una plantilla en un archivo vacío.
@@ -52,16 +53,32 @@ describe('filtrarPlantillas', () => {
 });
 
 describe('filtrarEtiquetas', () => {
-  const etiquetas = [
-    { nombre: 'sec:CAP2_IA', ruta: 'Cap2.tex', linea: 15, titulo: 'Inteligencia Artificial', numero: '2.1' },
-    { nombre: 'sec:CAP2_AA', ruta: 'Cap2.tex', linea: 17, titulo: 'Aprendizaje Automático', numero: '2.2' },
+  const etiquetas: Etiqueta[] = [
+    { nombre: 'sec:CAP2_IA', ruta: 'Cap2.tex', linea: 15, clase: 'seccion', titulo: 'Inteligencia Artificial', numero: '2.1' },
+    { nombre: 'sec:CAP2_AA', ruta: 'Cap2.tex', linea: 17, clase: 'seccion', titulo: 'Aprendizaje Automático', numero: '2.2' },
   ];
+  const objeto = (nombre: string, clase: Etiqueta['clase'], numero: string | null): Etiqueta =>
+    ({ nombre, ruta: 'Cap2.tex', linea: 20, clase, titulo: '', numero });
 
   it('busca en el nombre de la etiqueta y en el título, sin tildes ni mayúsculas', () => {
     expect(filtrarEtiquetas(etiquetas, '').map((e) => e.nombre)).toEqual(['sec:CAP2_IA', 'sec:CAP2_AA']);
     expect(filtrarEtiquetas(etiquetas, 'automatico').map((e) => e.nombre)).toEqual(['sec:CAP2_AA']);
     expect(filtrarEtiquetas(etiquetas, 'cap2_ia').map((e) => e.nombre)).toEqual(['sec:CAP2_IA']);
     expect(filtrarEtiquetas(etiquetas, '2.2').map((e) => e.nombre)).toEqual(['sec:CAP2_AA']);
+  });
+
+  it('describe cada etiqueta por lo que nombra', () => {
+    expect(describirEtiqueta(etiquetas[0])).toBe('2.1 Inteligencia Artificial');
+    expect(describirEtiqueta(objeto('fig:a', 'figura', '2.1'))).toBe('Figura 2.1');
+    expect(describirEtiqueta(objeto('tab:a', 'tabla', '2.3'))).toBe('Tabla 2.3');
+    expect(describirEtiqueta(objeto('eq:a', 'ecuacion', '2.2'))).toBe('Ecuación 2.2');
+    expect(describirEtiqueta(objeto('fig:b', 'figura', null))).toBe('');
+  });
+
+  it('encuentra una figura buscando por su clase y número', () => {
+    const todas = [...etiquetas, objeto('fig:a', 'figura', '2.1'), objeto('eq:a', 'ecuacion', '2.2')];
+    expect(filtrarEtiquetas(todas, 'figura 2').map((e) => e.nombre)).toEqual(['fig:a']);
+    expect(filtrarEtiquetas(todas, 'ecuacion').map((e) => e.nombre)).toEqual(['eq:a']);
   });
 });
 

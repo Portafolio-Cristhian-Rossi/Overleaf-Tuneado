@@ -1,3 +1,5 @@
+import type { ClaseDeObjeto } from './numeracion';
+
 export type FinDeLinea = '\r\n' | '\n';
 
 export interface Config {
@@ -20,6 +22,8 @@ export type ResultadoEscritura =
 export interface Capitulo { ruta: string; titulo: string; numero: string | null }
 export interface Etiqueta {
   nombre: string; ruta: string; linea: number;   // línea desde 1
+  // Qué nombra: una sección (con su título) o un objeto numerado aparte (sin título).
+  clase: 'seccion' | ClaseDeObjeto;
   titulo: string; numero: string | null;
 }
 export interface Proyecto {

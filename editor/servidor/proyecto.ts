@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { analizar, type Elemento } from '../compartido/analizador';
-import { numerarTitulos } from '../compartido/numeracion';
+import { numerarObjetos, numerarTitulos, objetoEn, type ClaseDeObjeto } from '../compartido/numeracion';
 import type { Capitulo, Etiqueta, Proyecto } from '../compartido/tipos';
 import { decodificar } from './archivos';
 
@@ -46,9 +46,17 @@ function nombresDePaquetes(texto: string, comando: 'usepackage' | 'RequirePackag
 // Entornos cuyo \label nombra al propio objeto (figura, tabla, ecuación) y no a la sección.
 const ENTORNO_CON_ETIQUETA_PROPIA = /\\begin\{((?:figure|table|equation|align|eqnarray|subfigure)\*?)\}[\s\S]*?\\end\{\1\}/g;
 
+function claseDeEntorno(entorno: string): ClaseDeObjeto {
+  if (entorno.startsWith('table')) return 'tabla';
+  return entorno.includes('figure') ? 'figura' : 'ecuacion';
+}
+
 function etiquetasDe(ruta: string, f: Fuente, numeroCapitulo: string | null): Etiqueta[] {
   const numeros = numerarTitulos(f.elementos, numeroCapitulo);
-  const objetos = [...f.sinComentarios.matchAll(ENTORNO_CON_ETIQUETA_PROPIA)].map((m) => ({ desde: m.index, hasta: m.index + m[0].length }));
+  const numerados = numerarObjetos(f.texto, f.elementos, numeroCapitulo);
+  // Objetos que el editor no numera (eqnarray, subfigure): su etiqueta lleva la clase, sin número.
+  const otros = [...f.sinComentarios.matchAll(ENTORNO_CON_ETIQUETA_PROPIA)]
+    .map((m) => ({ desde: m.index, hasta: m.index + m[0].length, clase: claseDeEntorno(m[1]) }));
   const salida: Etiqueta[] = [];
   let titulo = '';
   let numero: string | null = null;
@@ -58,10 +66,11 @@ function etiquetasDe(ruta: string, f: Fuente, numeroCapitulo: string | null): Et
       numero = numeros.get(e.desde) ?? null;
     } else if (e.tipo === 'etiqueta') {
       const linea = f.texto.slice(0, e.desde).split('\n').length;
-      const enObjeto = objetos.some((o) => o.desde <= e.desde && e.desde < o.hasta);
-      salida.push(enObjeto
-        ? { nombre: e.nombre, ruta, linea, titulo: '', numero: null }
-        : { nombre: e.nombre, ruta, linea, titulo, numero });
+      const otro = otros.find((o) => o.desde <= e.desde && e.desde < o.hasta);
+      const objeto = objetoEn(numerados, e.desde) ?? (otro ? { clase: otro.clase, numero: null } : null);
+      salida.push(objeto
+        ? { nombre: e.nombre, ruta, linea, clase: objeto.clase, titulo: '', numero: objeto.numero }
+        : { nombre: e.nombre, ruta, linea, clase: 'seccion', titulo, numero });
     }
   }
   return salida;

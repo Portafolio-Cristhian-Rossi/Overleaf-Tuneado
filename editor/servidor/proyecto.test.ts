@@ -32,8 +32,8 @@ describe('describirProyecto sobre el fixture', () => {
 
   it('indexa las etiquetas', () => {
     expect(p.etiquetas).toHaveLength(4);
-    expect(p.etiquetas).toContainEqual({ nombre: 'sec:CAP2_IA', ruta: 'Cap2.tex', linea: 15, titulo: 'Inteligencia Artificial', numero: '2.1' });
-    expect(p.etiquetas).toContainEqual({ nombre: 'sec:CAP2_Extra', ruta: 'Cap2.tex', linea: 48, titulo: 'Conceptos Complementarios', numero: '2.4' });
+    expect(p.etiquetas).toContainEqual({ nombre: 'sec:CAP2_IA', ruta: 'Cap2.tex', linea: 15, clase: 'seccion', titulo: 'Inteligencia Artificial', numero: '2.1' });
+    expect(p.etiquetas).toContainEqual({ nombre: 'sec:CAP2_Extra', ruta: 'Cap2.tex', linea: 48, clase: 'seccion', titulo: 'Conceptos Complementarios', numero: '2.4' });
   });
 
   it('junta los paquetes del principal y de la clase', () => {
@@ -115,10 +115,43 @@ describe('describirProyecto en otros proyectos', () => {
       'a.tex': '\\label{suelta}\n\\chapter{A}\\label{cap:a}\n\\section{S}\n\nTexto.\\label{sec:s}\n',
     });
     expect(p.etiquetas).toEqual([
-      { nombre: 'suelta', ruta: 'a.tex', linea: 1, titulo: '', numero: null },
-      { nombre: 'cap:a', ruta: 'a.tex', linea: 2, titulo: 'A', numero: '1' },
-      { nombre: 'sec:s', ruta: 'a.tex', linea: 5, titulo: 'S', numero: '1.1' },
+      { nombre: 'suelta', ruta: 'a.tex', linea: 1, clase: 'seccion', titulo: '', numero: null },
+      { nombre: 'cap:a', ruta: 'a.tex', linea: 2, clase: 'seccion', titulo: 'A', numero: '1' },
+      { nombre: 'sec:s', ruta: 'a.tex', linea: 5, clase: 'seccion', titulo: 'S', numero: '1.1' },
     ]);
+  });
+
+  it('las etiquetas de un align llevan el número de su fila', async () => {
+    const p = await proyectoCon({
+      'main.tex': '\\begin{document}\n\\include{a}\n\\end{document}\n',
+      'a.tex': '\\chapter{A}\n\\begin{equation}x \\label{eq:0}\\end{equation}\n\\begin{align}\na \\label{eq:1} \\\\\nb \\label{eq:2}\n\\end{align}\n',
+    });
+    expect(p.etiquetas.map((e) => [e.nombre, e.clase, e.numero])).toEqual([
+      ['eq:0', 'ecuacion', '1.1'], ['eq:1', 'ecuacion', '1.2'], ['eq:2', 'ecuacion', '1.3'],
+    ]);
+  });
+
+  it('una etiqueta en un objeto que el editor no numera lleva su clase y ningún número', async () => {
+    const p = await proyectoCon({
+      'main.tex': '\\begin{document}\n\\include{a}\n\\end{document}\n',
+      'a.tex': [
+        '\\chapter{A}', '\\section{S}',
+        '\\begin{eqnarray}', 'a \\label{eq:vieja}', '\\end{eqnarray}',
+        '\\begin{subfigure}', '\\label{fig:sub}', '\\end{subfigure}', '',
+      ].join('\n'),
+    });
+    expect(p.etiquetas.map((e) => [e.nombre, e.clase, e.titulo, e.numero])).toEqual([
+      ['eq:vieja', 'ecuacion', '', null],
+      ['fig:sub', 'figura', '', null],
+    ]);
+  });
+
+  it('una etiqueta de objeto en un capítulo sin número no lleva número', async () => {
+    const p = await proyectoCon({
+      'main.tex': '\\begin{document}\n\\frontmatter\n\\include{a}\n\\end{document}\n',
+      'a.tex': '\\chapter{A}\n\\begin{figure}\\caption{x}\\label{fig:f}\\end{figure}\n',
+    });
+    expect(p.etiquetas.map((e) => [e.nombre, e.clase, e.numero])).toEqual([['fig:f', 'figura', null]]);
   });
 
   // La etiqueta de una figura, tabla o ecuación nombra a ese objeto, no a la sección que lo contiene.
@@ -133,12 +166,12 @@ describe('describirProyecto en otros proyectos', () => {
         'Texto.\\label{sec:despues}', '',
       ].join('\n'),
     });
-    expect(p.etiquetas.map((e) => [e.nombre, e.titulo, e.numero])).toEqual([
-      ['sec:s', 'S', '1.1'],
-      ['fig:f', '', null],
-      ['tab:t', '', null],
-      ['eq:e', '', null],
-      ['sec:despues', 'S', '1.1'],
+    expect(p.etiquetas.map((e) => [e.nombre, e.clase, e.titulo, e.numero])).toEqual([
+      ['sec:s', 'seccion', 'S', '1.1'],
+      ['fig:f', 'figura', '', '1.1'],
+      ['tab:t', 'tabla', '', null],
+      ['eq:e', 'ecuacion', '', '1.1'],
+      ['sec:despues', 'seccion', 'S', '1.1'],
     ]);
   });
 
