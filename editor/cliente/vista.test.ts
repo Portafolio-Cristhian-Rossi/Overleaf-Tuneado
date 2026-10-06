@@ -84,7 +84,7 @@ describe('decorar', () => {
   });
 
   it('referencia a una etiqueta sin número muestra solo el título', () => {
-    const sinNumero: ContextoVista = { numeroCapitulo: null, etiquetas: new Map([['a', { ...etiqueta, nombre: 'a', numero: null }]]) };
+    const sinNumero = ctxDePrueba({ numeroCapitulo: null, etiquetas: new Map([['a', { ...etiqueta, nombre: 'a', numero: null }]]) });
     expect(decos('x \\ref{a} y', 0, sinNumero)).toContainEqual(expect.objectContaining({ widget: 'Inteligencia Artificial' }));
   });
 

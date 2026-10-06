@@ -27,5 +27,9 @@ export const ETIQUETA_DE_PRUEBA: Etiqueta = {
 
 // Contexto del capítulo 2 con una etiqueta de sección; cada prueba cambia lo que necesita.
 export function ctxDePrueba(cambios: Partial<ContextoVista> = {}): ContextoVista {
-  return { numeroCapitulo: '2', etiquetas: new Map([[ETIQUETA_DE_PRUEBA.nombre, ETIQUETA_DE_PRUEBA]]), ...cambios };
+  return {
+    numeroCapitulo: '2', etiquetas: new Map([[ETIQUETA_DE_PRUEBA.nombre, ETIQUETA_DE_PRUEBA]]),
+    urlDeImagen: (ruta) => ruta, alElegirImagen: () => {},
+    ...cambios,
+  };
 }

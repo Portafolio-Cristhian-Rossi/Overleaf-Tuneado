@@ -1,28 +1,17 @@
 import { StateEffect, StateField, type EditorState, type Extension, type Range } from '@codemirror/state';
-import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
+import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 import { analizar, type Rango } from '../compartido/analizador';
 import { numerarObjetos, numerarTitulos } from '../compartido/numeracion';
 import { decorarCodigo, esCodigo } from './bloques/codigo';
 import { decorarEcuaciones, esMatematica } from './bloques/ecuacion';
+import { decorarFiguras } from './bloques/figura';
+import { Pastilla } from './bloques/pastilla';
 import type { ContextoVista, Decorador, Dibujo } from './bloques/tipos';
 
 export type { ContextoVista } from './bloques/tipos';
 
 // Cada clase de bloque se dibuja en su archivo; acá queda la prosa: títulos, formato, listas, referencias.
-const BLOQUES: Decorador[] = [decorarCodigo, decorarEcuaciones];
-
-// Texto corto que se dibuja en lugar de un comando: número de título, viñeta, referencia, cita.
-class Pastilla extends WidgetType {
-  constructor(readonly texto: string, readonly clase: string) { super(); }
-  eq(otra: Pastilla): boolean { return otra.texto === this.texto && otra.clase === this.clase; }
-  toDOM(): HTMLElement {
-    const nodo = document.createElement('span');
-    nodo.className = this.clase;
-    nodo.textContent = this.texto;
-    return nodo;
-  }
-  ignoreEvent(): boolean { return false; }
-}
+const BLOQUES: Decorador[] = [decorarCodigo, decorarEcuaciones, decorarFiguras];
 
 const CLASE_DE_ESTILO = { negrita: 'cm-negrita', cursiva: 'cm-cursiva', mono: 'cm-mono' } as const;
 const COMANDO = /\\[a-zA-Z@]+\*?/g;

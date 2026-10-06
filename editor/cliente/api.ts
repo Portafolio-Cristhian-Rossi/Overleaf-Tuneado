@@ -32,6 +32,9 @@ async function pedir<T>(metodo: string, ruta: string, cuerpo?: unknown, opciones
   return respuesta.json();
 }
 
+// Dirección desde la que el navegador carga una imagen del informe.
+export const urlDeImagen = (ruta: string) => `/api/imagen?ruta=${encodeURIComponent(ruta)}`;
+
 export interface DatosDeEscritura {
   contenido: string; finDeLinea: FinDeLinea; bom: boolean; versionBase: string; forzar?: boolean;
 }

@@ -188,6 +188,23 @@ select {
   padding: 2px 8px; border-radius: 4px; background: var(--peligro-fondo); color: var(--peligro);
   font-family: var(--interfaz); font-size: 0.8em; text-align: left;
 }
+/* Bloques: figuras. La imagen ocupa todo el ancho de su línea, así el epígrafe queda debajo. */
+#editor .cm-linea-figura { text-align: center; }
+#editor .cm-linea-figura .cm-imagen { display: inline-block; width: 100%; }
+#editor .cm-imagen { position: relative; display: inline-block; text-align: center; vertical-align: middle; }
+#editor .cm-imagen img { max-width: 80%; max-height: 320px; border-radius: 4px; cursor: pointer; vertical-align: middle; }
+#editor .cm-imagen-recuadro {
+  display: inline-block; padding: 18px 24px; border: 1px dashed var(--borde); border-radius: 6px;
+  background: var(--superficie-2); color: var(--texto-2); font-family: var(--interfaz); font-size: 0.85em; cursor: pointer;
+}
+#editor .cm-imagen-falta { border-color: var(--peligro); background: var(--peligro-fondo); color: var(--peligro); }
+#editor .cm-ver-codigo {
+  position: absolute; top: 4px; right: 4px; padding: 2px 8px; border: 1px solid var(--borde); border-radius: 4px;
+  background: var(--superficie); color: var(--texto-2); font-family: var(--interfaz); font-size: 12px; cursor: pointer; opacity: 0;
+}
+#editor .cm-imagen:hover .cm-ver-codigo, #editor .cm-ver-codigo:focus-visible { opacity: 1; }
+#editor .cm-prefijo-epigrafe { color: var(--texto-2); font-size: 0.9em; font-weight: 600; }
+#editor .cm-epigrafe { font-size: 0.9em; }
 #editor .cm-foldPlaceholder {
   margin-left: 8px; padding: 1px 8px; border: 1px solid var(--borde); border-radius: 4px;
   background: var(--superficie-2); color: var(--texto-2); font-family: var(--interfaz); font-size: 0.8em; cursor: pointer;

@@ -1,6 +1,6 @@
 import 'katex/dist/katex.min.css';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
-import { api } from './api';
+import { api, urlDeImagen } from './api';
 import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
 import { agregarPaquete } from './comandos';
 import { extensionCorreccion } from './correccion';
@@ -130,7 +130,11 @@ async function asegurarPaquete(paquete: string, configuracion?: string): Promise
 
 const editor = crearEditor(porId('editor'), {
   extensiones: [
-    extensionVista(() => ({ numeroCapitulo: numeroDelCapitulo(editor.rutaAbierta()), etiquetas })),
+    extensionVista(() => ({
+      numeroCapitulo: numeroDelCapitulo(editor.rutaAbierta()), etiquetas,
+      urlDeImagen,
+      alElegirImagen: () => {},
+    })),
     extensionMenu({ paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete }),
     extensionAtajos((nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); }),
     extensionCorreccion({ api: api.correccion, alCambiarEstado: (estado) => panelGramatica.mostrarEstado(estado) }),
