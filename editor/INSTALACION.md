@@ -169,6 +169,48 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
 - Lo que el editor no sabe dibujar se ve como código, en gris. Podés editarlo
   igual.
 
+**Ecuaciones.** Las fórmulas se ven dibujadas: las que van dentro del texto
+(`$k$`) y las que van en un renglón aparte, con su número a la derecha.
+
+- Para insertar una: `/` → Ecuación. Para una fórmula corta dentro de un
+  párrafo, escribila entre signos de pesos: `$a + b$`.
+- Para cambiarla, poné el cursor encima: aparece su código LaTeX y, debajo, un
+  recuadro que muestra cómo va quedando mientras escribís.
+- Si el recuadro se pone rojo, la fórmula tiene algo que el editor no pudo
+  dibujar, y dice qué. Casi siempre es una llave sin cerrar o un comando mal
+  escrito. A veces es un comando válido que el editor no conoce: en ese caso
+  el aviso dice que puede compilar igual, y lo confirmás con **Compilar**.
+
+**Figuras.** Una figura se ve con su imagen y, debajo, su epígrafe
+("Figura 2.1: …").
+
+- Para insertar una: `/` → Figura. Se abre una ventana con las imágenes que
+  ya están en la carpeta `figs/` del informe. Elegí una, o usá
+  *Elegir archivo…* para sumar una imagen de tu computadora.
+- También podés arrastrar un archivo de imagen desde el Explorador de Windows
+  y soltarlo sobre el texto: queda la figura armada en ese lugar.
+- El epígrafe se escribe ahí mismo, como cualquier texto.
+- Para cambiar la imagen de una figura, hacé clic sobre la imagen.
+- Para ver o tocar el código de la figura, pasá el cursor por la imagen y usá
+  *Ver código*.
+- Se aceptan PNG, JPG y PDF, de hasta 20 MB. Un PDF no se dibuja en el editor:
+  se ve un recuadro con su nombre, y aparece al compilar.
+- El editor copia la imagen a `figs/` y le acomoda el nombre: sin espacios ni
+  tildes (`Gráfico final.png` queda como `Grafico-final.png`). Si ya hay una
+  con ese nombre, pregunta qué hacer; nunca reemplaza una imagen existente.
+- Una imagen nueva viaja a Overleaf con el próximo **Enviar**, igual que el
+  texto.
+- Una figura armada de otra forma (por ejemplo, con dos imágenes) se ve como
+  código y se edita así.
+
+**Código.** `/` → Bloque de código inserta un recuadro donde escribís el
+código tal cual. El corrector no lo revisa.
+
+**Referencias a figuras y ecuaciones.** `/` → Referencia cruzada ofrece
+también las figuras, tablas y ecuaciones del informe ("Figura 2.1",
+"Ecuación 2.2"). En el texto se ve su número. Como con los títulos, ese número
+es orientativo: el definitivo es el del PDF.
+
 **Corrección.** Unos segundos después de abrir el editor, el corrector queda
 listo y empieza a subrayar: rojo ondulado para ortografía, ámbar para
 gramática.
@@ -215,6 +257,8 @@ terminar.
   sigue leyendo en la web de Overleaf.
 - **No revisa el estilo ni la redacción.** Marca errores de ortografía y
   gramática, no si un párrafo está bien escrito.
+- **Todavía no dibuja las tablas ni busca citas.** Las tablas se ven y se
+  editan como código, y las citas se escriben con su clave.
 
 ## 7. Opciones de `config.json`
 
