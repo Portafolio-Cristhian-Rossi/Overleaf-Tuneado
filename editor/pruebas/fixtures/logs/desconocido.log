@@ -1,0 +1,9 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (MiKTeX 24.4) (preloaded format=pdflatex)
+entering extended mode
+(main.tex
+(./Cap2.tex
+./Cap2.tex:30: LaTeX Error: Something nobody has translated yet.
+
+l.30 \algo
+)
+Output written on build/main.pdf (12 pages, 181234 bytes).

@@ -1,0 +1,11 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (MiKTeX 24.4) (preloaded format=pdflatex)
+entering extended mode
+(main.tex
+(./Cap3.tex
+./Cap3.tex:9: LaTeX Error: Environment tabla undefined.
+
+See the LaTeX manual or LaTeX Companion for explanation.
+l.9 \begin{tabla}
+
+)
+Output written on build/main.pdf (12 pages, 181234 bytes).

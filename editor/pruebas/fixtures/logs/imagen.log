@@ -1,0 +1,14 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.26 (MiKTeX 24.4) (preloaded format=pdflatex)
+entering extended mode
+(main.tex
+(./Cap3.tex
+./Cap3.tex:5: LaTeX Error: File `figs/grafico.png' not found.
+
+See the LaTeX manual or LaTeX Companion for explanation.
+Type  H <return>  for immediate help.
+ ...
+
+l.5 ...udegraphics[width=0.8\textwidth]{figs/grafico.png}
+
+)
+Output written on build/main.pdf (12 pages, 181234 bytes).
