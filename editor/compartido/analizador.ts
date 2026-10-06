@@ -8,15 +8,19 @@ export type Elemento =
   | ({ tipo: 'ref'; clave: string } & Rango)
   | ({ tipo: 'cita'; comando: string; claves: string[] } & Rango)
   | ({ tipo: 'etiqueta'; nombre: string } & Rango)
+  | ({ tipo: 'matematica'; enLinea: boolean; entorno: EntornoMatematico | null; contenido: Rango } & Rango)
   | ({ tipo: 'comentario' } & Rango)
   | ({ tipo: 'preambulo' } & Rango);
+
+export type EntornoMatematico = 'equation' | 'equation*' | 'align' | 'align*';
 
 const NIVELES: Record<string, 0 | 1 | 2 | 3> = { chapter: 0, section: 1, subsection: 2, subsubsection: 3 };
 const ESTILOS: Record<string, 'negrita' | 'cursiva' | 'mono'> = {
   textbf: 'negrita', textit: 'cursiva', emph: 'cursiva', texttt: 'mono',
 };
 const ENTORNOS_LITERALES = new Set(['verbatim', 'verbatim*', 'lstlisting', 'minted']);
-const ES_CITA = /^(?:(?:full|short)?cite(?:A|NP|author|year|yearNP)?|nocite)$/;
+const ENTORNOS_MATEMATICOS = new Set<string>(['equation', 'equation*', 'align', 'align*']);
+const ES_CITA =/^(?:(?:full|short)?cite(?:A|NP|author|year|yearNP)?|nocite)$/;
 const ES_LETRA = /[a-zA-Z@]/;
 
 // Recorre el texto una sola vez. Lo que no reconoce, o no cierra, no se reporta.
@@ -63,7 +67,36 @@ export function analizar(texto: string): Elemento[] {
     return pos;
   };
 
+  // Posición del delimitador que cierra la matemática abierta antes de `desde`, o -1.
+  // Los delimitadores no cruzan una línea en blanco: un `$` suelto no se lleva el resto del texto.
+  const cierreDeMatematica = (desde: number, cierre: string): number => {
+    for (let j = desde; j < n; j++) {
+      if (texto.startsWith(cierre, j)) return j;
+      const c = texto[j];
+      if (c === '\\') j++;
+      else if (c === '%') j = finDeLinea(j) - 1;
+      else if (c === '\n' && /^[ \t]*\n/.test(texto.slice(j + 1, j + 200))) return -1;
+    }
+    return -1;
+  };
+
+  // Mientras `i` esté antes de `finMatematica` solo se reportan comentarios y etiquetas.
+  let finMatematica = -1;
+  let trasMatematica = 0;
+  const abrirMatematica = (desde: number, contenido: Rango, hasta: number, enLinea: boolean, entorno: EntornoMatematico | null) => {
+    salida.push({ tipo: 'matematica', enLinea, entorno, desde, hasta, contenido });
+    finMatematica = contenido.hasta;
+    trasMatematica = hasta;
+    i = contenido.desde;
+  };
+
   while (i < n) {
+    const enMatematica = finMatematica !== -1;
+    if (enMatematica && i >= finMatematica) {
+      i = trasMatematica;
+      finMatematica = -1;
+      continue;
+    }
     const c = texto[i];
 
     if (c === '%') {
@@ -72,14 +105,38 @@ export function analizar(texto: string): Elemento[] {
       i = hasta;
       continue;
     }
+    if (c === '$' && !enMatematica) {
+      const abre = texto[i + 1] === '$' ? 2 : 1;
+      const cierre = cierreDeMatematica(i + abre, abre === 2 ? '$$' : '$');
+      if (cierre === -1) i += abre;
+      else abrirMatematica(i, { desde: i + abre, hasta: cierre }, cierre + abre, abre === 1, null);
+      continue;
+    }
     if (c !== '\\') { i++; continue; }
 
     const desde = i;
     let j = i + 1;
-    if (j >= n || !ES_LETRA.test(texto[j])) { i += 2; continue; }   // escape: \%, \{, \\
+    if (j >= n || !ES_LETRA.test(texto[j])) {
+      const apertura = texto[j];
+      const cierre = !enMatematica && (apertura === '(' || apertura === '[')
+        ? cierreDeMatematica(j + 1, apertura === '(' ? '\\)' : '\\]')
+        : -1;
+      if (cierre === -1) i += 2;   // escape: \%, \{, \\
+      else abrirMatematica(desde, { desde: j + 1, hasta: cierre }, cierre + 2, apertura === '(', null);
+      continue;
+    }
     while (j < n && ES_LETRA.test(texto[j])) j++;
     const nombre = texto.slice(i + 1, j);
     i = j;   // por defecto se sigue justo después del nombre
+
+    if (enMatematica) {
+      const arg = nombre === 'label' ? argumento(j) : null;
+      if (arg && arg.hasta <= finMatematica) {
+        salida.push({ tipo: 'etiqueta', nombre: texto.slice(arg.contenido.desde, arg.contenido.hasta), desde, hasta: arg.hasta });
+        i = arg.hasta;
+      }
+      continue;
+    }
 
     if (nombre in NIVELES) {
       const conAsterisco = texto[j] === '*';
@@ -100,7 +157,11 @@ export function analizar(texto: string): Elemento[] {
       if (!arg) continue;
       const entorno = texto.slice(arg.contenido.desde, arg.contenido.hasta);
       i = arg.hasta;
-      if (nombre === 'begin' && ENTORNOS_LITERALES.has(entorno)) {
+      if (nombre === 'begin' && ENTORNOS_MATEMATICOS.has(entorno)) {
+        const fin = `\\end{${entorno}}`;
+        const cierre = texto.indexOf(fin, i);
+        if (cierre !== -1) abrirMatematica(desde, { desde: i, hasta: cierre }, cierre + fin.length, false, entorno as EntornoMatematico);
+      } else if (nombre === 'begin' && ENTORNOS_LITERALES.has(entorno)) {
         const cierre = texto.indexOf(`\\end{${entorno}}`, i);
         i = cierre === -1 ? n : cierre + `\\end{${entorno}}`.length;
       } else if (entorno === 'itemize' || entorno === 'enumerate') {

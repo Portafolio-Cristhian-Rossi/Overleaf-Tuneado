@@ -169,3 +169,50 @@ describe('analizar', () => {
     expect(tramo(t, deTipo(e, 'titulo')[0].contenido)).toBe('Introducción');
   });
 });
+
+describe('matemática', () => {
+  const mates = (t: string) => deTipo(analizar(t), 'matematica');
+
+  it('en línea con $', () => {
+    expect(mates('sea $a+b$ fin')).toEqual([
+      { tipo: 'matematica', enLinea: true, entorno: null, desde: 4, hasta: 9, contenido: { desde: 5, hasta: 8 } },
+    ]);
+  });
+
+  it.each([
+    ['\\(x\\)', true, null], ['\\[x\\]', false, null], ['$$x$$', false, null],
+    ['\\begin{equation}x\\end{equation}', false, 'equation'], ['\\begin{equation*}x\\end{equation*}', false, 'equation*'],
+    ['\\begin{align}x\\end{align}', false, 'align'], ['\\begin{align*}x\\end{align*}', false, 'align*'],
+  ])('%s', (t, enLinea, entorno) => {
+    const [e] = mates(t);
+    expect(e).toMatchObject({ enLinea, entorno, desde: 0, hasta: t.length });
+    expect(tramo(t, e.contenido)).toBe('x');
+  });
+
+  it('\\$ no abre ni cierra', () => {
+    expect(mates('cuesta \\$5 y \\$8')).toEqual([]);
+    expect(tramo('$a\\$b$', mates('$a\\$b$')[0].contenido)).toBe('a\\$b');
+  });
+
+  it('un $ suelto no cruza la línea en blanco ni afecta lo que sigue', () => {
+    const es = analizar('cuesta $50\n\nOtro \\textbf{párrafo} con $x$');
+    expect(es.map((e) => e.tipo)).toEqual(['formato', 'matematica']);
+  });
+
+  it('dentro de la matemática no se reporta formato', () => {
+    expect(analizar('$a \\textbf{b}$').map((e) => e.tipo)).toEqual(['matematica']);
+  });
+
+  it('la etiqueta y los comentarios de una ecuación sí se reportan', () => {
+    const t = '\\begin{equation}\n a = b % nota\n \\label{eq:e}\n\\end{equation}';
+    expect(analizar(t).map((e) => e.tipo)).toEqual(['matematica', 'comentario', 'etiqueta']);
+  });
+
+  it('no hay matemática en comentarios ni en texto literal', () => {
+    expect(mates('% $x$\n\\verb|$y$|\n\\begin{verbatim}\n$z$\n\\end{verbatim}')).toEqual([]);
+  });
+
+  it('una ecuación sin cerrar no se reporta y lo que sigue sí', () => {
+    expect(analizar('\\begin{equation}\na\n\n\\section{S}').map((e) => e.tipo)).toEqual(['titulo']);
+  });
+});
