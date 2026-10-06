@@ -50,3 +50,13 @@ export interface ProblemaLatex {
 export type ResultadoCompilacion =
   | { tipo: 'ok' | 'con-errores'; problemas: ProblemaLatex[]; pdfActualizado: boolean }
   | { tipo: 'sin-latex' } | { tipo: 'vencido' };
+
+// Corrección ortográfica y gramatical. Las posiciones son relativas al párrafo revisado.
+export interface Aviso {
+  desde: number; hasta: number;
+  tipo: 'ortografia' | 'gramatica' | 'estilo';
+  regla: string; mensaje: string; sugerencias: string[];
+}
+export type EstadoCorrector =
+  | { estado: 'apagado' | 'iniciando' | 'listo' }
+  | { estado: 'no-disponible'; motivo: string };
