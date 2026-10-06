@@ -170,6 +170,24 @@ select {
   padding-left: 12px; background: var(--superficie-2);
   font-family: var(--mono); font-size: 0.85em; white-space: pre-wrap;
 }
+/* Bloques: ecuaciones */
+#editor .cm-formula { cursor: text; }
+#editor .cm-formula-bloque, #editor .cm-formula-previa {
+  display: flex; align-items: center; justify-content: center; gap: 16px; padding: 6px 0;
+}
+#editor span.cm-formula-bloque { display: inline-flex; padding: 0 6px; }
+#editor .cm-formula-cuerpo { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; text-align: center; }
+#editor span.cm-formula:not(.cm-formula-bloque) .cm-formula-cuerpo { overflow: visible; }
+#editor .cm-formula-cuerpo .katex-display { margin: 0; }
+#editor .cm-formula-numero { flex: none; color: var(--texto-2); font-family: var(--interfaz); font-size: 0.85em; }
+#editor .cm-formula-previa {
+  margin: 2px 0 6px; border: 1px dashed var(--borde); border-radius: 6px; background: var(--superficie);
+}
+#editor .cm-fuente-formula { font-family: var(--mono); font-size: 0.85em; color: var(--texto-2); }
+#editor .cm-formula-error {
+  padding: 2px 8px; border-radius: 4px; background: var(--peligro-fondo); color: var(--peligro);
+  font-family: var(--interfaz); font-size: 0.8em; text-align: left;
+}
 #editor .cm-foldPlaceholder {
   margin-left: 8px; padding: 1px 8px; border: 1px solid var(--borde); border-radius: 4px;
   background: var(--superficie-2); color: var(--texto-2); font-family: var(--interfaz); font-size: 0.8em; cursor: pointer;

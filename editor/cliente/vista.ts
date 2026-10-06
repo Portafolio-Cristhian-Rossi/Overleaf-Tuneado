@@ -3,12 +3,13 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import { analizar, type Rango } from '../compartido/analizador';
 import { numerarObjetos, numerarTitulos } from '../compartido/numeracion';
 import { decorarCodigo, esCodigo } from './bloques/codigo';
+import { decorarEcuaciones, esMatematica } from './bloques/ecuacion';
 import type { ContextoVista, Decorador, Dibujo } from './bloques/tipos';
 
 export type { ContextoVista } from './bloques/tipos';
 
 // Cada clase de bloque se dibuja en su archivo; acá queda la prosa: títulos, formato, listas, referencias.
-const BLOQUES: Decorador[] = [decorarCodigo];
+const BLOQUES: Decorador[] = [decorarCodigo, decorarEcuaciones];
 
 // Texto corto que se dibuja en lugar de un comando: número de título, viñeta, referencia, cita.
 class Pastilla extends WidgetType {
@@ -48,8 +49,8 @@ export function decorar(estado: EditorState, ctx: ContextoVista, conFoco = true)
 
   // Posiciones que ya tienen dibujo propio: ahí no se aplica el resaltado genérico de comandos.
   const reconocidos = new Set<number>();
-  // Tramos donde un `\algo` no es un comando: comentarios y código literal.
-  const sinComandos: Rango[] = elementos.filter(esCodigo);
+  // Tramos donde un `\algo` no se resalta como comando suelto: comentarios, código literal y fórmulas.
+  const sinComandos: Rango[] = elementos.filter((e) => esCodigo(e) || esMatematica(e));
 
   for (const e of elementos) {
     if (e.tipo !== 'preambulo' && e.tipo !== 'comentario') reconocidos.add(e.desde);

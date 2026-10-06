@@ -1,3 +1,4 @@
+import 'katex/dist/katex.min.css';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api } from './api';
 import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
