@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avisoDeCompilacion, avisoDeEnviar, avisoDeTraer, ubicacionDe } from './mensajes';
+import { avisoDeCompilacion, avisoDeEnviar, avisoDeTraer, estadoDeCompilacion, ubicacionDe } from './mensajes';
 
 describe('avisoDeTraer', () => {
   it.each([
@@ -60,6 +60,25 @@ describe('avisoDeCompilacion', () => {
   it('una compilación que terminó no lleva aviso', () => {
     expect(avisoDeCompilacion({ tipo: 'ok', problemas: [], pdfActualizado: true })).toBeNull();
     expect(avisoDeCompilacion({ tipo: 'con-errores', problemas: [], pdfActualizado: false })).toBeNull();
+  });
+});
+
+describe('estadoDeCompilacion', () => {
+  const problema = (gravedad: 'error' | 'advertencia') => ({ gravedad, ruta: null, linea: null, mensaje: 'm', original: 'o' });
+
+  it('sin errores', () => {
+    expect(estadoDeCompilacion({ tipo: 'ok', problemas: [], pdfActualizado: true })).toBe('PDF actualizado');
+    expect(estadoDeCompilacion({ tipo: 'ok', problemas: [problema('advertencia')], pdfActualizado: true })).toBe('PDF actualizado, con 1 aviso');
+    expect(estadoDeCompilacion({ tipo: 'ok', problemas: [problema('advertencia'), problema('advertencia')], pdfActualizado: true }))
+      .toBe('PDF actualizado, con 2 avisos');
+  });
+
+  // pdflatex suele generar un PDF aunque haya errores: sale, pero con partes mal o faltantes.
+  it('con errores distingue si el PDF se generó igual o si quedó el anterior', () => {
+    expect(estadoDeCompilacion({ tipo: 'con-errores', problemas: [problema('error')], pdfActualizado: true }))
+      .toBe('Hay 1 error: el PDF se generó igual, pero puede estar incompleto');
+    expect(estadoDeCompilacion({ tipo: 'con-errores', problemas: [problema('error'), problema('error'), problema('advertencia')], pdfActualizado: false }))
+      .toBe('Hay 2 errores: se muestra el último PDF que se pudo generar');
   });
 });
 

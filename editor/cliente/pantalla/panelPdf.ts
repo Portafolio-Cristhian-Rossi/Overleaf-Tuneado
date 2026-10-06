@@ -1,6 +1,6 @@
 import type { ProblemaLatex } from '../../compartido/tipos';
 import { api } from '../api';
-import { avisoDeCompilacion, ubicacionDe } from '../mensajes';
+import { avisoDeCompilacion, estadoDeCompilacion, ubicacionDe } from '../mensajes';
 import { el } from './dom';
 
 export function crearPanelPdf(padre: HTMLElement, o: { alElegirProblema(ruta: string, linea: number): void }): { compilar(): Promise<void> } {
@@ -54,10 +54,8 @@ export function crearPanelPdf(padre: HTMLElement, o: { alElegirProblema(ruta: st
       if (r.tipo !== 'ok' && r.tipo !== 'con-errores') return;
       if (r.pdfActualizado) mostrarPdf();
       mostrarProblemas(r.problemas);
-      const errores = r.problemas.filter((p) => p.gravedad === 'error').length;
-      estado.textContent = errores === 0 ? 'PDF actualizado'
-        : `${errores === 1 ? 'Hay 1 error' : `Hay ${errores} errores`}; se muestra el último PDF correcto`;
-      if (errores > 0 && visor.hidden) mostrarMensaje('El informe tiene errores y todavía no se pudo generar un PDF. Están listados abajo.');
+      estado.textContent = estadoDeCompilacion(r);
+      if (r.tipo === 'con-errores' && visor.hidden) mostrarMensaje('El informe tiene errores y todavía no se pudo generar un PDF. Están listados abajo.');
     } catch (e) {
       estado.textContent = (e as Error).message;
     } finally {
