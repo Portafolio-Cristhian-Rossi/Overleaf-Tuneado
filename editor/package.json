@@ -1,0 +1,33 @@
+{
+  "name": "editor-informe",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "servir": "node --import tsx servidor/index.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "start": "npm run build && npm run servir",
+    "test": "vitest run",
+    "entorno-prueba": "node --import tsx pruebas/ayudas/entornoPrueba.ts",
+    "companero": "node --import tsx pruebas/ayudas/companero.ts",
+    "acceso-directo": "powershell -NoProfile -ExecutionPolicy Bypass -File lanzador/crear-acceso-directo.ps1"
+  },
+  "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "^6.12.4",
+    "@codemirror/search": "^6.7.2",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.13",
+    "express": "^5.2.1",
+    "tsx": "^4.23.15"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.4",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}
