@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import express, { type ErrorRequestHandler, type RequestHandler } from 'express';
 import type { Config, Proyecto } from '../compartido/tipos';
-import { RutaInvalida, type Archivos } from './archivos';
+import { ArchivoProtegido, RutaInvalida, type Archivos } from './archivos';
 import type { Compilador } from './compilar';
 import type { Git } from './git';
 import type { Vigia } from './vigia';
@@ -36,13 +36,27 @@ function esEscrituraValida(c: any): c is { ruta: string; contenido: string; finD
 
 export function crearApp(d: Dependencias): express.Express {
   const app = express();
+
+  // Guardar un archivo y operar con Git van de a uno: un guardado que llega en medio de un
+  // Traer espera a que Git termine de combinar, y recién entonces compara versiones.
+  let cola: Promise<unknown> = Promise.resolve();
+  function enSerie<T>(tarea: () => Promise<T>): Promise<T> {
+    const resultado = cola.then(tarea, tarea);
+    cola = resultado.catch(() => undefined);
+    return resultado;
+  }
+
   app.disable('x-powered-by');
   app.use('/api', soloEsteEquipo);
   app.use(express.json({ limit: '20mb' }));
 
   app.get('/api/salud', (_req, res) => { res.json({ app: 'editor-informe' }); });
-  app.get('/api/config', (_req, res) => {
-    res.json({ compilarAlGuardar: d.config.compilarAlGuardar, principal: d.config.principal });
+  app.get('/api/config', async (_req, res) => {
+    res.json({
+      compilarAlGuardar: d.config.compilarAlGuardar,
+      principal: d.config.principal,
+      problema: await d.git.verificar(),
+    });
   });
   app.get('/api/proyecto', async (_req, res) => { res.json(await d.proyecto()); });
 
@@ -55,15 +69,15 @@ export function crearApp(d: Dependencias): express.Express {
       return;
     }
     const { ruta, contenido, finDeLinea, bom, versionBase, forzar } = req.body;
-    const r = await d.archivos.escribir(ruta, { contenido, finDeLinea, bom, versionBase, forzar: forzar === true });
+    const r = await enSerie(() => d.archivos.escribir(ruta, { contenido, finDeLinea, bom, versionBase, forzar: forzar === true }));
     res.status(r.tipo === 'ok' ? 200 : r.tipo === 'cambio-en-disco' ? 409 : 410).json(r);
   });
 
   app.get('/api/git/estado', async (_req, res) => { res.json(await d.git.estado()); });
-  app.post('/api/git/traer', async (_req, res) => { res.json(await d.git.traer()); });
-  app.post('/api/git/enviar', async (_req, res) => { res.json(await d.git.enviar()); });
-  app.post('/api/git/terminar', async (_req, res) => { res.json(await d.git.terminarCombinacion()); });
-  app.post('/api/git/cancelar', async (_req, res) => { await d.git.cancelarCombinacion(); res.json({}); });
+  app.post('/api/git/traer', async (_req, res) => { res.json(await enSerie(() => d.git.traer())); });
+  app.post('/api/git/enviar', async (_req, res) => { res.json(await enSerie(() => d.git.enviar())); });
+  app.post('/api/git/terminar', async (_req, res) => { res.json(await enSerie(() => d.git.terminarCombinacion())); });
+  app.post('/api/git/cancelar', async (_req, res) => { await enSerie(() => d.git.cancelarCombinacion()); res.json({}); });
   app.post('/api/git/abrir-vscode', async (_req, res) => { await d.abrirVsCode(); res.json({}); });
 
   app.post('/api/compilar', async (_req, res) => { res.json(await d.compilador.compilar()); });
@@ -83,6 +97,7 @@ export function crearApp(d: Dependencias): express.Express {
 
   const alFallar: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof RutaInvalida) res.status(400).json({ mensaje: error.message });
+    else if (error instanceof ArchivoProtegido) res.status(423).json({ mensaje: error.message });
     else if (error?.code === 'ENOENT') res.status(404).json({ mensaje: 'El archivo no existe.' });
     else if (error?.type === 'entity.parse.failed') res.status(400).json({ mensaje: 'Pedido mal formado.' });
     else res.status(500).json({ mensaje: String(error?.message ?? 'Error interno del editor.') });

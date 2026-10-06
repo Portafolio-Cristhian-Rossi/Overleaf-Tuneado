@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { DIR_FIXTURE, copiarFixture, dirTemporal } from '../pruebas/ayudas/temporales';
-import { RutaInvalida, codificar, crearArchivos, decodificar, versionDe, type Archivos } from './archivos';
+import { ArchivoProtegido, RutaInvalida, codificar, crearArchivos, decodificar, esFiel, versionDe, type Archivos } from './archivos';
 
 // Solo lectura: el informe real, si está, nunca se escribe desde las pruebas.
 const DIR_INFORME_REAL = path.resolve(import.meta.dirname, '../../informe');
@@ -132,7 +132,7 @@ describe('crearArchivos', () => {
     expect(fs.existsSync(ruta())).toBe(false);
   });
 
-  it.each(['../fuera.tex', 'a/../../fuera.tex', '.git/config', 'C:/Windows/x.tex', '/etc/x.tex', ''])('rechaza leer %j', async (r) => {
+  it.each(['../fuera.tex', 'a/../../fuera.tex', '.git/config', '.GIT/config', '.Git/HEAD', 'C:/Windows/x.tex', '/etc/x.tex', ''])('rechaza leer %j', async (r) => {
     await expect(a.leer(r)).rejects.toBeInstanceOf(RutaInvalida);
   });
 
@@ -145,6 +145,34 @@ describe('crearArchivos', () => {
     const datos = { contenido: 'x', finDeLinea: '\n' as const, bom: false, versionBase: '' };
     await expect(a.escribir('prgrado.cls', datos)).rejects.toBeInstanceOf(RutaInvalida);
     await expect(a.escribir('figs/logo.png', datos)).rejects.toBeInstanceOf(RutaInvalida);
+  });
+
+  // Si el editor no puede reproducir el archivo byte a byte, guardarlo lo dañaría entero.
+  describe('archivos que no se pueden reproducir con fidelidad', () => {
+    const casos: [string, Buffer][] = [
+      ['Latin-1 en vez de UTF-8', Buffer.from([0x61, 0xf1, 0x6f, 0x0a])],          // "año" en Latin-1
+      ['fines de línea mezclados', Buffer.from('a\r\nb\r\nc\n')],
+      ['retorno de carro suelto', Buffer.from('a\rb\n')],
+    ];
+
+    it.each(casos)('%s: se lee marcado como no fiel', async (_nombre, bytes) => {
+      expect(esFiel(bytes)).toBe(false);
+      fs.writeFileSync(path.join(dir, 'raro.bib'), bytes);
+      expect((await a.leer('raro.bib')).fiel).toBe(false);
+    });
+
+    it.each(casos)('%s: no se deja escribir, ni forzando', async (_nombre, bytes) => {
+      fs.writeFileSync(path.join(dir, 'raro.bib'), bytes);
+      const leido = await a.leer('raro.bib');
+      await expect(a.escribir('raro.bib', { ...leido, versionBase: leido.version, forzar: true })).rejects.toBeInstanceOf(ArchivoProtegido);
+      expect(fs.readFileSync(path.join(dir, 'raro.bib')).equals(bytes)).toBe(true);
+    });
+
+    it('los archivos normales, con BOM o sin salto final, son fieles', async () => {
+      expect((await a.leer('Cap1.tex')).fiel).toBe(true);
+      expect(esFiel(Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('a\r\nb')]))).toBe(true);
+      expect(esFiel(Buffer.from(''))).toBe(true);
+    });
   });
 
   it('permite leer y escribir el .bib', async () => {

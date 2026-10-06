@@ -1,0 +1,148 @@
+% Template LaTeX para Informes de Proyectos de Grado de Computación
+% InCo, Facultad de Ingeniería, Universidad de la República
+% 06/2023
+
+\documentclass[oneside]{prgrado}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Datos del Proyecto:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% título del proyecto (debe escribirse en minúscula, con excepción de la
+% letra inicial de la primera palabra y nombres propios)
+\title{Análisis de tópicos en sitios con participación uruguaya}                   
+
+% autores
+\author{Juan Manuel Pacheco, Ignacio Perez y Cristhian Rossi}  
+
+% fecha de la defensa
+\date{\today}                                 
+
+% supervisor
+\supervisor{Juan José Prada}                
+
+% cosupervisor (comentar si no tiene)
+\cosupervisor{Santiago Góngora}
+
+% licencia creative commons del documento
+% opciones: by, by-sa, by-nd, by-nc, by-nc-sa y by-nc-nd
+% opción por defecto: by-nc-nd versión 4.0
+\cclicense{by-nc}{4.0}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%links con colores 
+\hypersetup{
+  colorlinks   = true,
+  urlcolor     = blue,
+  linkcolor    = blue,
+  citecolor    = red
+}
+
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Parte inicial
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\frontmatter % numeración en romanos, capitulos sin numerar
+
+% carátula
+\maketitle
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% agradecimientos
+\chapter*{Agradecimientos}
+
+Además de mi perro, quiero agradecerle a la facultad y a Claudio. Una por hacerme el trabajo en este artículo más fácil, y la otra por hacérmelo mucho más difícil. 
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% resumen
+\chapter*{Resumen}
+
+[Placeholder]
+
+El resumen (200-500 palabras) debe dar una idea completa de todo el
+proyecto, mencionando claramente los formalismos, técnicas, herramientas y lenguajes
+utilizados. No debe limitarse a describir el problema abordado, sino que debe describir
+la solución del problema, con una evaluación de la misma. No debe incluir referencias
+bibliográficas ni referencias a otras partes del informe. Tampoco debe utilizar
+acrónimos sin explicar su significado.
+
+[Que poner]
+
+En la actualidad, cada persona tiene la oportunidad de expresar su opinión en un mundo más globalizado que nunca; cada día se generan en promedio XXX mensajes en redes sociales. Por ello, desarrollar herramientas capaces de procesar todas estas opiniones constituye un objetivo más justificado que nunca. Limitar el estudio al entorno uruguayo nos brinda la oportunidad de enfocarnos y ejercer un mayor control sobre los temas discutidos en una región tan particular como la República Oriental del Uruguay, además de permitirnos explorar el procesamiento de un lenguaje más ruidoso y abierto a los uruguayismos propios de la zona.
+
+Exploramos y experimentamos con diversos métodos de preprocesamiento con el propósito de extraer la mayor utilidad de cada mensaje, así como con diferentes modelos para determinar cuál se adapta mejor a la problemática de trabajar con documentos de un tamaño tan reducido como el de los mensajes en redes sociales.
+
+\hfill \break
+\keywords{Procesamiento del Lenguaje Natural, Aprendizaje Automático, Modelado de Tópicos, Redes Sociales}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% índice
+\tableofcontents
+\newpage
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Parte central
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\mainmatter %numeración en arábicos, numerar capítulos 
+
+% introducción
+\include{Cap1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% antecedentes
+\include{Cap2}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% parte central
+\include{Cap3}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% experimentación
+\include{Cap4}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%conclusiones
+\include{Cap5}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Parte final
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+{ % inicio backmatter
+
+\backmatter % no numerar capítulos 
+
+% referencias bibliográficas
+
+\newpage
+\bibliographystyle{apacite}
+\bibliography{referencias}
+
+} % fin backmatter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% anexos
+\include{Cap6}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\end{document}

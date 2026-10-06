@@ -180,17 +180,18 @@ describe('lo que no debe llegar al remoto', () => {
     expect(await git.estado()).toEqual(LIMPIO);
   });
 
-  it('guardar sin editar un archivo con BOM o fines mezclados no genera cambios', async () => {
+  it('guardar sin editar un archivo con BOM no genera cambios, y uno con fines mezclados no se toca', async () => {
     fs.writeFileSync(path.join(e.informe, 'mezclado.tex'), 'a\r\nb\r\nc\n');
     fs.writeFileSync(path.join(e.informe, 'conbom.tex'), Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('a\r\n')]));
     correr(e.informe, 'add', '-A');
     correr(e.informe, 'commit', '--quiet', '-m', 'casos raros');
 
     const a = crearArchivos(e.informe);
-    for (const ruta of ['Cap1.tex', 'mezclado.tex', 'conbom.tex']) {
+    for (const ruta of ['Cap1.tex', 'conbom.tex']) {
       const l = await a.leer(ruta);
       await a.escribir(ruta, { ...l, versionBase: l.version });
     }
+    await expect(a.escribir('mezclado.tex', { contenido: 'x', finDeLinea: '\n', bom: false, versionBase: '', forzar: true })).rejects.toThrow();
     expect((await git.estado()).cambiosLocales).toBe(false);
   });
 
@@ -206,5 +207,106 @@ describe('lo que no debe llegar al remoto', () => {
     expect(await git.traer()).toEqual({ tipo: 'ok', archivosCambiados: [] });
     expect(await git.enviar()).toEqual({ tipo: 'ok', enviado: false });
     expect(correr(e.informe, 'rev-list', '--count', 'HEAD').trim()).toBe(commitsAntes);
+  });
+});
+
+describe('nombres de archivo con tildes', () => {
+  beforeEach(() => {
+    fs.writeFileSync(path.join(e.informe, 'Introducción.tex'), '\chapter{Uno}\r\nTexto.\r\n');
+    correr(e.informe, 'add', '-A');
+    correr(e.informe, 'commit', '--quiet', '-m', 'archivo con tilde');
+    correr(e.informe, 'push', '--quiet');
+  });
+
+  it('el conflicto informa el nombre real y terminarCombinacion detecta las marcas', async () => {
+    editar(e.informe, 'Introducción.tex', (t) => t.replace('Uno', 'Mío'));
+    await cambioDelCompanero(e, 'Introducción.tex', (t) => t.replace('Uno', 'Del otro'));
+    expect(await git.enviar()).toEqual({ tipo: 'conflicto', archivos: ['Introducción.tex'] });
+    expect(await git.terminarCombinacion()).toEqual({ tipo: 'quedan-marcas', archivos: ['Introducción.tex'] });
+    expect(leerDelRemoto('Introducción.tex')).not.toContain('<<<<<<<');
+    expect((await git.estado()).combinacionEnCurso).toBe(true);
+  });
+
+  it('traer informa el nombre real del archivo cambiado', async () => {
+    await cambioDelCompanero(e, 'Introducción.tex', (t) => t + 'Más.\r\n');
+    expect(await git.traer()).toEqual({ tipo: 'ok', archivosCambiados: ['Introducción.tex'] });
+  });
+});
+
+describe('fallas locales de Git', () => {
+  const bloquearIndice = () => fs.writeFileSync(path.join(e.informe, '.git', 'index.lock'), '');
+
+  it('si no se pueden registrar los cambios, traer lo informa como error local y no sigue', async () => {
+    editar(e.informe, 'Cap1.tex', (t) => t + '\nMío.\n');
+    bloquearIndice();
+    const r = await git.traer();
+    expect(r).toMatchObject({ tipo: 'error', motivo: 'local' });
+    expect(await git.enviar()).toMatchObject({ tipo: 'error', motivo: 'local' });
+    expect(leerDelRemoto('Cap1.tex')).not.toContain('Mío.');
+  });
+
+  it('sin identidad para firmar, enviar falla como error local y no como rechazo de Overleaf', async () => {
+    correr(e.informe, 'config', 'user.name', '');
+    editar(e.informe, 'Cap1.tex', (t) => t + '\nMío.\n');
+    const r = await git.enviar();
+    expect(r).toMatchObject({ tipo: 'error', motivo: 'local' });
+    expect(leer(e.informe, 'Cap1.tex')).toContain('Mío.');
+  });
+
+  it('terminarCombinacion no da por cerrada una combinación cuyo commit falló', async () => {
+    await provocarConflicto();
+    fs.writeFileSync(path.join(e.informe, 'Cap4.tex'), '\chapter{Resuelto}\r\n');
+    bloquearIndice();
+    await expect(git.terminarCombinacion()).rejects.toThrow();
+    fs.rmSync(path.join(e.informe, '.git', 'index.lock'));
+    expect((await git.estado()).combinacionEnCurso).toBe(true);
+    expect(await git.terminarCombinacion()).toEqual({ tipo: 'ok' });
+  });
+
+  it('operaciones pedidas a la vez no se pisan', async () => {
+    editar(e.informe, 'Cap1.tex', (t) => t + '\nMío.\n');
+    const [envio, busqueda, traida] = await Promise.all([git.enviar(), git.buscar(), git.traer()]);
+    expect(envio).toEqual({ tipo: 'ok', enviado: true });
+    expect(busqueda).toEqual({ tipo: 'ok' });
+    expect(traida).toEqual({ tipo: 'ok', archivosCambiados: [] });
+    expect(await git.estado()).toEqual(LIMPIO);
+  });
+});
+
+describe('la carpeta del informe no es un clon propio', () => {
+  it('verificar no encuentra problemas en un clon normal', async () => {
+    expect(await git.verificar()).toBeNull();
+  });
+
+  it('verificar avisa si falta la identidad para firmar', async () => {
+    correr(e.informe, 'config', 'user.email', '');
+    expect(await git.verificar()).toMatch(/git config user\.name/);
+  });
+
+  it('una subcarpeta sin .git no usa el repositorio que la contiene', async () => {
+    const suelta = path.join(e.informe, 'suelta');
+    fs.mkdirSync(suelta);
+    fs.writeFileSync(path.join(suelta, 'a.tex'), 'x\n');
+    const exclusionesAntes = leer(e.informe, '.git/info/exclude');
+    const commitsAntes = correr(e.informe, 'rev-list', '--count', 'HEAD').trim();
+    const ajeno = crearGit(suelta);
+
+    expect(await ajeno.verificar()).toMatch(/no es un clon del proyecto de Overleaf/);
+    await expect(ajeno.preparar()).rejects.toThrow(/no es un clon/);
+    expect(await ajeno.traer()).toMatchObject({ tipo: 'error', motivo: 'local' });
+    expect(await ajeno.enviar()).toMatchObject({ tipo: 'error', motivo: 'local' });
+    expect(await ajeno.estado()).toEqual(LIMPIO);
+
+    expect(leer(e.informe, '.git/info/exclude')).toBe(exclusionesAntes);
+    expect(correr(e.informe, 'rev-list', '--count', 'HEAD').trim()).toBe(commitsAntes);
+  });
+
+  it('una carpeta inexistente no se crea ni se convierte en archivo', async () => {
+    const falta = path.join(e.raiz, 'no-existe');
+    const ajeno = crearGit(falta);
+    expect(await ajeno.verificar()).toMatch(/no es un clon del proyecto de Overleaf/);
+    await expect(ajeno.preparar()).rejects.toThrow();
+    expect(await ajeno.traer()).toMatchObject({ tipo: 'error', motivo: 'local' });
+    expect(fs.existsSync(falta)).toBe(false);
   });
 });

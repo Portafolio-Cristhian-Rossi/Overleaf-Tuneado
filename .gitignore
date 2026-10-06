@@ -1,5 +1,5 @@
-informe/
-build/
+/informe/
+/build/
 node_modules/
 editor/dist/
 editor/config.prueba.json

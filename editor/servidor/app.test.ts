@@ -45,6 +45,7 @@ beforeEach(async () => {
     archivos: crearArchivos(informe),
     proyecto: () => describirProyecto(informe, 'main.tex'),
     git: {
+      verificar: vi.fn(async () => null),
       preparar: vi.fn(async () => {}),
       estado: vi.fn(async () => ESTADO),
       buscar: vi.fn(async () => ({ tipo: 'ok' as const })),
@@ -77,7 +78,12 @@ describe('estado general', () => {
   });
 
   it('config expone solo lo que el cliente necesita', async () => {
-    expect(await get('/api/config')).toEqual({ compilarAlGuardar: true, principal: 'main.tex' });
+    expect(await get('/api/config')).toEqual({ compilarAlGuardar: true, principal: 'main.tex', problema: null });
+  });
+
+  it('config informa el problema que impide sincronizar', async () => {
+    d.git.verificar = vi.fn(async () => 'La carpeta no es un clon del proyecto de Overleaf.');
+    expect((await get('/api/config')).problema).toBe('La carpeta no es un clon del proyecto de Overleaf.');
   });
 
   it('proyecto', async () => {
@@ -180,6 +186,37 @@ describe('archivos', () => {
     const antes = leerDisco('Cap1.tex');
     expect((await put('/api/archivo', cuerpo)).status).toBe(400);
     expect(leerDisco('Cap1.tex')).toBe(antes);
+  });
+});
+
+// Un guardado que llega en medio de un Traer no debe escribir mientras Git combina archivos.
+describe('guardados y Git de a uno', () => {
+  it('un guardado pedido durante un traer espera a que el traer termine', async () => {
+    const orden: string[] = [];
+    d.git.traer = vi.fn(async () => {
+      orden.push('traer empieza');
+      await new Promise((r) => setTimeout(r, 150));
+      orden.push('traer termina');
+      return { tipo: 'ok' as const, archivosCambiados: [] };
+    });
+    const a = await get('/api/archivo?ruta=Cap1.tex');
+    const traida = post('/api/git/traer');
+    await new Promise((r) => setTimeout(r, 30));
+    const guardado = put('/api/archivo', { ruta: 'Cap1.tex', ...a, contenido: a.contenido + 'x', versionBase: a.version })
+      .then((r) => { orden.push('guardado termina'); return r; });
+    await Promise.all([traida, guardado]);
+    expect(orden).toEqual(['traer empieza', 'traer termina', 'guardado termina']);
+  });
+
+  it('un archivo protegido responde 423 con su motivo y no se escribe', async () => {
+    const bytes = Buffer.from([0x61, 0xf1, 0x6f, 0x0a]);
+    fs.writeFileSync(path.join(dir, 'informe', 'raro.bib'), bytes);
+    const a = await get('/api/archivo?ruta=raro.bib');
+    expect(a.fiel).toBe(false);
+    const r = await put('/api/archivo', { ruta: 'raro.bib', contenido: 'x', finDeLinea: a.finDeLinea, bom: false, versionBase: a.version, forzar: true });
+    expect(r.status).toBe(423);
+    expect(r.cuerpo.mensaje).toMatch(/no se puede guardar/);
+    expect(fs.readFileSync(path.join(dir, 'informe', 'raro.bib')).equals(bytes)).toBe(true);
   });
 });
 

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { Config, ResultadoCompilacion } from '../compartido/tipos';
+import type { Config, ProblemaLatex, ResultadoCompilacion } from '../compartido/tipos';
 import { interpretarBlg, interpretarLog } from './logLatex';
 
 export type Ejecutar = (comando: string, args: string[], opciones: { cwd: string; timeoutMs: number })
@@ -30,6 +30,17 @@ const ejecutarProceso: Ejecutar = (comando, args, opciones) =>
 
 const leer = (ruta: string) => fs.readFile(ruta, 'utf8').catch(() => '');
 const modificado = (ruta: string) => fs.stat(ruta).then((s) => s.mtimeMs, () => null);
+
+function errorFatal(log: string, codigo: number | null): ProblemaLatex {
+  const linea = log.split(/\r?\n/).find((l) => l.startsWith('! '));
+  return linea
+    ? { gravedad: 'error', ruta: null, linea: null, mensaje: `LaTeX se detuvo sin terminar: ${linea.slice(2).trim()}`, original: linea.trim() }
+    : {
+      gravedad: 'error', ruta: null, linea: null,
+      mensaje: 'LaTeX terminó con un error y no dejó detalles en su registro.',
+      original: `pdflatex terminó con código ${codigo}`,
+    };
+}
 
 export function crearCompilador(
   cfg: Pick<Config, 'informe' | 'build' | 'principal'>,
@@ -74,6 +85,12 @@ export function crearCompilador(
     const yaInformados = new Set(delLog.map((p) => p.mensaje));
     const delBlg = corrioBibtex ? interpretarBlg(await leer(enBuild('blg'))).filter((p) => !yaInformados.has(p.mensaje)) : [];
     const problemas = [...delLog, ...delBlg];
+
+    // pdflatex puede fallar sin dejar ningún error con ARCHIVO:LÍNEA (un error fatal solo
+    // escribe líneas que empiezan con "!"). Eso nunca debe pasar por una compilación correcta.
+    if (r.codigo !== 0 && !problemas.some((p) => p.gravedad === 'error')) {
+      problemas.push(errorFatal(await leer(enBuild('log')), r.codigo));
+    }
     const pdfDespues = await modificado(rutaPdf());
     return {
       tipo: problemas.some((p) => p.gravedad === 'error') ? 'con-errores' : 'ok',

@@ -9,6 +9,7 @@ export interface ArchivoLeido {
   contenido: string;                   // saltos normalizados a \n, sin BOM
   finDeLinea: FinDeLinea; bom: boolean;
   version: string;                     // SHA-1 hex de los bytes en disco
+  fiel: boolean;                       // false: el editor no puede reproducirlo byte a byte; solo lectura
 }
 export type ResultadoEscritura =
   | { tipo: 'ok'; version: string }
@@ -29,7 +30,8 @@ export interface EstadoGit {
   cambiosLocales: boolean; commitsSinEnviar: number; commitsSinTraer: number;
   combinacionEnCurso: boolean; archivosEnConflicto: string[];
 }
-export type ErrorRed = { tipo: 'error'; motivo: 'autenticacion' | 'sin-conexion' | 'otro'; mensaje: string };
+// 'local': falló un paso de Git en esta máquina; no tiene que ver con Overleaf.
+export type ErrorRed = { tipo: 'error'; motivo: 'autenticacion' | 'sin-conexion' | 'local' | 'otro'; mensaje: string };
 export type ResultadoTraer =
   | { tipo: 'ok'; archivosCambiados: string[] }
   | { tipo: 'conflicto'; archivos: string[] } | ErrorRed;

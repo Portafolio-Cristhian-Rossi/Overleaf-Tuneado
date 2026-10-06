@@ -36,7 +36,19 @@ describe('interpretarLog', () => {
   it('carácter pegado desde Word', () => {
     const [p] = interpretarLog(log('unicode.log'));
     expect(p).toMatchObject({ gravedad: 'error', ruta: 'Cap1.tex', linea: 5 });
-    expect(p.mensaje).toBe('Carácter no soportado: «“». Suele aparecer al copiar y pegar desde Word o un PDF; reemplazalo por el equivalente común');
+    expect(p.mensaje).toBe('Carácter no soportado: «“» (U+201C). Suele aparecer al copiar y pegar desde Word o un PDF; reemplazalo por el equivalente común');
+  });
+
+  // Un carácter invisible entre comillas no le dice nada a nadie: se nombra por su código.
+  it.each([
+    ['200B', 'espacio de ancho cero'],
+    ['202F', 'espacio estrecho sin separación'],
+    ['FEFF', 'marca de orden de bytes'],
+    ['2063', 'carácter invisible'],
+  ])('carácter invisible U+%s', (codigo, nombre) => {
+    const caracter = String.fromCodePoint(parseInt(codigo, 16));
+    const [p] = interpretarLog(`./Cap1.tex:5: LaTeX Error: Unicode character ${caracter} (U+${codigo})\n`);
+    expect(p.mensaje).toBe(`Carácter invisible no soportado (U+${codigo}, ${nombre}). Suele aparecer al copiar y pegar desde la web o un PDF; borrá ese tramo y volvé a escribirlo`);
   });
 
   it('referencia y cita inexistentes, sin duplicar', () => {

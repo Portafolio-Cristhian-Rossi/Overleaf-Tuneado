@@ -15,7 +15,7 @@ let build: string;
 let llamadas: Llamada[];
 let c: Compilador;
 // Lo que el pdflatex y el bibtex falsos harán en las próximas corridas.
-let falso: { conBibliografia: boolean; logs: string[]; vence: boolean; noEncontrado: boolean; escribePdf: boolean };
+let falso: { conBibliografia: boolean; logs: string[]; vence: boolean; noEncontrado: boolean; escribePdf: boolean; codigo: number };
 let reloj: number;
 
 // Simula a pdflatex y bibtex: escribe .aux, .log y .pdf donde indique -output-directory.
@@ -40,7 +40,7 @@ const ejecutar: Ejecutar = async (comando, args, opciones) => {
   } else {
     fs.writeFileSync(path.join(opciones.cwd, 'main.blg'), 'This is BibTeX\n');
   }
-  return { codigo: 0, vencido: false, noEncontrado: false };
+  return { codigo: comando === 'pdflatex' ? falso.codigo : 0, vencido: false, noEncontrado: false };
 };
 
 const listar = (dir: string) => fs.readdirSync(dir, { recursive: true }).map(String).sort();
@@ -52,7 +52,7 @@ beforeEach(() => {
   build = path.join(raiz, 'build');
   copiarFixture(informe);
   llamadas = [];
-  falso = { conBibliografia: true, logs: [], vence: false, noEncontrado: false, escribePdf: true };
+  falso = { conBibliografia: true, logs: [], vence: false, noEncontrado: false, escribePdf: true, codigo: 0 };
   reloj = 1_700_000_000;
   c = crearCompilador({ informe, build, principal: 'main.tex' }, ejecutar);
 });
@@ -152,6 +152,36 @@ describe('crearCompilador', () => {
       ['La cita Perez2020 no está en la bibliografía', 39],
       ['La cita Otra2021 no está en la bibliografía', null],
     ]);
+  });
+
+  // Un error fatal no trae ARCHIVO:LÍNEA: solo líneas que empiezan con "!".
+  it('si pdflatex falla sin errores reconocibles, no se informa como compilación correcta', async () => {
+    falso.conBibliografia = false;
+    falso.escribePdf = false;
+    falso.codigo = 1;
+    falso.logs = ['(./Cap2.tex\n! Emergency stop.\n*** (job aborted, no legal \\end found)\n'];
+    expect(await c.compilar()).toEqual({
+      tipo: 'con-errores',
+      pdfActualizado: false,
+      problemas: [{ gravedad: 'error', ruta: null, linea: null, mensaje: 'LaTeX se detuvo sin terminar: Emergency stop.', original: '! Emergency stop.' }],
+    });
+  });
+
+  it('si pdflatex falla y el registro no dice nada, igual se informa un error', async () => {
+    falso.conBibliografia = false;
+    falso.escribePdf = false;
+    falso.codigo = 1;
+    falso.logs = ['\n'];
+    const r = await c.compilar();
+    expect(r).toMatchObject({ tipo: 'con-errores', problemas: [{ gravedad: 'error', mensaje: 'LaTeX terminó con un error y no dejó detalles en su registro.' }] });
+  });
+
+  it('un código de salida con errores ya reconocidos no agrega un error de más', async () => {
+    falso.conBibliografia = false;
+    falso.codigo = 1;
+    falso.logs = [LOG_ERROR];
+    const r = await c.compilar();
+    expect(r.tipo === 'con-errores' && r.problemas).toHaveLength(1);
   });
 
   it('tres pedidos simultáneos producen dos compilaciones', async () => {

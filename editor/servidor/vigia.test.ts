@@ -33,3 +33,28 @@ describe('crearVigia', () => {
     expect(alVencer).toHaveBeenCalledTimes(1);
   });
 });
+
+// Al suspender la máquina no corren ni los latidos ni las revisiones: al despertar, el tiempo
+// "pasó" de golpe. Eso no significa que se hayan cerrado las pestañas.
+describe('suspensión del equipo', () => {
+  it('un salto grande entre revisiones se toma como despertar y reinicia la cuenta', () => {
+    let t = 0;
+    const alVencer = vi.fn();
+    const v = crearVigia({ limiteMs: 600000, saltoDeSuspensionMs: 120000, ahora: () => t, alVencer });
+    t = 30000; v.revisar();
+    t = 30000 + 8 * 3600 * 1000; v.revisar();          // ocho horas suspendida
+    expect(alVencer).not.toHaveBeenCalled();
+    t += 30000; v.latido();                             // la pestaña sigue ahí y vuelve a latir
+    t += 600000; v.revisar();
+    expect(alVencer).not.toHaveBeenCalled();
+  });
+
+  it('si tras despertar no llega ningún latido, igual vence al cumplirse el límite', () => {
+    let t = 0;
+    const alVencer = vi.fn();
+    const v = crearVigia({ limiteMs: 600000, saltoDeSuspensionMs: 120000, ahora: () => t, alVencer });
+    t = 8 * 3600 * 1000; v.revisar();
+    for (let i = 0; i < 21; i++) { t += 30000; v.revisar(); }
+    expect(alVencer).toHaveBeenCalledTimes(1);
+  });
+});

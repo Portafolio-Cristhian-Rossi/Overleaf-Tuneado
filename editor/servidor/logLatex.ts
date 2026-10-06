@@ -4,6 +4,17 @@ function normalizarRuta(ruta: string): string {
   return ruta.replace(/\\/g, '/').replace(/^\.\//, '');
 }
 
+const INVISIBLES: Record<string, string> = {
+  '200B': 'espacio de ancho cero',
+  '200C': 'separador de ancho cero',
+  '200D': 'unión de ancho cero',
+  '2009': 'espacio fino',
+  '202F': 'espacio estrecho sin separación',
+  '2060': 'unión de palabras',
+  'FEFF': 'marca de orden de bytes',
+  '00AD': 'guion opcional',
+};
+
 // Mensaje en español para los errores comunes; null si no es de los conocidos.
 function traducir(original: string, siguientes: string[]): string | null {
   let m: RegExpMatchArray | null;
@@ -19,8 +30,14 @@ function traducir(original: string, siguientes: string[]): string | null {
   if (/Missing \$ inserted/.test(original)) return 'Hay un símbolo matemático fuera de una ecuación';
   if ((m = original.match(/File `([^']+)' not found/))) return `No se encontró el archivo ${m[1]}`;
   if ((m = original.match(/Environment (\S+) undefined/))) return `Entorno desconocido: ${m[1]}`;
-  if ((m = original.match(/Unicode character (.+?) \(U\+[0-9A-Fa-f]+\)/))) {
-    return `Carácter no soportado: «${m[1]}». Suele aparecer al copiar y pegar desde Word o un PDF; reemplazalo por el equivalente común`;
+  if ((m = original.match(/Unicode character (.*?) \(U\+([0-9A-Fa-f]+)\)/))) {
+    const codigo = m[2].toUpperCase();
+    // Espacios especiales y caracteres de formato: entre comillas no se verían.
+    if (/^[\p{Z}\p{C}]*$/u.test(m[1])) {
+      const nombre = INVISIBLES[codigo] ?? 'carácter invisible';
+      return `Carácter invisible no soportado (U+${codigo}, ${nombre}). Suele aparecer al copiar y pegar desde la web o un PDF; borrá ese tramo y volvé a escribirlo`;
+    }
+    return `Carácter no soportado: «${m[1]}» (U+${codigo}). Suele aparecer al copiar y pegar desde Word o un PDF; reemplazalo por el equivalente común`;
   }
   return null;
 }

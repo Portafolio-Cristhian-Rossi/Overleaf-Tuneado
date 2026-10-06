@@ -7,12 +7,14 @@ const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 const EXTENSIONES_EDITABLES = new Set(['.tex', '.bib']);
 
 export class RutaInvalida extends Error {}
+// El archivo existe pero el editor no lo puede guardar sin dañarlo.
+export class ArchivoProtegido extends Error {}
 
 export function versionDe(bytes: Buffer): string {
   return createHash('sha1').update(bytes).digest('hex');
 }
 
-export function decodificar(bytes: Buffer): Omit<ArchivoLeido, 'version'> {
+export function decodificar(bytes: Buffer): Omit<ArchivoLeido, 'version' | 'fiel'> {
   const bom = bytes.subarray(0, 3).equals(BOM);
   const texto = (bom ? bytes.subarray(3) : bytes).toString('utf8');
   const crlf = texto.match(/\r\n/g)?.length ?? 0;
@@ -25,6 +27,18 @@ export function codificar(contenido: string, finDeLinea: FinDeLinea, bom: boolea
   const texto = finDeLinea === '\n' ? contenido : contenido.replace(/\n/g, finDeLinea);
   const bytes = Buffer.from(texto, 'utf8');
   return bom ? Buffer.concat([BOM, bytes]) : bytes;
+}
+
+// ¿Puede el editor devolver exactamente estos bytes? No, si el archivo no es UTF-8 válido,
+// mezcla fines de línea o tiene retornos de carro sueltos: guardarlo alteraría partes que
+// nadie tocó (por ejemplo, todas las tildes de un .bib en Latin-1).
+export function esFiel(bytes: Buffer): boolean {
+  const d = decodificar(bytes);
+  return !d.contenido.includes('\r') && codificar(d.contenido, d.finDeLinea, d.bom).equals(bytes);
+}
+
+function leido(bytes: Buffer): ArchivoLeido {
+  return { ...decodificar(bytes), version: versionDe(bytes), fiel: esFiel(bytes) };
 }
 
 export interface Archivos {
@@ -45,7 +59,8 @@ export function crearArchivos(dirInforme: string): Archivos {
     const absoluta = path.resolve(raiz, ruta);
     const relativa = path.relative(raiz, absoluta);
     const partes = relativa.split(path.sep);
-    if (relativa === '' || partes[0] === '..' || partes.includes('.git')) {
+    // Windows no distingue mayúsculas: .GIT es la misma carpeta que .git.
+    if (relativa === '' || partes[0] === '..' || partes.some((parte) => parte.toLowerCase() === '.git')) {
       throw new RutaInvalida(`Ruta no permitida: ${ruta}`);
     }
     return absoluta;
@@ -62,8 +77,7 @@ export function crearArchivos(dirInforme: string): Archivos {
 
   return {
     async leer(ruta) {
-      const bytes = await fs.readFile(resolver(ruta));
-      return { ...decodificar(bytes), version: versionDe(bytes) };
+      return leido(await fs.readFile(resolver(ruta)));
     },
 
     async escribir(ruta, datos) {
@@ -73,8 +87,11 @@ export function crearArchivos(dirInforme: string): Archivos {
       }
       const actuales = await leerBytes(absoluta);
       if (actuales === null) return { tipo: 'desaparecido' };
+      if (!esFiel(actuales)) {
+        throw new ArchivoProtegido('Este archivo no está en UTF-8 o mezcla fines de línea: no se puede guardar desde el editor sin dañarlo.');
+      }
       if (!datos.forzar && versionDe(actuales) !== datos.versionBase) {
-        return { tipo: 'cambio-en-disco', actual: { ...decodificar(actuales), version: versionDe(actuales) } };
+        return { tipo: 'cambio-en-disco', actual: leido(actuales) };
       }
       const nuevos = codificar(datos.contenido, datos.finDeLinea, datos.bom);
       await fs.writeFile(absoluta, nuevos);
