@@ -23,10 +23,15 @@ export function crearSincronizacion(barra: Barra, o: {
     enCurso = true;
     traer.disabled = enviar.disabled = true;
     novedad.textContent = cual === 'traer' ? 'Trayendo…' : 'Enviando…';
+    let conflicto: string[] | null = null;
     try {
-      await o.editor.guardarAhora();
+      // Mientras Git trabaja no se escribe ni se guarda: un guardado en medio de una
+      // combinación pisaría lo que se está trayendo.
+      if (!(await o.editor.congelar())) {
+        barra.avisar('No se pudo guardar el archivo abierto, así que no se sincronizó. Probá de nuevo en unos segundos.', 'error');
+        return;
+      }
       let aviso: Aviso | null;
-      let conflicto: string[] | null = null;
       if (cual === 'traer') {
         const r = await api.traer();
         aviso = avisoDeTraer(r);
@@ -44,6 +49,8 @@ export function crearSincronizacion(barra: Barra, o: {
       barra.avisar((e as Error).message, 'error');
     } finally {
       enCurso = false;
+      // Con un conflicto el editor sigue congelado hasta que se resuelva o se cancele.
+      if (!conflicto) o.editor.descongelar();
       traer.disabled = enviar.disabled = false;
       novedad.textContent = '';
       await revisar();

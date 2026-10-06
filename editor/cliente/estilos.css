@@ -120,7 +120,7 @@ select {
 #editor .cm-panels { background: var(--superficie-2); color: var(--texto); border-color: var(--borde); font-family: var(--interfaz); font-size: 13px; }
 #editor .cm-panels input, #editor .cm-panels button { font: inherit; }
 #editor .cm-searchMatch { background: var(--aviso-fondo); }
-#editor.bloqueado { opacity: 0.35; pointer-events: none; }
+#editor.solo-lectura .cm-content { caret-color: transparent; }
 
 /* Diálogos */
 .dialogo {

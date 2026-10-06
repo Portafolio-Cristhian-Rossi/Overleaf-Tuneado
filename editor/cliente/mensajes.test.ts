@@ -23,6 +23,12 @@ describe('avisoDeTraer', () => {
       tipo: 'error',
       texto: 'No hay conexión con Overleaf. Tus cambios están guardados en esta máquina.',
     });
+    // Una falla de Git en esta máquina no es un rechazo de Overleaf: no hay que echarle la culpa.
+    expect(avisoDeTraer({ tipo: 'error', motivo: 'local', mensaje: 'fatal: empty ident name' })).toEqual({
+      tipo: 'error',
+      texto: 'Git no pudo completar la operación en tu máquina:\nfatal: empty ident name',
+    });
+    expect(avisoDeEnviar({ tipo: 'error', motivo: 'local', mensaje: 'x' })?.texto).not.toMatch(/Overleaf/);
     expect(avisoDeTraer({ tipo: 'error', motivo: 'otro', mensaje: 'fatal: algo raro' })).toEqual({
       tipo: 'error',
       texto: 'Overleaf rechazó la operación:\nfatal: algo raro',

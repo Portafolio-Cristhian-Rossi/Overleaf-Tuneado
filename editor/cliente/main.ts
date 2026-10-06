@@ -131,18 +131,24 @@ const editor = crearEditor(porId('editor'), {
     extensionMenu({ paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete }),
     extensionAtajos((nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); }),
   ],
-  alAbrir(ruta, texto) {
+  alAbrir(ruta, archivo) {
     quitarCartel();
     recordarUltimo(ruta);
     habilitarFormato(esTex(ruta));
     selectorNivel.selectedIndex = 0;
     lateral.mostrarProyecto(proyecto, ruta);
-    actualizarIndice(texto, 0);
+    actualizarIndice(archivo.contenido, 0);
+    if (!archivo.fiel) {
+      barra.avisar('Este archivo no está en UTF-8 o mezcla fines de línea. Se abre en solo lectura para no dañarlo: corregilo en VS Code y volvé a abrirlo.', 'error');
+    }
     const capitulo = proyecto.capitulos.find((c) => c.ruta === ruta);
     barra.mostrarTitulo(capitulo ? (capitulo.numero ? `${capitulo.numero}. ${capitulo.titulo}` : capitulo.titulo) : 'Referencias');
   },
-  alCambiarEstado(estado) {
+  alCambiarEstado(estado, detalle) {
     barra.mostrarGuardado(estado);
+    if (estado === 'error' && detalle) {
+      barra.avisar(`${detalle}\nTus cambios siguen en pantalla y el guardado se reintenta solo.`, 'error');
+    }
     if (estado !== 'guardado') return;
     // Los títulos y etiquetas pueden haber cambiado: se refresca la lista de capítulos.
     clearTimeout(relojProyecto);
@@ -155,8 +161,9 @@ const editor = crearEditor(porId('editor'), {
   alCambiarDocumento: (texto) => actualizarIndice(texto),
   preguntarConflicto: () => preguntar('Este archivo cambió por fuera del editor.', [
     { texto: 'Conservar la mía', valor: 'sobrescribir' as const },
-    { texto: 'Recargar la versión del disco', valor: 'recargar' as const, principal: true },
-  ], 'Tenés cambios sin guardar. Si recargás, se pierden; si conservás la tuya, reemplaza a la del disco.'),
+    { texto: 'Recargar la versión del disco', valor: 'recargar' as const },
+    { texto: 'Decidir después', valor: 'despues' as const, neutra: true },
+  ], 'Tenés cambios sin guardar. Si recargás, se pierden; si conservás la tuya, reemplaza a la del disco. Si lo dejás para después, no se guarda ni se pierde nada.'),
   alDesaparecer() {
     mostrarCartel(
       'Este archivo ya no existe en el informe',
@@ -233,7 +240,9 @@ setInterval(latir, INTERVALO_DE_LATIDO_MS);
 
 async function iniciar(): Promise<void> {
   try {
-    ({ principal, compilarAlGuardar } = await api.config());
+    const config = await api.config();
+    ({ principal, compilarAlGuardar } = config);
+    if (config.problema) barra.avisar(config.problema, 'error');
     tomarProyecto(await api.proyecto());
     lateral.mostrarProyecto(proyecto, null);
     const ruta = rutaInicial();

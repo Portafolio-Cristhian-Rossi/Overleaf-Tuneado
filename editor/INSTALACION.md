@@ -70,6 +70,9 @@ initexmf --set-config-value "[MPM]AutoInstall=1"
 Sin MiKTeX el editor funciona igual para escribir y sincronizar; lo único que
 no vas a tener es el PDF local.
 
+**VS Code** es opcional. Sirve para resolver un conflicto cuando dos personas
+cambiaron el mismo párrafo, y como plan B si el editor no arranca.
+
 ## 3. Conectar con Overleaf
 
 1. En Overleaf, entrá a **Account Settings → Git Integration** y creá un token.
@@ -84,6 +87,19 @@ git clone https://git@git.overleaf.com/<id-del-proyecto> informe
 
 Cuando pida contraseña, pegá el token. Windows lo guarda y no lo vuelve a
 pedir.
+
+4. Decile a Git con qué nombre firmar tus cambios; es el que van a ver los
+   demás en el historial de Overleaf. Parado en la carpeta `Tesis`:
+
+```bash
+git -C informe config user.name "Tu Nombre"
+```
+
+```bash
+git -C informe config user.email "tu@correo.com"
+```
+
+Si te salteás este paso, el editor te lo recuerda al abrir.
 
 **El token es una contraseña.** No lo pegues en chats, mails ni documentos. Si
 se te escapó, borralo en la misma pantalla de Overleaf y creá otro.
@@ -199,7 +215,26 @@ minutos o reiniciá la máquina, y volvé a abrirlo.
 
 **"Este archivo cambió por fuera del editor".** Alguien, u otro programa,
 modificó el archivo mientras lo tenías abierto con cambios sin guardar. Elegí
-qué versión conservar.
+qué versión conservar, o *Decidir después* para mirar con calma: mientras
+tanto no se guarda ni se pierde nada.
+
+**"No se pudo conectar con el editor" o "No se pudo guardar".** El programa
+del editor se cerró o no responde. No cierres la pestaña: tu texto sigue ahí.
+Abrí el editor de nuevo desde el ícono del escritorio; la pestaña anterior
+reintenta sola cada pocos segundos y guarda lo pendiente.
+
+**"Git no pudo completar la operación en tu máquina".** El problema no es de
+Overleaf sino del repositorio local. El mensaje que sigue dice cuál. Los más
+comunes: falta configurar el nombre (paso 4 de la sección 3) u otro programa
+está usando la carpeta `informe`; en ese caso cerralo y probá de nuevo.
+
+**"La carpeta … no es un clon del proyecto de Overleaf".** La carpeta
+`informe` no existe o se copió a mano en vez de clonarse. Repetí la sección 3.
+
+**"Se abre en solo lectura para no dañarlo".** El archivo no está en UTF-8 o
+mezcla tipos de fin de línea, algo que pasa con archivos `.bib` exportados por
+algunos programas. Abrilo en VS Code, guardalo como UTF-8 y volvé a abrirlo en
+el editor.
 
 **"Este archivo ya no existe en el informe".** Otra persona lo borró o lo
 renombró. Copiá tu texto con el botón y abrí el capítulo que corresponda.
@@ -240,3 +275,6 @@ npm install
 ```bash
 npm run build
 ```
+
+Los cambios se ven la próxima vez que el editor arranque: cerrá sus pestañas y
+esperá diez minutos a que se cierre solo, o reiniciá la máquina.

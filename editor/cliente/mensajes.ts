@@ -11,6 +11,7 @@ function avisoDeRed(e: ErrorRed): Aviso {
     return error('Git no pudo autenticarse con Overleaf. Abrí una terminal en la carpeta informe, ejecutá git pull e ingresá el token.');
   }
   if (e.motivo === 'sin-conexion') return error('No hay conexión con Overleaf. Tus cambios están guardados en esta máquina.');
+  if (e.motivo === 'local') return error(`Git no pudo completar la operación en tu máquina:\n${e.mensaje}`);
   return rechazo(e.mensaje);
 }
 

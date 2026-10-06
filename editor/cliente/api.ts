@@ -36,7 +36,7 @@ export interface DatosDeEscritura {
 }
 
 export const api = {
-  config: () => pedir<{ compilarAlGuardar: boolean; principal: string }>('GET', '/api/config'),
+  config: () => pedir<{ compilarAlGuardar: boolean; principal: string; problema: string | null }>('GET', '/api/config'),
   proyecto: () => pedir<Proyecto>('GET', '/api/proyecto'),
   leer: (ruta: string) => pedir<ArchivoLeido>('GET', `/api/archivo?ruta=${encodeURIComponent(ruta)}`),
   escribir: (ruta: string, datos: DatosDeEscritura, urgente = false) =>

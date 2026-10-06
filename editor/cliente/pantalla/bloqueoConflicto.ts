@@ -16,7 +16,7 @@ export function crearBloqueoConflicto(padre: HTMLElement, o: { editor: ControlEd
       el('h2', {}, 'Vos y otra persona cambiaron el mismo párrafo'),
       el('p', {}, 'Git no pudo combinar estos archivos por su cuenta:'),
       lista,
-      el('p', {}, 'Podés elegir qué versión queda en VS Code, o cancelar y volver a como estabas antes de traer. Tu trabajo no se pierde en ningún caso.'),
+      el('p', {}, 'Podés elegir qué versión queda en VS Code, o cancelar y volver a como estabas antes de traer. Cancelar no borra nada: lo tuyo queda en tu máquina y lo de la otra persona sigue en Overleaf.'),
       error,
       botones));
   padre.append(cartel);
@@ -56,7 +56,7 @@ export function crearBloqueoConflicto(padre: HTMLElement, o: { editor: ControlEd
 
   function ocultar(): void {
     cartel.hidden = true;
-    o.editor.bloquear(false);
+    o.editor.descongelar();
   }
 
   return {
@@ -65,7 +65,7 @@ export function crearBloqueoConflicto(padre: HTMLElement, o: { editor: ControlEd
       if (!cartel.hidden) return;
       error.hidden = true;
       cartel.hidden = false;
-      o.editor.bloquear(true);
+      void o.editor.congelar();
     },
     ocultar,
   };
