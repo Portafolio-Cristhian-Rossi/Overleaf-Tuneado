@@ -43,8 +43,12 @@ function nombresDePaquetes(texto: string, comando: 'usepackage' | 'RequirePackag
   return [...texto.matchAll(patron)].flatMap((m) => m[1].split(',').map((p) => p.trim()).filter(Boolean));
 }
 
+// Entornos cuyo \label nombra al propio objeto (figura, tabla, ecuación) y no a la sección.
+const ENTORNO_CON_ETIQUETA_PROPIA = /\\begin\{((?:figure|table|equation|align|eqnarray|subfigure)\*?)\}[\s\S]*?\\end\{\1\}/g;
+
 function etiquetasDe(ruta: string, f: Fuente, numeroCapitulo: string | null): Etiqueta[] {
   const numeros = numerarTitulos(f.elementos, numeroCapitulo);
+  const objetos = [...f.sinComentarios.matchAll(ENTORNO_CON_ETIQUETA_PROPIA)].map((m) => ({ desde: m.index, hasta: m.index + m[0].length }));
   const salida: Etiqueta[] = [];
   let titulo = '';
   let numero: string | null = null;
@@ -54,7 +58,10 @@ function etiquetasDe(ruta: string, f: Fuente, numeroCapitulo: string | null): Et
       numero = numeros.get(e.desde) ?? null;
     } else if (e.tipo === 'etiqueta') {
       const linea = f.texto.slice(0, e.desde).split('\n').length;
-      salida.push({ nombre: e.nombre, ruta, linea, titulo, numero });
+      const enObjeto = objetos.some((o) => o.desde <= e.desde && e.desde < o.hasta);
+      salida.push(enObjeto
+        ? { nombre: e.nombre, ruta, linea, titulo: '', numero: null }
+        : { nombre: e.nombre, ruta, linea, titulo, numero });
     }
   }
   return salida;

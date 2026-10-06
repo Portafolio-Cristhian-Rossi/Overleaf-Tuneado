@@ -1,7 +1,10 @@
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api } from './api';
+import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
+import { agregarPaquete } from './comandos';
 import { crearEditor } from './editor';
 import { titulosDelIndice } from './indice';
+import { extensionMenu } from './menuBarra';
 import { crearBarra } from './pantalla/barra';
 import { el, preguntar } from './pantalla/dom';
 import { crearLateral } from './pantalla/lateral';
@@ -23,6 +26,7 @@ function ultimoRecordado(): string | null {
 
 let proyecto: Proyecto = { capitulos: [], etiquetas: [], paquetes: [], bibliografia: null };
 let etiquetas = new Map<string, Etiqueta>();
+let principal = 'main.tex';
 
 function tomarProyecto(nuevo: Proyecto): void {
   proyecto = nuevo;
@@ -42,6 +46,22 @@ function mostrarCartel(titulo: string, ...contenido: (Node | string)[]): void {
   quitarCartel();
   cartel = el('div', { clase: 'cartel' }, el('div', { clase: 'cartel-caja', role: 'alert' }, el('h2', {}, titulo), ...contenido));
   zonaEditor.append(cartel);
+}
+
+// Controles de formato: actúan sobre la selección o la línea del cursor.
+const NIVELES: [string, Nivel][] = [['Texto', null], ['Capítulo', 0], ['Sección', 1], ['Subsección', 2], ['Subsubsección', 3]];
+const selectorNivel = el('select', {
+  'aria-label': 'Nivel de título',
+  alChange: () => darNivel(editor.vista, NIVELES[selectorNivel.selectedIndex][1]),
+}, ...NIVELES.map(([texto]) => el('option', {}, texto)));
+barra.zonaFormato.append(
+  selectorNivel,
+  el('button', { type: 'button', title: 'Negrita (Ctrl+B)', 'aria-label': 'Negrita', alClick: () => darFormato(editor.vista, 'textbf') }, el('b', {}, 'N')),
+  el('button', { type: 'button', title: 'Cursiva (Ctrl+I)', 'aria-label': 'Cursiva', alClick: () => darFormato(editor.vista, 'textit') }, el('i', {}, 'C')),
+);
+
+function habilitarFormato(si: boolean): void {
+  for (const control of barra.zonaFormato.querySelectorAll<HTMLSelectElement | HTMLButtonElement>('select, button')) control.disabled = !si;
 }
 
 const lateral = crearLateral(porId('lateral'), {
@@ -68,13 +88,50 @@ async function recargarProyecto(): Promise<void> {
   editor.vista.dispatch({ effects: contextoCambiado.of(null) });
 }
 
+// Las plantillas pueden necesitar un paquete que el informe todavía no carga.
+async function asegurarPaquete(paquete: string, configuracion?: string): Promise<boolean> {
+  const acepta = await preguntar(`Esta plantilla necesita el paquete ${paquete}. ¿Agregarlo a ${principal}?`, [
+    { texto: 'Agregar', valor: true, principal: true },
+    { texto: 'Cancelar', valor: false },
+  ]);
+  if (!acepta) return false;
+
+  if (editor.rutaAbierta() === principal) {
+    const actual = editor.vista.state.doc.toString();
+    const nuevo = agregarPaquete(actual, paquete, configuracion);
+    if (nuevo !== actual) {
+      // agregarPaquete solo inserta: lo agregado es lo que sigue al prefijo común.
+      let i = 0;
+      while (i < actual.length && actual[i] === nuevo[i]) i++;
+      editor.vista.dispatch({ changes: { from: i, insert: nuevo.slice(i, i + nuevo.length - actual.length) } });
+      await editor.guardarAhora();
+    }
+  } else {
+    const archivo = await api.leer(principal);
+    const nuevo = agregarPaquete(archivo.contenido, paquete, configuracion);
+    if (nuevo !== archivo.contenido) {
+      const r = await api.escribir(principal, { contenido: nuevo, finDeLinea: archivo.finDeLinea, bom: archivo.bom, versionBase: archivo.version });
+      if (r.tipo !== 'ok') {
+        barra.avisar(`No se pudo agregar el paquete a ${principal}. Probá de nuevo.`, 'error');
+        return false;
+      }
+    }
+  }
+  await recargarProyecto();
+  return true;
+}
+
 const editor = crearEditor(porId('editor'), {
   extensiones: [
     extensionVista(() => ({ numeroCapitulo: numeroDelCapitulo(editor.rutaAbierta()), etiquetas })),
+    extensionMenu({ paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete }),
+    extensionAtajos((nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); }),
   ],
   alAbrir(ruta, texto) {
     quitarCartel();
     recordarUltimo(ruta);
+    habilitarFormato(esTex(ruta));
+    selectorNivel.selectedIndex = 0;
     lateral.mostrarProyecto(proyecto, ruta);
     actualizarIndice(texto, 0);
     const capitulo = proyecto.capitulos.find((c) => c.ruta === ruta);
@@ -141,6 +198,7 @@ setInterval(latir, INTERVALO_DE_LATIDO_MS);
 
 async function iniciar(): Promise<void> {
   try {
+    principal = (await api.config()).principal;
     tomarProyecto(await api.proyecto());
     lateral.mostrarProyecto(proyecto, null);
     const ruta = rutaInicial();

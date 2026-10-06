@@ -121,6 +121,27 @@ describe('describirProyecto en otros proyectos', () => {
     ]);
   });
 
+  // La etiqueta de una figura, tabla o ecuación nombra a ese objeto, no a la sección que lo contiene.
+  it('una etiqueta dentro de una figura, tabla o ecuación no toma el título de la sección', async () => {
+    const p = await proyectoCon({
+      'main.tex': '\\begin{document}\n\\include{a}\n\\end{document}\n',
+      'a.tex': [
+        '\\chapter{A}', '\\section{S}\\label{sec:s}',
+        '\\begin{figure}[htbp]', '\\caption{Una figura}', '\\label{fig:f}', '\\end{figure}',
+        '\\begin{table*}', '\\label{tab:t}', '\\end{table*}',
+        '\\begin{equation}', 'a = b \\label{eq:e}', '\\end{equation}',
+        'Texto.\\label{sec:despues}', '',
+      ].join('\n'),
+    });
+    expect(p.etiquetas.map((e) => [e.nombre, e.titulo, e.numero])).toEqual([
+      ['sec:s', 'S', '1.1'],
+      ['fig:f', '', null],
+      ['tab:t', '', null],
+      ['eq:e', '', null],
+      ['sec:despues', 'S', '1.1'],
+    ]);
+  });
+
   it('separa los paquetes listados con comas e ignora los comentados', async () => {
     const p = await proyectoCon({
       'main.tex': '\\documentclass{book}\n\\usepackage[fleqn]{amsmath, amssymb}\n% \\usepackage{tikz}\n\\begin{document}\n\\end{document}\n',

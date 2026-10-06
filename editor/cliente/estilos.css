@@ -169,3 +169,14 @@ select {
   margin-left: 8px; padding: 1px 8px; border: 1px solid var(--borde); border-radius: 4px;
   background: var(--superficie-2); color: var(--texto-2); font-family: var(--interfaz); font-size: 0.8em; cursor: pointer;
 }
+
+/* Menú de inserción y autocompletado */
+#editor .cm-tooltip {
+  border: 1px solid var(--borde); border-radius: 8px; overflow: hidden;
+  background: var(--superficie); color: var(--texto); font-family: var(--interfaz); font-size: 14px;
+}
+#editor .cm-tooltip-autocomplete > ul { max-height: 22em; font-family: var(--interfaz); }
+#editor .cm-tooltip-autocomplete > ul > li { padding: 5px 12px; }
+#editor .cm-tooltip-autocomplete > ul > li[aria-selected] { background: var(--acento-fondo); color: var(--acento); }
+#editor .cm-completionDetail { margin-left: 12px; color: var(--texto-3); font-style: normal; font-family: var(--mono); font-size: 0.85em; }
+#editor .cm-snippetField { background: var(--acento-fondo); border-radius: 2px; }
