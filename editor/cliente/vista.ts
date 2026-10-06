@@ -1,10 +1,14 @@
 import { StateEffect, StateField, type EditorState, type Extension, type Range } from '@codemirror/state';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
-import { analizar, type Elemento, type Rango } from '../compartido/analizador';
-import { numerarTitulos } from '../compartido/numeracion';
-import type { Etiqueta } from '../compartido/tipos';
+import { analizar, type Rango } from '../compartido/analizador';
+import { numerarObjetos, numerarTitulos } from '../compartido/numeracion';
+import { decorarCodigo, esCodigo } from './bloques/codigo';
+import type { ContextoVista, Decorador, Dibujo } from './bloques/tipos';
 
-export interface ContextoVista { numeroCapitulo: string | null; etiquetas: Map<string, Etiqueta> }
+export type { ContextoVista } from './bloques/tipos';
+
+// Cada clase de bloque se dibuja en su archivo; acá queda la prosa: títulos, formato, listas, referencias.
+const BLOQUES: Decorador[] = [decorarCodigo];
 
 // Texto corto que se dibuja en lugar de un comando: número de título, viñeta, referencia, cita.
 class Pastilla extends WidgetType {
@@ -44,7 +48,8 @@ export function decorar(estado: EditorState, ctx: ContextoVista, conFoco = true)
 
   // Posiciones que ya tienen dibujo propio: ahí no se aplica el resaltado genérico de comandos.
   const reconocidos = new Set<number>();
-  const comentarios: Rango[] = [];
+  // Tramos donde un `\algo` no es un comando: comentarios y código literal.
+  const sinComandos: Rango[] = elementos.filter(esCodigo);
 
   for (const e of elementos) {
     if (e.tipo !== 'preambulo' && e.tipo !== 'comentario') reconocidos.add(e.desde);
@@ -80,7 +85,7 @@ export function decorar(estado: EditorState, ctx: ContextoVista, conFoco = true)
         if (!activo(e)) reemplazar(e, e.claves.join(', '), 'cm-cita');
         break;
       case 'comentario':
-        comentarios.push(e);
+        sinComandos.push(e);
         marcar(e.desde, e.hasta, 'cm-atenuado');
         break;
       case 'inicioLista':
@@ -88,18 +93,22 @@ export function decorar(estado: EditorState, ctx: ContextoVista, conFoco = true)
       case 'etiqueta':
         marcar(e.desde, e.hasta, 'cm-atenuado');
         break;
-      case 'preambulo':
+      default:
         break;
     }
   }
 
+  const dibujo: Dibujo = { estado, texto, elementos, ctx, objetos: numerarObjetos(texto, elementos, ctx.numeroCapitulo), activo };
+  for (const bloque of BLOQUES) rangos.push(...bloque(dibujo));
+
   // Todo comando que el editor no sabe dibujar se muestra como código.
-  let indiceComentario = 0;
+  sinComandos.sort((a, b) => a.desde - b.desde);
+  let indice = 0;
   for (const m of texto.matchAll(COMANDO)) {
     const desde = m.index;
-    while (indiceComentario < comentarios.length && comentarios[indiceComentario].hasta <= desde) indiceComentario++;
-    const enComentario = indiceComentario < comentarios.length && comentarios[indiceComentario].desde <= desde;
-    if (!enComentario && !reconocidos.has(desde)) marcar(desde, desde + m[0].length, 'cm-comando');
+    while (indice < sinComandos.length && sinComandos[indice].hasta <= desde) indice++;
+    const excluido = indice < sinComandos.length && sinComandos[indice].desde <= desde;
+    if (!excluido && !reconocidos.has(desde)) marcar(desde, desde + m[0].length, 'cm-comando');
   }
 
   return Decoration.set(rangos, true);

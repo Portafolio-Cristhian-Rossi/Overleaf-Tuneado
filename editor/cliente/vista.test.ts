@@ -3,29 +3,11 @@ import path from 'node:path';
 import { EditorState } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
 import type { Etiqueta } from '../compartido/tipos';
+import { ctxDePrueba, decos, ETIQUETA_DE_PRUEBA as etiqueta } from '../pruebas/ayudas/decoraciones';
 import { DIR_FIXTURE, leerFixture } from '../pruebas/ayudas/temporales';
 import { decorar, type ContextoVista } from './vista';
 
-interface Deco { desde: number; hasta: number; clase?: string; reemplaza: boolean; widget?: string }
-
-// Decoraciones resultantes, sin tocar el DOM.
-function decos(texto: string, cursor: number, ctx: ContextoVista): Deco[] {
-  const estado = EditorState.create({ doc: texto, selection: { anchor: cursor } });
-  const salida: Deco[] = [];
-  decorar(estado, ctx).between(0, texto.length, (desde, hasta, d) => {
-    const widget = d.spec.widget as { texto: string; clase: string } | undefined;
-    salida.push({
-      desde, hasta,
-      clase: widget ? widget.clase : d.spec.class,
-      reemplaza: d.spec.reemplaza === true,
-      widget: widget?.texto,
-    });
-  });
-  return salida;
-}
-
-const etiqueta: Etiqueta = { nombre: 'sec:CAP2_IA', ruta: 'Cap2.tex', linea: 15, clase: 'seccion', titulo: 'Inteligencia Artificial', numero: '2.1' };
-const ctx: ContextoVista = { numeroCapitulo: '2', etiquetas: new Map([[etiqueta.nombre, etiqueta]]) };
+const ctx = ctxDePrueba();
 
 describe('decorar', () => {
   it('título: oculta el comando, numera y estiliza', () => {
