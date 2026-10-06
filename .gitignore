@@ -4,4 +4,6 @@ node_modules/
 editor/dist/
 editor/config.prueba.json
 editor/.entorno-prueba/
+editor/languagetool/
+editor/correccion.json
 .superpowers/
