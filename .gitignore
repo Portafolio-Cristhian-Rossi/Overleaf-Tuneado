@@ -7,3 +7,4 @@ editor/.entorno-prueba/
 editor/languagetool/
 editor/correccion.json
 .superpowers/
+.claude/worktrees/
