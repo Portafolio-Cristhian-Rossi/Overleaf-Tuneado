@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { analizar } from '../compartido/analizador';
 import type { Etiqueta } from '../compartido/tipos';
 import { describirEtiqueta, detectarBarra, filtrarEtiquetas, filtrarPlantillas } from './menuBarra';
-import { CONFIG_LISTINGS, PLANTILLAS } from './plantillas';
+import { CONFIG_LISTINGS, PLANTILLAS, type Plantilla } from './plantillas';
 
 // Texto que queda en el documento al insertar una plantilla en un archivo vacío.
 function expandir(texto: string): string {
@@ -83,7 +83,8 @@ describe('filtrarEtiquetas', () => {
 });
 
 describe('PLANTILLAS', () => {
-  const plantilla = (id: string) => PLANTILLAS.find((p) => p.id === id)!;
+  const conTexto = PLANTILLAS.filter((p): p is Plantilla & { texto: string } => 'texto' in p);
+  const plantilla = (id: string) => conTexto.find((p) => p.id === id)!;
 
   it('la plantilla de tabla termina sus filas con dos barras invertidas', () => {
     const texto = expandir(plantilla('tabla').texto);
@@ -94,15 +95,17 @@ describe('PLANTILLAS', () => {
 
   it('las plantillas con campos quedan con su texto de ejemplo y sin marcas de snippet', () => {
     expect(expandir(plantilla('seccion').texto)).toBe('\\section{Título}\n\n');
-    expect(expandir(plantilla('figura').texto)).toBe(
-      '\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{figs/archivo.png}\n'
-      + '  \\caption{Descripción de la figura}\n  \\label{fig:nombre}\n\\end{figure}\n');
     expect(expandir(plantilla('ecuacion').texto)).toBe('\\begin{equation}\n  a = b\n  \\label{eq:nombre}\n\\end{equation}\n');
     expect(expandir(plantilla('cita').texto)).toBe('\\cite{clave}');
     expect(expandir(plantilla('referencia').texto)).toBe('\\ref{}');
     expect(expandir(plantilla('codigo').texto)).toBe(
       '\\begin{lstlisting}[language=Python, caption={Descripción}, label={lst:nombre}]\n\n\\end{lstlisting}\n');
-    for (const p of PLANTILLAS) expect(expandir(p.texto), p.id).not.toMatch(/\$\{|#\{/);
+    for (const p of conTexto) expect(expandir(p.texto), p.id).not.toMatch(/\$\{|#\{/);
+  });
+
+  // La figura no trae un texto a completar: el menú abre el selector de imágenes.
+  it('la figura es la única plantilla que elige una imagen en vez de insertar un texto', () => {
+    expect(PLANTILLAS.filter((p) => !('texto' in p))).toEqual([{ id: 'figura', nombre: 'Figura', paquete: 'graphicx', accion: 'elegir-imagen' }]);
   });
 
   it('declaran el paquete que necesitan', () => {
@@ -115,9 +118,8 @@ describe('PLANTILLAS', () => {
   });
 
   it('toda plantilla expandida es reconocida sin error por analizar', () => {
-    for (const p of PLANTILLAS) expect(() => analizar(expandir(p.texto)), p.id).not.toThrow();
+    for (const p of conTexto) expect(() => analizar(expandir(p.texto)), p.id).not.toThrow();
     expect(analizar(expandir(plantilla('lista').texto)).map((e) => e.tipo)).toEqual(['inicioLista', 'item', 'finLista']);
-    expect(analizar(expandir(plantilla('figura').texto)).map((e) => e.tipo)).toEqual(['entorno', 'imagen', 'epigrafe', 'etiqueta']);
     expect(analizar(expandir(plantilla('ecuacion').texto)).map((e) => e.tipo)).toEqual(['matematica', 'etiqueta']);
     expect(analizar(expandir(plantilla('codigo').texto)).map((e) => e.tipo)).toEqual(['entorno']);
   });

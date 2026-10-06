@@ -88,6 +88,45 @@ export function cambiarNivelTitulo(texto: string, posicion: number, nivel: 0 | 1
   };
 }
 
+// Cambia solo la ruta de la imagen que contiene `posicion`; null si no hay ninguna ahí.
+export function cambiarRutaDeImagen(texto: string, posicion: number, ruta: string): Edicion | null {
+  const imagen = analizar(texto).find((e) => e.tipo === 'imagen' && e.desde <= posicion && posicion <= e.hasta);
+  if (imagen?.tipo !== 'imagen') return null;
+  const { desde, hasta } = imagen.rutaRango;
+  const igual = texto.slice(desde, hasta) === ruta;
+  // El cursor queda donde estaba, corrido lo que haya cambiado el largo de la ruta.
+  const cursor = posicion <= desde ? posicion : posicion >= hasta ? posicion + ruta.length - (hasta - desde) : desde + ruta.length;
+  return {
+    cambios: igual ? [] : [{ desde, hasta, insertar: ruta }],
+    seleccion: { ancla: igual ? posicion : cursor, cabeza: igual ? posicion : cursor },
+  };
+}
+
+const EPIGRAFE_INICIAL = 'Descripción de la figura';
+
+// Nombre para \label a partir del archivo: 'figs/Mi-Grafico.png' → 'mi-grafico'.
+function etiquetaDe(ruta: string): string {
+  const archivo = ruta.split('/').pop() ?? '';
+  const nombre = archivo.replace(/\.[^.]*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return nombre || 'figura';
+}
+
+// Inserta la plantilla de Figura en una línea propia; la selección queda sobre el texto del epígrafe.
+export function insertarFigura(texto: string, posicion: number, ruta: string): Edicion {
+  const figura = `\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{${ruta}}\n`
+    + `  \\caption{${EPIGRAFE_INICIAL}}\n  \\label{fig:${etiquetaDe(ruta)}}\n\\end{figure}\n`;
+  const linea = lineaDe(texto, posicion);
+
+  // Una línea vacía se reemplaza; si tiene texto, la figura va en la línea siguiente.
+  let cambio: Edicion['cambios'][number];
+  if (texto.slice(linea.desde, linea.hasta).trim() === '') cambio = { desde: linea.desde, hasta: linea.hasta, insertar: figura };
+  else if (linea.hasta < texto.length) cambio = { desde: linea.hasta + 1, hasta: linea.hasta + 1, insertar: figura };
+  else cambio = { desde: linea.hasta, hasta: linea.hasta, insertar: `\n${figura}` };
+
+  const ancla = cambio.desde + cambio.insertar.indexOf(EPIGRAFE_INICIAL);
+  return { cambios: [cambio], seleccion: { ancla, cabeza: ancla + EPIGRAFE_INICIAL.length } };
+}
+
 // Devuelve el archivo principal con \usepackage{paquete} agregado al preámbulo, o el mismo
 // texto si ya lo carga. Nunca toca nada fuera de la línea que inserta.
 export function agregarPaquete(principal: string, paquete: string, configuracion?: string): string {

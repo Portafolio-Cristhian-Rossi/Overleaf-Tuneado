@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { leerFixture } from '../pruebas/ayudas/temporales';
-import { agregarPaquete, alternarFormato, cambiarNivelTitulo, nivelEnPosicion, type Edicion } from './comandos';
+import { analizar } from '../compartido/analizador';
+import { partesDeFigura } from '../compartido/flotante';
+import {
+  agregarPaquete, alternarFormato, cambiarNivelTitulo, cambiarRutaDeImagen, insertarFigura, nivelEnPosicion, type Edicion,
+} from './comandos';
 
 // Aplica una edición y devuelve el texto resultante y el tramo que queda seleccionado.
 function aplicar(texto: string, e: Edicion) {
@@ -130,5 +134,79 @@ describe('agregarPaquete', () => {
   it('un nombre de paquete que es prefijo de otro no cuenta como presente', () => {
     const t = '\\documentclass{book}\n\\usepackage{amsmathx}\n\\begin{document}\n';
     expect(agregarPaquete(t, 'amsmath')).toContain('\\usepackage{amsmath}\n');
+  });
+});
+
+describe('cambiarRutaDeImagen', () => {
+  const t = 'a \\includegraphics[width=5cm]{ figs/vieja.png } b';
+
+  it('toca solo la ruta', () => {
+    const e = cambiarRutaDeImagen(t, 5, 'figs/nueva.png')!;
+    expect(e.cambios).toEqual([{ desde: t.indexOf(' figs'), hasta: t.indexOf('}'), insertar: 'figs/nueva.png' }]);
+    expect(aplicar(t, e).texto).toBe('a \\includegraphics[width=5cm]{figs/nueva.png} b');
+  });
+
+  it('vale cualquier posición dentro de la imagen, y sus bordes', () => {
+    for (const posicion of [2, t.indexOf('vieja'), t.indexOf('}') + 1]) {
+      expect(cambiarRutaDeImagen(t, posicion, 'x.png'), `posición ${posicion}`).not.toBeNull();
+    }
+  });
+
+  it('fuera de una imagen no hay nada que cambiar', () => {
+    expect(cambiarRutaDeImagen(t, 0, 'x.png')).toBeNull();
+    expect(cambiarRutaDeImagen(t, t.length, 'x.png')).toBeNull();
+    expect(cambiarRutaDeImagen('sin imágenes', 3, 'x.png')).toBeNull();
+  });
+
+  it('con la misma ruta no produce cambios', () => {
+    expect(cambiarRutaDeImagen('\\includegraphics{figs/a.png}', 3, 'figs/a.png')!.cambios).toEqual([]);
+  });
+});
+
+describe('insertarFigura', () => {
+  const plantilla = (ruta: string, etiqueta: string) => '\\begin{figure}[htbp]\n  \\centering\n'
+    + `  \\includegraphics[width=0.8\\textwidth]{${ruta}}\n`
+    + `  \\caption{Descripción de la figura}\n  \\label{fig:${etiqueta}}\n\\end{figure}\n`;
+
+  it('en una línea vacía', () => {
+    const e = insertarFigura('a\n\nb', 2, 'figs/Mi-Grafico.png');
+    expect(e.cambios).toEqual([{ desde: 2, hasta: 2, insertar: plantilla('figs/Mi-Grafico.png', 'mi-grafico') }]);
+    const r = aplicar('a\n\nb', e);
+    expect(r.texto).toBe(`a\n${plantilla('figs/Mi-Grafico.png', 'mi-grafico')}\nb`);
+    expect(r.seleccionado).toBe('Descripción de la figura');
+  });
+
+  it('en medio de un párrafo va después de esa línea, sin partirla', () => {
+    const r = aplicar('uno dos\ntres', insertarFigura('uno dos\ntres', 3, 'figs/a.png'));
+    expect(r.texto).toBe(`uno dos\n${plantilla('figs/a.png', 'a')}tres`);
+    expect(r.seleccionado).toBe('Descripción de la figura');
+  });
+
+  it('al final de un archivo que no termina en salto de línea', () => {
+    const r = aplicar('uno', insertarFigura('uno', 3, 'figs/a.png'));
+    expect(r.texto).toBe(`uno\n${plantilla('figs/a.png', 'a')}`);
+    expect(r.seleccionado).toBe('Descripción de la figura');
+  });
+
+  it('en un archivo vacío', () => {
+    expect(aplicar('', insertarFigura('', 0, 'figs/a.png')).texto).toBe(plantilla('figs/a.png', 'a'));
+  });
+
+  it('una línea con solo espacios cuenta como vacía y se reemplaza', () => {
+    expect(aplicar('a\n   \nb', insertarFigura('a\n   \nb', 4, 'figs/a.png')).texto).toBe(`a\n${plantilla('figs/a.png', 'a')}\nb`);
+  });
+
+  it.each([
+    ['figs/Mi-Grafico.png', 'mi-grafico'], ['figs/cc/by-nc.png', 'by-nc'], ['figs/resultado.v2.pdf', 'resultado-v2'],
+    ['figs/a__b.png', 'a-b'], ['figs/___.png', 'figura'],
+  ])('la etiqueta de %s es fig:%s', (ruta, etiqueta) => {
+    expect(insertarFigura('', 0, ruta).cambios[0].insertar).toContain(`\\label{fig:${etiqueta}}`);
+  });
+
+  it('lo insertado es una figura dibujable', () => {
+    const texto = aplicar('', insertarFigura('', 0, 'figs/a.png')).texto;
+    const elementos = analizar(texto);
+    const figura = elementos.find((x) => x.tipo === 'entorno');
+    expect(figura?.tipo === 'entorno' && partesDeFigura(texto, figura, elementos)).not.toBeNull();
   });
 });

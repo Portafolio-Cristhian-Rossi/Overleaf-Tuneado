@@ -4,7 +4,7 @@ import { alternarFormato, cambiarNivelTitulo, nivelEnPosicion, type Edicion } fr
 
 export type Nivel = 0 | 1 | 2 | 3 | null;
 
-function aplicar(vista: EditorView, e: Edicion): void {
+export function aplicarEdicion(vista: EditorView, e: Edicion): void {
   vista.dispatch({
     changes: e.cambios.map((c) => ({ from: c.desde, to: c.hasta, insert: c.insertar })),
     selection: { anchor: e.seleccion.ancla, head: e.seleccion.cabeza },
@@ -17,13 +17,13 @@ function aplicar(vista: EditorView, e: Edicion): void {
 export function darFormato(vista: EditorView, comando: 'textbf' | 'textit'): boolean {
   if (vista.state.readOnly) return false;
   const { from, to } = vista.state.selection.main;
-  aplicar(vista, alternarFormato(vista.state.doc.toString(), { desde: from, hasta: to }, comando));
+  aplicarEdicion(vista, alternarFormato(vista.state.doc.toString(), { desde: from, hasta: to }, comando));
   return true;
 }
 
 export function darNivel(vista: EditorView, nivel: Nivel): void {
   if (vista.state.readOnly) return;
-  aplicar(vista, cambiarNivelTitulo(vista.state.doc.toString(), vista.state.selection.main.head, nivel));
+  aplicarEdicion(vista, cambiarNivelTitulo(vista.state.doc.toString(), vista.state.selection.main.head, nivel));
 }
 
 // Ctrl+B y Ctrl+I, y aviso del nivel de título de la línea donde está el cursor.

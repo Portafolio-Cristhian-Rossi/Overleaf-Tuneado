@@ -1,10 +1,12 @@
+import type { EditorView } from '@codemirror/view';
 import 'katex/dist/katex.min.css';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api, urlDeImagen } from './api';
 import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
-import { agregarPaquete } from './comandos';
+import { agregarPaquete, cambiarRutaDeImagen } from './comandos';
 import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
+import { crearSubida, extensionArrastre } from './imagenes';
 import { titulosDelIndice } from './indice';
 import { extensionMenu } from './menuBarra';
 import { crearBarra } from './pantalla/barra';
@@ -13,6 +15,7 @@ import { el, preguntar } from './pantalla/dom';
 import { crearLateral } from './pantalla/lateral';
 import { crearPanelGramatica, extensionPanelGramatica } from './pantalla/panelGramatica';
 import { crearPanelPdf } from './pantalla/panelPdf';
+import { elegirImagen } from './pantalla/selectorImagen';
 import { crearSincronizacion } from './pantalla/sincronizacion';
 import { contextoCambiado, extensionVista } from './vista';
 
@@ -128,14 +131,32 @@ async function asegurarPaquete(paquete: string, configuracion?: string): Promise
   return true;
 }
 
+// Imágenes: las que ya están en figs/ o una nueva desde la computadora, que se copia ahí.
+const subirImagen = crearSubida({ subir: api.imagenes.subir, preguntar, avisar: (mensaje) => barra.avisar(mensaje, 'error') });
+const abrirSelectorDeImagen = () => elegirImagen({ listar: api.imagenes.listar, url: urlDeImagen, subir: subirImagen });
+
+// Clic en una imagen dibujada: se elige otra y cambia solo la ruta de ese \includegraphics.
+async function cambiarImagen(vista: EditorView, posicion: number): Promise<void> {
+  if (vista.state.readOnly) return;
+  const ruta = await abrirSelectorDeImagen();
+  if (ruta === null || vista.state.readOnly) return;
+  const edicion = cambiarRutaDeImagen(vista.state.doc.toString(), posicion, ruta);
+  if (!edicion || edicion.cambios.length === 0) return;
+  vista.dispatch({ changes: edicion.cambios.map((c) => ({ from: c.desde, to: c.hasta, insert: c.insertar })), userEvent: 'input' });
+}
+
 const editor = crearEditor(porId('editor'), {
   extensiones: [
     extensionVista(() => ({
       numeroCapitulo: numeroDelCapitulo(editor.rutaAbierta()), etiquetas,
       urlDeImagen,
-      alElegirImagen: () => {},
+      alElegirImagen: (vista, posicion) => { void cambiarImagen(vista, posicion); },
     })),
-    extensionMenu({ paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete }),
+    extensionMenu({
+      paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete,
+      elegirImagen: abrirSelectorDeImagen,
+    }),
+    extensionArrastre({ subir: subirImagen, avisar: (mensaje) => barra.avisar(mensaje, 'error') }),
     extensionAtajos((nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); }),
     extensionCorreccion({ api: api.correccion, alCambiarEstado: (estado) => panelGramatica.mostrarEstado(estado) }),
     extensionPanelGramatica(() => panelGramatica.actualizar()),

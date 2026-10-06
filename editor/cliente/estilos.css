@@ -132,6 +132,25 @@ select {
 .dialogo-detalle { margin: 0; color: var(--texto-2); }
 .dialogo-botones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 18px; }
 
+/* Selector de imágenes */
+.selector-imagen { width: min(46rem, 92vw); max-width: none; max-height: 86vh; }
+.selector-imagen[open] { display: flex; flex-direction: column; gap: 10px; }
+.selector-titulo { margin: 0; font-size: 16px; }
+.selector-filtro { padding: 6px 10px; border: 1px solid var(--borde); border-radius: 6px; background: var(--superficie); color: var(--texto); font: inherit; }
+.selector-grilla {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 8px;
+  min-height: 4rem; overflow-y: auto; padding: 2px;
+}
+.selector-imagen-opcion {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px;
+  border: 1px solid var(--borde); border-radius: 8px; background: var(--superficie); color: var(--texto); font: inherit; cursor: pointer;
+}
+.selector-imagen-opcion:hover, .selector-imagen-opcion:focus-visible { border-color: var(--acento); background: var(--acento-fondo); }
+.selector-miniatura { width: 100%; height: 6rem; object-fit: contain; border-radius: 4px; background: var(--superficie-2); }
+.selector-pdf { display: flex; align-items: center; justify-content: center; color: var(--texto-2); font-weight: 600; }
+.selector-nombre { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--texto-2); }
+.selector-aviso { margin: 0; color: var(--texto-2); }
+
 /* Cartel sobre el editor (archivo inexistente, conflicto) */
 .cartel {
   position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;

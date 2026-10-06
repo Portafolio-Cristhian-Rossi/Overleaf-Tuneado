@@ -1,6 +1,8 @@
 // Plantillas del menú "/". El texto usa la sintaxis de snippet de CodeMirror:
 // ${1:ejemplo} es un campo a completar y Tab pasa al siguiente.
-export interface Plantilla { id: string; nombre: string; texto: string; paquete?: string; configuracion?: string }
+// Una plantilla inserta su texto, o bien abre el selector de imágenes y arma la figura con la elegida.
+export type Plantilla = { id: string; nombre: string; paquete?: string; configuracion?: string }
+  & ({ texto: string } | { accion: 'elegir-imagen' });
 
 // listings no acepta tildes ni eñes con pdflatex salvo que se le enseñe cada una.
 export const CONFIG_LISTINGS = [
@@ -14,11 +16,7 @@ export const PLANTILLAS: Plantilla[] = [
   { id: 'subseccion', nombre: 'Subsección', texto: '\\subsection{${1:Título}}\n\n${}' },
   { id: 'lista', nombre: 'Lista', texto: '\\begin{itemize}\n  \\item ${}\n\\end{itemize}\n' },
   { id: 'listaNumerada', nombre: 'Lista numerada', texto: '\\begin{enumerate}\n  \\item ${}\n\\end{enumerate}\n' },
-  {
-    id: 'figura', nombre: 'Figura', paquete: 'graphicx',
-    texto: '\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{figs/${1:archivo.png}}\n'
-      + '  \\caption{${2:Descripción de la figura}}\n  \\label{fig:${3:nombre}}\n\\end{figure}\n',
-  },
+  { id: 'figura', nombre: 'Figura', paquete: 'graphicx', accion: 'elegir-imagen' },
   {
     id: 'tabla', nombre: 'Tabla', paquete: 'booktabs',
     texto: '\\begin{table}[htbp]\n  \\centering\n  \\caption{${1:Descripción de la tabla}}\n  \\label{tab:${2:nombre}}\n'

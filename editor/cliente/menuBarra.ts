@@ -2,6 +2,8 @@ import { autocompletion, snippet, startCompletion, type Completion, type Complet
 import type { Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import type { Etiqueta } from '../compartido/tipos';
+import { aplicarEdicion } from './atajos';
+import { insertarFigura } from './comandos';
 import { PLANTILLAS, type Plantilla } from './plantillas';
 
 export interface ContextoMenu {
@@ -9,6 +11,8 @@ export interface ContextoMenu {
   etiquetas(): Etiqueta[];
   // Agrega el paquete al archivo principal si el usuario acepta; false si lo rechaza.
   asegurarPaquete(paquete: string, configuracion?: string): Promise<boolean>;
+  // Abre el selector de imágenes; null si se cancela.
+  elegirImagen(): Promise<string | null>;
 }
 
 const normalizar = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
@@ -42,6 +46,14 @@ export function extensionMenu(ctx: ContextoMenu): Extension {
     vista.dispatch({ changes: { from: desde, to: hasta, insert: '' } });
     if (plantilla.paquete && !ctx.paquetes().includes(plantilla.paquete)) {
       if (!(await ctx.asegurarPaquete(plantilla.paquete, plantilla.configuracion))) return;
+    }
+    if ('accion' in plantilla) {
+      const ruta = await ctx.elegirImagen();
+      if (ruta !== null && !vista.state.readOnly) {
+        aplicarEdicion(vista, insertarFigura(vista.state.doc.toString(), vista.state.selection.main.head, ruta));
+      }
+      vista.focus();
+      return;
     }
     // Agregar el paquete pudo mover el texto: se inserta donde quedó el cursor.
     const cursor = vista.state.selection.main.head;

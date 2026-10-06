@@ -35,6 +35,9 @@ async function pedir<T>(metodo: string, ruta: string, cuerpo?: unknown, opciones
 // Dirección desde la que el navegador carga una imagen del informe.
 export const urlDeImagen = (ruta: string) => `/api/imagen?ruta=${encodeURIComponent(ruta)}`;
 
+// Lo que respondió el servidor a una subida: 201 con `ruta`, 409 con `ruta` y `sugerido`, 400 o 413 con `mensaje`.
+export interface RespuestaDeSubida { estado: number; ruta?: string; sugerido?: string; mensaje?: string }
+
 export interface DatosDeEscritura {
   contenido: string; finDeLinea: FinDeLinea; bom: boolean; versionBase: string; forzar?: boolean;
 }
@@ -53,6 +56,17 @@ export const api = {
   abrirVsCode: () => pedir<void>('POST', '/api/git/abrir-vscode'),
   compilar: () => pedir<ResultadoCompilacion>('POST', '/api/compilar'),
   latido: () => pedir<void>('POST', '/api/latido'),
+  imagenes: {
+    listar: () => pedir<{ ruta: string; bytes: number }[]>('GET', '/api/imagenes'),
+    // No lanza por un rechazo del servidor: quien llama decide qué hacer con cada estado.
+    async subir(nombre: string, archivo: Blob): Promise<RespuestaDeSubida> {
+      const respuesta = await fetch(`/api/imagenes?nombre=${encodeURIComponent(nombre)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: archivo,
+      });
+      const cuerpo = await respuesta.json().catch(() => ({}));
+      return { ...cuerpo, estado: respuesta.status };
+    },
+  },
   correccion: {
     estado: () => pedir<EstadoCorrector>('GET', '/api/correccion/estado'),
     revisar: (parrafos: Segmento[][]) => pedir<(Aviso[] | null)[]>('POST', '/api/correccion/revisar', { parrafos }),
