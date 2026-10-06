@@ -2,13 +2,17 @@ import fs from 'node:fs/promises';
 import express, { type ErrorRequestHandler, type RequestHandler } from 'express';
 import type { Config, Proyecto } from '../compartido/tipos';
 import { ArchivoProtegido, RutaInvalida, type Archivos } from './archivos';
+import type { Segmento } from '../compartido/prosa';
 import type { Compilador } from './compilar';
+import type { Diccionario } from './diccionario';
 import type { Git } from './git';
+import type { Corrector } from './languagetool';
 import type { Vigia } from './vigia';
 
 export interface Dependencias {
   config: Config; archivos: Archivos; proyecto: () => Promise<Proyecto>;
   git: Git; compilador: Compilador; vigia: Vigia;
+  corrector: Corrector; diccionario: Diccionario;
   abrirVsCode: () => Promise<void>; dirEstaticos: string;
 }
 
@@ -32,6 +36,15 @@ function esEscrituraValida(c: any): c is { ruta: string; contenido: string; finD
   return typeof c?.ruta === 'string' && typeof c.contenido === 'string'
     && (c.finDeLinea === '\n' || c.finDeLinea === '\r\n')
     && typeof c.bom === 'boolean' && typeof c.versionBase === 'string';
+}
+
+const MAXIMO_DE_PARRAFOS = 2000;
+
+function sonParrafos(x: unknown): x is Segmento[][] {
+  return Array.isArray(x) && x.length <= MAXIMO_DE_PARRAFOS && x.every((parrafo) =>
+    Array.isArray(parrafo) && parrafo.every((s) =>
+      (s?.tipo === 'texto' || s?.tipo === 'marca') && typeof s.fuente === 'string'
+      && (s.como === undefined || typeof s.como === 'string')));
 }
 
 export function crearApp(d: Dependencias): express.Express {
@@ -89,6 +102,30 @@ export function crearApp(d: Dependencias): express.Express {
     }
     res.set('Cache-Control', 'no-store').type('application/pdf').send(pdf);
   });
+
+  app.get('/api/correccion/estado', (_req, res) => { res.json(d.corrector.estado()); });
+  app.get('/api/correccion/diccionario', async (_req, res) => { res.json(await d.diccionario.leer()); });
+  app.post('/api/correccion/revisar', async (req, res) => {
+    const parrafos = req.body?.parrafos;
+    if (!sonParrafos(parrafos)) {
+      res.status(400).json({ mensaje: 'Pedido de revisión mal formado.' });
+      return;
+    }
+    res.json(await Promise.all(parrafos.map((p) => d.corrector.revisar(p))));
+  });
+  // Una palabra inválida es un error de quien pide, no del servidor.
+  const guardarPalabra = (guardar: (palabra: string) => Promise<void>): RequestHandler => async (req, res) => {
+    try {
+      await guardar(req.body?.palabra);
+    } catch (e) {
+      res.status(400).json({ mensaje: (e as Error).message });
+      return;
+    }
+    d.corrector.olvidarCache();
+    res.json({});
+  };
+  app.post('/api/correccion/palabra', guardarPalabra((p) => d.diccionario.agregarPalabra(p)));
+  app.post('/api/correccion/excepcion', guardarPalabra((p) => d.diccionario.agregarExcepcion(p)));
 
   app.post('/api/latido', (_req, res) => { d.vigia.latido(); res.json({}); });
 

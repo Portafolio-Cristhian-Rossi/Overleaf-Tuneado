@@ -22,12 +22,21 @@ describe('cargarConfig', () => {
   it('usa los valores por defecto para lo que falte', () => {
     const dir = dirCon({});
     const c = cargarConfig(dir, 'config.json');
-    expect(c).toMatchObject({ principal: 'main.tex', puerto: 4317, compilarAlGuardar: false });
+    expect(c).toMatchObject({ principal: 'main.tex', puerto: 4317, compilarAlGuardar: false, corrector: true, puertoCorrector: 4319 });
     expect(c.informe).toBe(path.resolve(dir, '../informe'));
   });
 
   it.each(['x', 80, 70000, 4317.5])('rechaza el puerto %j', (puerto) => {
     expect(() => cargarConfig(dirCon({ puerto }), 'config.json')).toThrow(/puerto/);
+  });
+
+  it('el corrector se puede apagar y cambiar de puerto', () => {
+    const c = cargarConfig(dirCon({ corrector: false, puertoCorrector: 5001 }), 'config.json');
+    expect(c).toMatchObject({ corrector: false, puertoCorrector: 5001 });
+  });
+
+  it.each([80, 'x', 4317])('rechaza el puerto del corrector %j (inválido o igual al del editor)', (puertoCorrector) => {
+    expect(() => cargarConfig(dirCon({ puertoCorrector }), 'config.json')).toThrow(/puertoCorrector/);
   });
 
   it('lee el archivo indicado por el segundo argumento', () => {

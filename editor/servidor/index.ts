@@ -4,7 +4,9 @@ import { crearApp } from './app';
 import { crearArchivos } from './archivos';
 import { crearCompilador } from './compilar';
 import { cargarConfig } from './config';
+import { crearDiccionario } from './diccionario';
 import { crearGit } from './git';
+import { crearCorrector } from './languagetool';
 import { describirProyecto } from './proyecto';
 import { crearVigia } from './vigia';
 
@@ -22,6 +24,17 @@ const vigia = crearVigia({
   alVencer: () => process.exit(0),
 });
 
+// El corrector (LanguageTool) y el diccionario personal viven en editor/, nunca en el informe.
+const diccionario = crearDiccionario(path.join(DIR_EDITOR, 'correccion.json'));
+const corrector = crearCorrector({
+  dir: path.join(DIR_EDITOR, 'languagetool'),
+  puerto: config.puertoCorrector,
+  diccionario: async () => (await diccionario.leer()).palabras,
+});
+// Al salir, por la vía que sea, no debe quedar Java corriendo.
+process.on('exit', () => corrector.detener());
+for (const senal of ['SIGINT', 'SIGTERM'] as const) process.on(senal, () => process.exit(0));
+
 const app = crearApp({
   config,
   archivos: crearArchivos(config.informe),
@@ -29,6 +42,8 @@ const app = crearApp({
   git,
   compilador: crearCompilador(config),
   vigia,
+  corrector,
+  diccionario,
   abrirVsCode: () => new Promise<void>((resolver, rechazar) => {
     // `code` es un .cmd en Windows: hay que lanzarlo a través de cmd.
     const proceso = spawn('cmd', ['/c', 'code', config.informe], { stdio: 'ignore', windowsHide: true, detached: true });
@@ -49,6 +64,8 @@ servidor.on('listening', () => {
   git.verificar().then((problema) => { if (problema) console.error(problema); });
   git.preparar().catch(() => undefined).then(buscar);
   setInterval(buscar, INTERVALO_DE_BUSQUEDA_MS);
+
+  if (config.corrector) void corrector.iniciar();
 });
 
 servidor.on('error', async (error: NodeJS.ErrnoException) => {

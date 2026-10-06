@@ -3,6 +3,7 @@ export type FinDeLinea = '\r\n' | '\n';
 export interface Config {
   informe: string; build: string;      // rutas absolutas
   principal: string; puerto: number; compilarAlGuardar: boolean;
+  corrector: boolean; puertoCorrector: number;
 }
 
 export interface ArchivoLeido {

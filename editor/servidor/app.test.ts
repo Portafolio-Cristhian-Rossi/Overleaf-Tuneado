@@ -38,7 +38,7 @@ beforeEach(async () => {
   copiarFixture(informe);
   fs.mkdirSync(path.join(dir, 'estaticos'));
   fs.writeFileSync(path.join(dir, 'estaticos', 'index.html'), '<title>Editor</title>');
-  const config: Config = { informe, build: path.join(dir, 'build'), principal: 'main.tex', puerto: 0, compilarAlGuardar: true };
+  const config: Config = { informe, build: path.join(dir, 'build'), principal: 'main.tex', puerto: 0, compilarAlGuardar: true, corrector: true, puertoCorrector: 4319 };
 
   d = {
     config,
@@ -59,6 +59,20 @@ beforeEach(async () => {
       rutaPdf: () => path.join(dir, 'build', 'main.pdf'),
     },
     vigia: { latido: vi.fn(), revisar: vi.fn() },
+    corrector: {
+      iniciar: vi.fn(async () => {}),
+      estado: vi.fn(() => ({ estado: 'listo' as const })),
+      revisar: vi.fn(async (segmentos: { fuente: string }[]) => [
+        { desde: 0, hasta: segmentos[0].fuente.length, tipo: 'ortografia' as const, regla: 'R', mensaje: 'm', sugerencias: [] },
+      ]),
+      olvidarCache: vi.fn(),
+      detener: vi.fn(),
+    },
+    diccionario: {
+      leer: vi.fn(async () => ({ palabras: ['BERTopic'], excepciones: ['analisis'] })),
+      agregarPalabra: vi.fn(async (p: string) => { if (/\s/.test(p)) throw new Error('La palabra no es válida: tiene que ser una sola palabra.'); }),
+      agregarExcepcion: vi.fn(async () => {}),
+    },
     abrirVsCode: vi.fn(async () => {}),
     dirEstaticos: path.join(dir, 'estaticos'),
   };
@@ -217,6 +231,55 @@ describe('guardados y Git de a uno', () => {
     expect(r.status).toBe(423);
     expect(r.cuerpo.mensaje).toMatch(/no se puede guardar/);
     expect(fs.readFileSync(path.join(dir, 'informe', 'raro.bib')).equals(bytes)).toBe(true);
+  });
+});
+
+describe('corrección', () => {
+  const posta = (ruta: string, cuerpo: unknown) => pedir('POST', ruta, cuerpo);
+
+  it('estado del corrector', async () => {
+    expect(await get('/api/correccion/estado')).toEqual({ estado: 'listo' });
+  });
+
+  it('revisar devuelve los avisos de cada párrafo, en orden', async () => {
+    const parrafos = [[{ tipo: 'texto', fuente: 'Hola' }], [{ tipo: 'marca', fuente: '~', como: ' ' }, { tipo: 'texto', fuente: 'x' }]];
+    const r = await posta('/api/correccion/revisar', { parrafos });
+    expect(r.status).toBe(200);
+    expect(r.cuerpo.map((avisos: { hasta: number }[]) => avisos[0].hasta)).toEqual([4, 1]);
+    expect(d.corrector.revisar).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [{}],
+    [{ parrafos: 'no es lista' }],
+    [{ parrafos: [[{ tipo: 'otro', fuente: 'x' }]] }],
+    [{ parrafos: [[{ tipo: 'texto' }]] }],
+    [{ parrafos: [[{ tipo: 'marca', fuente: 'x', como: 3 }]] }],
+  ])('revisar rechaza un pedido mal formado: %j', async (cuerpo) => {
+    expect((await posta('/api/correccion/revisar', cuerpo)).status).toBe(400);
+    expect(d.corrector.revisar).not.toHaveBeenCalled();
+  });
+
+  it('diccionario devuelve palabras y excepciones', async () => {
+    expect(await get('/api/correccion/diccionario')).toEqual({ palabras: ['BERTopic'], excepciones: ['analisis'] });
+  });
+
+  it('agregar una palabra la guarda y hace olvidar lo ya revisado', async () => {
+    expect((await posta('/api/correccion/palabra', { palabra: 'embeddings' })).status).toBe(200);
+    expect(d.diccionario.agregarPalabra).toHaveBeenCalledWith('embeddings');
+    expect(d.corrector.olvidarCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('agregar una excepción la guarda', async () => {
+    expect((await posta('/api/correccion/excepcion', { palabra: 'analisis' })).status).toBe(200);
+    expect(d.diccionario.agregarExcepcion).toHaveBeenCalledWith('analisis');
+  });
+
+  it('una palabra inválida da 400 con su motivo', async () => {
+    const r = await posta('/api/correccion/palabra', { palabra: 'dos palabras' });
+    expect(r.status).toBe(400);
+    expect(r.cuerpo.mensaje).toMatch(/una sola palabra/);
+    expect(d.corrector.olvidarCache).not.toHaveBeenCalled();
   });
 });
 
