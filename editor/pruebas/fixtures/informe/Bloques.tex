@@ -1,0 +1,53 @@
+\chapter{Bloques}
+
+Sea $k$ la cantidad de tópicos y \(n\) la cantidad de documentos del corpus.
+
+La coherencia de un tópico se calcula como:
+\begin{equation}
+  C(t) = \sum_{i<j} \log \frac{D(w_i, w_j) + 1}{D(w_j)}
+  \label{eq:coherencia}
+\end{equation}
+
+El modelo se descompone en dos pasos:
+\begin{align}
+  \theta_d &\sim \mathrm{Dir}(\alpha) \\
+  z_{d,n} &\sim \mathrm{Mult}(\theta_d) \nonumber
+\end{align}
+
+En forma resumida:
+\[
+  p(w \mid d) = \sum_{k} p(w \mid k) \, p(k \mid d)
+\]
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.8\textwidth]{figs/ejemplo.png}
+  \caption{Distribución de \textbf{tópicos}}
+  \label{fig:distribucion}
+\end{figure}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.4\textwidth]{figs/ejemplo.png}
+  \includegraphics[width=0.4\textwidth]{figs/ejemplo.png}
+\end{figure}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Tamaño del corpus}
+  \label{tab:corpus}
+  \begin{tabular}{ll}
+    \toprule
+    Sitio & Documentos \\
+    \midrule
+    Foro & 1200 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{lstlisting}[language=Python]
+precio = "$10"  # no es \textbf{formato}
+print(precio)
+\end{lstlisting}
+
+En la figura~\ref{fig:distribucion}, la tabla~\ref{tab:corpus} y la ecuación~\ref{eq:coherencia} se resume lo anterior.

@@ -100,7 +100,8 @@ describe('PLANTILLAS', () => {
   it('toda plantilla expandida es reconocida sin error por analizar', () => {
     for (const p of PLANTILLAS) expect(() => analizar(expandir(p.texto)), p.id).not.toThrow();
     expect(analizar(expandir(plantilla('lista').texto)).map((e) => e.tipo)).toEqual(['inicioLista', 'item', 'finLista']);
-    expect(analizar(expandir(plantilla('figura').texto)).map((e) => e.tipo)).toEqual(['etiqueta']);
-    expect(analizar(expandir(plantilla('codigo').texto))).toEqual([]);
+    expect(analizar(expandir(plantilla('figura').texto)).map((e) => e.tipo)).toEqual(['entorno', 'imagen', 'epigrafe', 'etiqueta']);
+    expect(analizar(expandir(plantilla('ecuacion').texto)).map((e) => e.tipo)).toEqual(['matematica', 'etiqueta']);
+    expect(analizar(expandir(plantilla('codigo').texto)).map((e) => e.tipo)).toEqual(['entorno']);
   });
 });

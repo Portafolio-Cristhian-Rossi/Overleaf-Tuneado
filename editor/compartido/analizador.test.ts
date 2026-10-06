@@ -129,14 +129,14 @@ describe('analizar', () => {
   });
 
   it('no analiza dentro de lstlisting, verbatim ni \\verb', () => {
-    expect(analizar('\\begin{lstlisting}\n% x \\textbf{y}\n\\end{lstlisting}')).toEqual([]);
-    expect(analizar('\\begin{verbatim}\n\\section{y} % z\n\\end{verbatim}')).toEqual([]);
+    expect(analizar('\\begin{lstlisting}\n% x \\textbf{y}\n\\end{lstlisting}').map((e) => e.tipo)).toEqual(['entorno']);
+    expect(analizar('\\begin{verbatim}\n\\section{y} % z\n\\end{verbatim}').map((e) => e.tipo)).toEqual(['entorno']);
     expect(analizar('\\verb|\\textbf{y}|')).toEqual([]);
   });
 
   it('sigue analizando después de un bloque literal', () => {
     const t = '\\begin{lstlisting}\nx\n\\end{lstlisting}\n\\textbf{a}';
-    expect(analizar(t).map((e) => tramo(t, e))).toEqual(['\\textbf{a}']);
+    expect(analizar(t).filter((e) => e.tipo !== 'entorno').map((e) => tramo(t, e))).toEqual(['\\textbf{a}']);
   });
 
   it('los elementos salen ordenados por inicio', () => {
@@ -167,6 +167,69 @@ describe('analizar', () => {
       'CitekeyArticle', 'CitekeyBook', 'CitekeyInproceedings', 'CitekeyManual', 'CitekeyMisc',
     ]);
     expect(tramo(t, deTipo(e, 'titulo')[0].contenido)).toBe('Introducción');
+  });
+});
+
+describe('entornos de bloque, imagen y epígrafe', () => {
+  const FIGURA = '\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{ figs/a.png }\n'
+    + '  \\caption{Una \\textbf{figura}}\n  \\label{fig:a}\n\\end{figure}';
+
+  it('figura: entorno, imagen, epígrafe y etiqueta, en orden', () => {
+    const es = analizar(FIGURA);
+    expect(es.map((e) => e.tipo)).toEqual(['entorno', 'imagen', 'epigrafe', 'formato', 'etiqueta']);
+    const [entorno] = deTipo(es, 'entorno');
+    expect(entorno).toMatchObject({ nombre: 'figure', desde: 0, hasta: FIGURA.length });
+    expect(tramo(FIGURA, entorno.interior).startsWith('[htbp]')).toBe(true);
+    expect(tramo(FIGURA, entorno.interior).endsWith('\\label{fig:a}\n')).toBe(true);
+    const [imagen] = deTipo(es, 'imagen');
+    expect(imagen.ruta).toBe('figs/a.png');
+    expect(tramo(FIGURA, imagen.rutaRango)).toBe(' figs/a.png ');
+    expect(tramo(FIGURA, imagen)).toBe('\\includegraphics[width=0.8\\textwidth]{ figs/a.png }');
+    expect(tramo(FIGURA, deTipo(es, 'epigrafe')[0].contenido)).toBe('Una \\textbf{figura}');
+  });
+
+  it('figure* y table* se reportan sin asterisco', () => {
+    expect(deTipo(analizar('\\begin{figure*}\\end{figure*}\\begin{table*}\\end{table*}'), 'entorno').map((e) => e.nombre)).toEqual(['figure', 'table']);
+  });
+
+  it('table con tabular: dos entornos, el de afuera primero', () => {
+    const t = '\\begin{table}\n\\begin{tabular}{ll}\na & b \\\\\n\\end{tabular}\n\\end{table}';
+    expect(deTipo(analizar(t), 'entorno').map((e) => e.nombre)).toEqual(['table', 'tabular']);
+  });
+
+  it('lstlisting: interior exacto y nada reportado adentro', () => {
+    const t = '\\begin{lstlisting}[language=Python]\nx = "$a$" # \\textbf{no}\n\\end{lstlisting}';
+    const es = analizar(t);
+    expect(es.map((e) => e.tipo)).toEqual(['entorno']);
+    expect(es[0]).toMatchObject({ nombre: 'lstlisting', desde: 0, hasta: t.length });
+    expect(tramo(t, deTipo(es, 'entorno')[0].interior)).toBe('[language=Python]\nx = "$a$" # \\textbf{no}\n');
+  });
+
+  it('verbatim* se reporta como verbatim', () => {
+    expect(deTipo(analizar('\\begin{verbatim*}\nx\n\\end{verbatim*}'), 'entorno').map((e) => e.nombre)).toEqual(['verbatim']);
+  });
+
+  it('un entorno sin cerrar no se reporta, pero sí lo que contiene', () => {
+    expect(analizar('\\begin{figure}\n\\includegraphics{a.png}').map((e) => e.tipo)).toEqual(['imagen']);
+  });
+
+  it('un \\end sin su \\begin no rompe los entornos que lo rodean', () => {
+    const t = '\\begin{figure}\\end{table}\\includegraphics{a}\\end{figure}';
+    expect(analizar(t).map((e) => e.tipo)).toEqual(['entorno', 'imagen']);
+  });
+
+  it('\\caption con texto corto opcional', () => {
+    const t = '\\caption[Corto]{Largo}';
+    expect(tramo(t, deTipo(analizar(t), 'epigrafe')[0].contenido)).toBe('Largo');
+  });
+
+  it('el fixture de bloques se analiza entero', () => {
+    const es = analizar(leerFixture('Bloques.tex'));
+    expect(deTipo(es, 'entorno').map((e) => e.nombre)).toEqual(['figure', 'figure', 'table', 'tabular', 'lstlisting']);
+    expect(deTipo(es, 'matematica')).toHaveLength(5);
+    expect(deTipo(es, 'imagen')).toHaveLength(3);
+    expect(deTipo(es, 'etiqueta').map((e) => e.nombre)).toEqual(['eq:coherencia', 'fig:distribucion', 'tab:corpus']);
+    expect(es.map((e) => e.desde)).toEqual([...es.map((e) => e.desde)].sort((a, b) => a - b));
   });
 });
 

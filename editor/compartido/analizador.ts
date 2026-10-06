@@ -9,10 +9,15 @@ export type Elemento =
   | ({ tipo: 'cita'; comando: string; claves: string[] } & Rango)
   | ({ tipo: 'etiqueta'; nombre: string } & Rango)
   | ({ tipo: 'matematica'; enLinea: boolean; entorno: EntornoMatematico | null; contenido: Rango } & Rango)
+  | ({ tipo: 'entorno'; nombre: NombreDeEntorno; interior: Rango } & Rango)
+  | ({ tipo: 'imagen'; ruta: string; rutaRango: Rango } & Rango)
+  | ({ tipo: 'epigrafe'; contenido: Rango } & Rango)
   | ({ tipo: 'comentario' } & Rango)
   | ({ tipo: 'preambulo' } & Rango);
 
 export type EntornoMatematico = 'equation' | 'equation*' | 'align' | 'align*';
+// `figure*`, `table*` y `verbatim*` se reportan con el nombre sin asterisco.
+export type NombreDeEntorno = 'figure' | 'table' | 'tabular' | 'lstlisting' | 'verbatim';
 
 const NIVELES: Record<string, 0 | 1 | 2 | 3> = { chapter: 0, section: 1, subsection: 2, subsubsection: 3 };
 const ESTILOS: Record<string, 'negrita' | 'cursiva' | 'mono'> = {
@@ -20,7 +25,12 @@ const ESTILOS: Record<string, 'negrita' | 'cursiva' | 'mono'> = {
 };
 const ENTORNOS_LITERALES = new Set(['verbatim', 'verbatim*', 'lstlisting', 'minted']);
 const ENTORNOS_MATEMATICOS = new Set<string>(['equation', 'equation*', 'align', 'align*']);
-const ES_CITA =/^(?:(?:full|short)?cite(?:A|NP|author|year|yearNP)?|nocite)$/;
+// Entornos que la vista dibuja como bloque, por el nombre con que se reportan.
+const ENTORNOS_DE_BLOQUE: Record<string, NombreDeEntorno> = {
+  figure: 'figure', 'figure*': 'figure', table: 'table', 'table*': 'table', tabular: 'tabular',
+  lstlisting: 'lstlisting', verbatim: 'verbatim', 'verbatim*': 'verbatim',
+};
+const ES_CITA = /^(?:(?:full|short)?cite(?:A|NP|author|year|yearNP)?|nocite)$/;
 const ES_LETRA = /[a-zA-Z@]/;
 
 // Recorre el texto una sola vez. Lo que no reconoce, o no cierra, no se reporta.
@@ -28,6 +38,8 @@ export function analizar(texto: string): Elemento[] {
   const n = texto.length;
   const salida: Elemento[] = [];
   const listas: { clase: 'itemize' | 'enumerate'; contador: number }[] = [];
+  // Entornos de bloque abiertos: se reportan recién cuando aparece su \end.
+  const abiertos: { entorno: string; desde: number; interiorDesde: number }[] = [];
   let preambuloVisto = false;
   let i = 0;
 
@@ -162,8 +174,26 @@ export function analizar(texto: string): Elemento[] {
         const cierre = texto.indexOf(fin, i);
         if (cierre !== -1) abrirMatematica(desde, { desde: i, hasta: cierre }, cierre + fin.length, false, entorno as EntornoMatematico);
       } else if (nombre === 'begin' && ENTORNOS_LITERALES.has(entorno)) {
-        const cierre = texto.indexOf(`\\end{${entorno}}`, i);
-        i = cierre === -1 ? n : cierre + `\\end{${entorno}}`.length;
+        const fin = `\\end{${entorno}}`;
+        const cierre = texto.indexOf(fin, i);
+        if (cierre !== -1 && entorno in ENTORNOS_DE_BLOQUE) {
+          salida.push({ tipo: 'entorno', nombre: ENTORNOS_DE_BLOQUE[entorno], desde, hasta: cierre + fin.length, interior: { desde: i, hasta: cierre } });
+        }
+        i = cierre === -1 ? n : cierre + fin.length;
+      } else if (entorno in ENTORNOS_DE_BLOQUE) {
+        if (nombre === 'begin') {
+          abiertos.push({ entorno, desde, interiorDesde: arg.hasta });
+        } else {
+          // Un \end sin su \begin se ignora; los que quedaron abiertos adentro se descartan.
+          const indice = abiertos.findLastIndex((a) => a.entorno === entorno);
+          if (indice !== -1) {
+            const [abierto] = abiertos.splice(indice);
+            salida.push({
+              tipo: 'entorno', nombre: ENTORNOS_DE_BLOQUE[entorno],
+              desde: abierto.desde, hasta: arg.hasta, interior: { desde: abierto.interiorDesde, hasta: desde },
+            });
+          }
+        }
       } else if (entorno === 'itemize' || entorno === 'enumerate') {
         if (nombre === 'begin') {
           listas.push({ clase: entorno, contador: 0 });
@@ -197,6 +227,21 @@ export function analizar(texto: string): Elemento[] {
         const claves = texto.slice(arg.contenido.desde, arg.contenido.hasta).split(',').map((k) => k.trim()).filter(Boolean);
         salida.push({ tipo: 'cita', comando: nombre, claves, desde, hasta: arg.hasta });
         i = arg.hasta;
+      }
+    } else if (nombre === 'includegraphics') {
+      const pos = saltearOpcionales(j, '[');
+      const arg = pos === -1 ? null : argumento(pos);
+      if (arg) {
+        const ruta = texto.slice(arg.contenido.desde, arg.contenido.hasta).trim();
+        salida.push({ tipo: 'imagen', ruta, rutaRango: arg.contenido, desde, hasta: arg.hasta });
+        i = arg.hasta;
+      }
+    } else if (nombre === 'caption') {
+      const pos = saltearOpcionales(j, '[');
+      const arg = pos === -1 ? null : argumento(pos);
+      if (arg) {
+        salida.push({ tipo: 'epigrafe', desde, hasta: arg.hasta, contenido: arg.contenido });
+        i = arg.contenido.desde;
       }
     } else if (nombre === 'verb') {
       const inicio = texto[j] === '*' ? j + 1 : j;   // el carácter en `inicio` es el delimitador
