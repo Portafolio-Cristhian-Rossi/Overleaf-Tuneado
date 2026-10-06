@@ -1,5 +1,6 @@
+import type { Segmento } from '../compartido/prosa';
 import type {
-  ArchivoLeido, EstadoGit, FinDeLinea, Proyecto, ResultadoCompilacion, ResultadoEnviar,
+  ArchivoLeido, Aviso, EstadoCorrector, EstadoGit, FinDeLinea, Proyecto, ResultadoCompilacion, ResultadoEnviar,
   ResultadoEscritura, ResultadoTerminar, ResultadoTraer,
 } from '../compartido/tipos';
 
@@ -49,4 +50,11 @@ export const api = {
   abrirVsCode: () => pedir<void>('POST', '/api/git/abrir-vscode'),
   compilar: () => pedir<ResultadoCompilacion>('POST', '/api/compilar'),
   latido: () => pedir<void>('POST', '/api/latido'),
+  correccion: {
+    estado: () => pedir<EstadoCorrector>('GET', '/api/correccion/estado'),
+    revisar: (parrafos: Segmento[][]) => pedir<Aviso[][]>('POST', '/api/correccion/revisar', { parrafos }),
+    diccionario: () => pedir<{ palabras: string[]; excepciones: string[] }>('GET', '/api/correccion/diccionario'),
+    agregarPalabra: (palabra: string) => pedir<void>('POST', '/api/correccion/palabra', { palabra }),
+    agregarExcepcion: (palabra: string) => pedir<void>('POST', '/api/correccion/excepcion', { palabra }),
+  },
 };

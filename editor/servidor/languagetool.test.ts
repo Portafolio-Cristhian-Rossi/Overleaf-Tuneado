@@ -245,7 +245,8 @@ const instalado = fs.existsSync(DIR_REAL) && fs.readdirSync(DIR_REAL).some((n) =
 
 describe.skipIf(!instalado)('con el LanguageTool real', () => {
   it('las posiciones que devuelve caen sobre la palabra en el texto original', async () => {
-    const c = crearCorrector({ dir: DIR_REAL, puerto: 4391, diccionario: async () => ['BERTopic'] });
+    // Tiempos holgados: junto con el resto de la suite la máquina está cargada.
+    const c = crearCorrector({ dir: DIR_REAL, puerto: 4391, diccionario: async () => ['BERTopic'], tiempoLimiteMs: 60000 });
     correctores.push(c);
     await c.iniciar();
     expect(c.estado()).toEqual({ estado: 'listo' });

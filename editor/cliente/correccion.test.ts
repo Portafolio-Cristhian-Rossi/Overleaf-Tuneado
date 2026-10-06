@@ -98,8 +98,10 @@ describe('crearRevisor', () => {
     let falla = true;
     const { revisor } = conApi((p) => { if (falla) throw new Error('caído'); return marcarMalo(p); });
     expect(await revisor.revisarDocumento(texto)).toEqual([]);
+    expect(revisor.fallo()).toBe(true);
     falla = false;
     expect(await revisor.revisarDocumento(texto)).toHaveLength(2);
+    expect(revisor.fallo()).toBe(false);
   });
 
   it('revisarParrafo devuelve los avisos de un párrafo y los deja recordados', async () => {

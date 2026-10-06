@@ -11,7 +11,8 @@ Los archivos siguen siendo los `.tex` de siempre. El editor no los convierte a
 ningún otro formato, así que tus compañeros pueden seguir editando en Overleaf.
 
 Necesitás Windows 10 u 11, una cuenta de Overleaf con acceso al proyecto, y
-tres programas: Git, Node y MiKTeX.
+tres programas: Git, Node y MiKTeX. Para el corrector de ortografía y gramática
+hace falta además Java.
 
 Las carpetas quedan así:
 
@@ -69,6 +70,19 @@ initexmf --set-config-value "[MPM]AutoInstall=1"
 
 Sin MiKTeX el editor funciona igual para escribir y sincronizar; lo único que
 no vas a tener es el PDF local.
+
+**Java**, para el corrector de ortografía y gramática
+
+```bash
+java -version
+```
+
+```bash
+winget install --id EclipseAdoptium.Temurin.21.JRE -e
+```
+
+Sin Java el editor funciona igual; lo único que no vas a tener es el corrector
+propio, y en su lugar queda el del navegador.
 
 **VS Code** es opcional. Sirve para resolver un conflicto cuando dos personas
 cambiaron el mismo párrafo, y como plan B si el editor no arranca.
@@ -128,6 +142,13 @@ npm run acceso-directo
 El último comando crea el ícono **Editor del informe** en el escritorio. Podés
 anclarlo a la barra de tareas con clic derecho.
 
+Para tener el corrector, un comando más. Descarga LanguageTool (unos 250 MB)
+dentro de la carpeta `editor`; corre en tu máquina y tu texto no sale de ahí:
+
+```bash
+npm run instalar-corrector
+```
+
 ## 5. Uso diario
 
 **Abrir.** Doble clic en el ícono. El editor se abre en el navegador. Si ya
@@ -148,6 +169,28 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
 - Lo que el editor no sabe dibujar se ve como código, en gris. Podés editarlo
   igual.
 
+**Corrección.** Unos segundos después de abrir el editor, el corrector queda
+listo y empieza a subrayar: rojo ondulado para ortografía, ámbar para
+gramática.
+
+- Al pasar el cursor por una palabra subrayada aparecen las sugerencias; un
+  clic la reemplaza. *Agregar al diccionario* hace que no se vuelva a marcar:
+  sirve para términos técnicos o en inglés.
+- Al terminar de escribir una palabra, el editor corrige solo tres cosas, y
+  solo cuando no hay duda: una tilde faltante en una palabra que sin tilde no
+  existe (`analisis` → `análisis`), dos letras invertidas, y una doble
+  mayúscula inicial (`ESta` → `Esta`). Lo corregido queda resaltado un
+  momento. `Ctrl+Z` lo deshace; si deshacés la misma palabra dos veces, no la
+  vuelve a tocar.
+- Palabras como `mas`, `esta` o `calculo`, que existen con y sin tilde, nunca
+  se corrigen solas: quedan subrayadas para que decidas.
+- La pestaña **Gramática**, a la derecha, lista todos los avisos del capítulo;
+  un clic en uno te lleva al lugar.
+- Nunca se revisa ni se toca lo que no es prosa: fórmulas, código, comandos,
+  claves de citas y etiquetas.
+
+Tu diccionario queda en `editor/correccion.json`. No viaja a Overleaf.
+
 **Traer.** Baja lo que cambiaron los demás en Overleaf y lo combina con lo
 tuyo. Cuando hay algo nuevo, la barra avisa `Hay cambios nuevos en Overleaf`.
 
@@ -167,8 +210,8 @@ terminar.
   Enviar, y vos los de ellos cuando apretás Traer.
 - **No muestra los comentarios ni el control de cambios de Overleaf.** Eso se
   sigue leyendo en la web de Overleaf.
-- **No corrige ortografía por su cuenta todavía.** Mientras tanto usa el
-  corrector en español del navegador.
+- **No revisa el estilo ni la redacción.** Marca errores de ortografía y
+  gramática, no si un párrafo está bien escrito.
 
 ## 7. Opciones de `config.json`
 
@@ -179,6 +222,8 @@ terminar.
 | `principal` | `main.tex` | Archivo principal del informe. |
 | `puerto` | `4317` | Puerto local del editor. Cambialo solo si está ocupado. |
 | `compilarAlGuardar` | `false` | Con `true`, compila el PDF cada vez que se guarda. |
+| `corrector` | `true` | Con `false`, no se usa el corrector propio. |
+| `puertoCorrector` | `4319` | Puerto local del corrector. Cambialo solo si está ocupado. |
 
 Después de cambiar una opción, cerrá las pestañas del editor, esperá a que se
 cierre (o reiniciá la máquina) y volvé a abrirlo.
@@ -209,6 +254,19 @@ el comando `initexmf` de la sección 2.
 **"Para ver el PDF hace falta instalar MiKTeX".** Falta MiKTeX o se instaló con
 el editor abierto. Instalalo, cerrá las pestañas del editor, esperá diez
 minutos o reiniciá la máquina, y volvé a abrirlo.
+
+**La pestaña Gramática dice "LanguageTool no está instalado".** Ejecutá
+`npm run instalar-corrector` en la carpeta `editor` y volvé a abrir el editor.
+
+**Dice "No se encontró Java".** Instalalo con el comando de la sección 2 y
+reiniciá la máquina.
+
+**Dice "El corrector no pudo iniciar".** Cerrá las pestañas del editor, esperá
+a que se cierre y abrilo de nuevo. Si se repite, puede que el puerto 4319 esté
+ocupado: cambiá `puertoCorrector` en `config.json`.
+
+**El corrector marca una palabra que está bien.** Pasá el cursor por encima y
+elegí *Agregar al diccionario*.
 
 **"El puerto 4317 está ocupado por otro programa".** Cambiá `puerto` en
 `config.json` por otro número, por ejemplo `4318`.

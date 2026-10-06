@@ -2,6 +2,7 @@ import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api } from './api';
 import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
 import { agregarPaquete } from './comandos';
+import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
 import { titulosDelIndice } from './indice';
 import { extensionMenu } from './menuBarra';
@@ -9,6 +10,7 @@ import { crearBarra } from './pantalla/barra';
 import { crearBloqueoConflicto } from './pantalla/bloqueoConflicto';
 import { el, preguntar } from './pantalla/dom';
 import { crearLateral } from './pantalla/lateral';
+import { crearPanelGramatica, extensionPanelGramatica } from './pantalla/panelGramatica';
 import { crearPanelPdf } from './pantalla/panelPdf';
 import { crearSincronizacion } from './pantalla/sincronizacion';
 import { contextoCambiado, extensionVista } from './vista';
@@ -130,11 +132,14 @@ const editor = crearEditor(porId('editor'), {
     extensionVista(() => ({ numeroCapitulo: numeroDelCapitulo(editor.rutaAbierta()), etiquetas })),
     extensionMenu({ paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete }),
     extensionAtajos((nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); }),
+    extensionCorreccion({ api: api.correccion, alCambiarEstado: (estado) => panelGramatica.mostrarEstado(estado) }),
+    extensionPanelGramatica(() => panelGramatica.actualizar()),
   ],
   alAbrir(ruta, archivo) {
     quitarCartel();
     recordarUltimo(ruta);
     habilitarFormato(esTex(ruta));
+    panelGramatica.actualizar();
     selectorNivel.selectedIndex = 0;
     lateral.mostrarProyecto(proyecto, ruta);
     actualizarIndice(archivo.contenido, 0);
@@ -201,7 +206,30 @@ const sincronizacion = crearSincronizacion(barra, {
   alConflicto: (archivos) => bloqueo.mostrar(archivos),
 });
 
-const panelPdf = crearPanelPdf(porId('panel'), {
+// Panel derecho con dos pestañas: el PDF y los avisos de gramática.
+const zonaPdf = el('div', { clase: 'pestana' });
+const zonaGramatica = el('div', { clase: 'pestana', hidden: true });
+const pestanas: [HTMLButtonElement, HTMLElement][] = [
+  [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(0) }, 'PDF'), zonaPdf],
+  [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(1) }, 'Gramática'), zonaGramatica],
+];
+function elegirPestana(indice: number): void {
+  pestanas.forEach(([boton, zona], i) => {
+    zona.hidden = i !== indice;
+    boton.setAttribute('aria-selected', String(i === indice));
+  });
+}
+porId('panel').append(el('div', { clase: 'pestanas', role: 'tablist' }, ...pestanas.map(([boton]) => boton)), zonaPdf, zonaGramatica);
+elegirPestana(0);
+
+const panelGramatica = crearPanelGramatica(zonaGramatica, {
+  vista: () => editor.vista,
+  esCapitulo: () => esTex(editor.rutaAbierta()),
+  alElegir: (posicion) => editor.irA(posicion),
+  alContar: (cantidad) => { pestanas[1][0].textContent = cantidad > 0 ? `Gramática (${cantidad})` : 'Gramática'; },
+});
+
+const panelPdf = crearPanelPdf(zonaPdf, {
   alElegirProblema: async (ruta, linea) => {
     if (editor.rutaAbierta() !== ruta) await abrir(ruta);
     if (editor.rutaAbierta() === ruta) editor.irALinea(linea);
