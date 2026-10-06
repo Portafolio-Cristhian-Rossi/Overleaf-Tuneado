@@ -62,9 +62,10 @@ beforeEach(async () => {
     corrector: {
       iniciar: vi.fn(async () => {}),
       estado: vi.fn(() => ({ estado: 'listo' as const })),
-      revisar: vi.fn(async (segmentos: { fuente: string }[]) => [
+      revisar: vi.fn(async () => []),
+      revisarVarios: vi.fn(async (parrafos: { fuente: string }[][]) => parrafos.map((segmentos) => (segmentos[0].fuente === 'falla' ? null : [
         { desde: 0, hasta: segmentos[0].fuente.length, tipo: 'ortografia' as const, regla: 'R', mensaje: 'm', sugerencias: [] },
-      ]),
+      ]))),
       olvidarCache: vi.fn(),
       detener: vi.fn(),
     },
@@ -246,7 +247,13 @@ describe('corrección', () => {
     const r = await posta('/api/correccion/revisar', { parrafos });
     expect(r.status).toBe(200);
     expect(r.cuerpo.map((avisos: { hasta: number }[]) => avisos[0].hasta)).toEqual([4, 1]);
-    expect(d.corrector.revisar).toHaveBeenCalledTimes(2);
+    expect(d.corrector.revisarVarios).toHaveBeenCalledTimes(1);
+  });
+
+  it('un párrafo que no se pudo revisar viaja como null, no como "sin avisos"', async () => {
+    const r = await posta('/api/correccion/revisar', { parrafos: [[{ tipo: 'texto', fuente: 'falla' }], [{ tipo: 'texto', fuente: 'bien' }]] });
+    expect(r.cuerpo[0]).toBeNull();
+    expect(r.cuerpo[1]).toHaveLength(1);
   });
 
   it.each([
@@ -257,7 +264,7 @@ describe('corrección', () => {
     [{ parrafos: [[{ tipo: 'marca', fuente: 'x', como: 3 }]] }],
   ])('revisar rechaza un pedido mal formado: %j', async (cuerpo) => {
     expect((await posta('/api/correccion/revisar', cuerpo)).status).toBe(400);
-    expect(d.corrector.revisar).not.toHaveBeenCalled();
+    expect(d.corrector.revisarVarios).not.toHaveBeenCalled();
   });
 
   it('diccionario devuelve palabras y excepciones', async () => {

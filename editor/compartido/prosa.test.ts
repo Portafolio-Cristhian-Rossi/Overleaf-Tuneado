@@ -32,7 +32,7 @@ describe('segmentar', () => {
     ['A\\label{sec:x} B', 'A B'],
     ['R\\&D y a\\_b', 'R&D y a_b'],
     ['visitar \\url{https://x.org/a_b} hoy', 'visitar enlace hoy'],
-    ['un \\emph{término} y \\texttt{codigo}', 'un término y codigo'],
+    ['un \\emph{término} y \\texttt{codigo}', 'un término y X'],
   ])('%j se lee como %j', (texto, esperado) => {
     expect(visto(texto)).toBe(esperado);
   });
@@ -74,6 +74,83 @@ describe('segmentar', () => {
     for (const n of ['Cap1.tex', 'Cap2.tex', 'Cap3.tex', 'Cap6.tex']) {
       expect(visto(leerFixture(n)), n).not.toMatch(/[\\{}]|sec:CAP2|Citekey/);
     }
+  });
+});
+
+// Quien escribe a mano va de izquierda a derecha: mientras tipea el argumento, la llave de
+// cierre todavía no existe. Ese tramo tampoco es prosa.
+describe('lo que todavía no se cerró', () => {
+  const prosaDe = (texto: string) => segmentar(texto).filter((s) => s.tipo === 'texto').map((s) => s.fuente).join('|');
+
+  it.each([
+    '\\includegraphics{distribucion',
+    '\\includegraphics[width=1cm]{figs/distribucion',
+    '\\input{analisis',
+    '\\bibliography{referencias',
+    '\\usepackage{algoritmo',
+    '\\cite{metodo',
+    '\\cite{garcia, metodo',
+    '\\citeA<ver>[p. 3]{metodo',
+    '\\url{modelo',
+    '\\label{sec',
+    '\\ref{analisis',
+    '\\begin{algoritmo',
+    '\\verb|analisis',
+    '$x = analisis',
+    '\\(x = analisis',
+    '\\[x = analisis',
+    '\\texttt{funcion',
+    '\\href{pagina',
+  ])('%s: lo escrito hasta ahí no es prosa', (inicio) => {
+    expect(prosaDe(`Antes ${inicio}`)).toBe('Antes ');
+    expect(segmentar(`Antes ${inicio}`).map((s) => s.fuente).join('')).toBe(`Antes ${inicio}`);
+  });
+
+  it('lo que sigue en la misma línea tampoco se toma por prosa, pero la línea siguiente sí', () => {
+    expect(prosaDe('Ver \\cite{metodo y sigue\nOtra línea.')).toBe('Ver |\nOtra línea.');
+    expect(prosaDe('Ver \\includegraphics{figs/analisis.png\nOtra línea.')).toBe('Ver |\nOtra línea.');
+  });
+
+  it('una fórmula sin cerrar no pasa del párrafo: los siguientes se leen normal', () => {
+    const texto = 'Cuesta 5$ y sigo escribiendo.\n\nOtro párrafo con $x$ y texto normal.\n\nTercero con $y$ y más texto.';
+    const leido = segmentar(texto).map((s) => (s.tipo === 'texto' ? s.fuente : s.como ?? '')).join('');
+    expect(leido).toContain('Otro párrafo con X y texto normal.');
+    expect(leido).toContain('Tercero con X y más texto.');
+    expect(leido).not.toContain('sigo escribiendo');
+  });
+
+  it('una fórmula cerrada más abajo, dentro del mismo párrafo, sigue siendo una sola marca', () => {
+    expect(prosaDe('Sea $a +\nb$ la suma.')).toBe('Sea | la suma.');
+  });
+
+  it('el argumento de un comando no se busca más allá de su párrafo', () => {
+    expect(prosaDe('Ver \\ref{sec\n\nOtro párrafo} con texto.')).toBe('Ver |\n\nOtro párrafo| con texto.');
+  });
+});
+
+describe('código y claves que no son prosa', () => {
+  const leido = (texto: string) => segmentar(texto).map((s) => (s.tipo === 'texto' ? s.fuente : s.como ?? '')).join('');
+
+  it.each([
+    ['el archivo \\texttt{analisis_final.csv} está', 'el archivo X está'],
+    ['la función \\lstinline|calcular_metodo(x)| devuelve', 'la función X devuelve'],
+    ['la función \\lstinline{calcular_metodo(x)} devuelve', 'la función X devuelve'],
+    ['en \\path{figs/analisis.png} hay', 'en X hay'],
+    ['ver \\cref{sec:metodo} y \\Cref{fig:analisis}', 'ver 1 y 1'],
+    ['ver \\nameref{sec:metodo}', 'ver 1'],
+    ['según \\citep{garcia2020} y \\citet{lopez2019}', 'según (Autor, 2020) y Autor (2020)'],
+    ['según \\autocite{garcia2020} y \\textcite{lopez2019}', 'según (Autor, 2020) y Autor (2020)'],
+    ['la \\possessivecite{garcia2020} propuesta', 'la (Autor, 2020) propuesta'],
+    ['en \\textcolor{rojo}{texto visible} sigue', 'en texto visible sigue'],
+    ['\\graphicspath{{figs/}}\\setcounter{pagina}{3}Texto', 'Texto'],
+    ['\\bibitem{garcia2020} García, 2020.', ' García, 2020.'],
+  ])('%j se lee como %j', (texto, esperado) => {
+    expect(leido(texto)).toBe(esperado);
+  });
+
+  it.each(['Verbatim', 'algorithmic', 'comment', 'alltt'])('el entorno %s no es prosa', (entorno) => {
+    const bloque = `\\begin{${entorno}}\nanalisis del metodo\n\n mas codigo\n\\end{${entorno}}`;
+    expect(leido(`Antes ${bloque} después`)).toBe('Antes  después');
   });
 });
 

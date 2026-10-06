@@ -98,10 +98,43 @@ describe('revisar', () => {
       coincidencia(21, 2, 'ES_ESTILO', 'style', []),
     ];
     expect(await c.revisar(segmentos)).toEqual([
-      { desde: 11, hasta: 19, tipo: 'ortografia', regla: 'MORFOLOGIK_RULE_ES', mensaje: 'Posible error ortográfico', sugerencias: ['análisis', 'anaclisis', 'a', 'b', 'c'] },
+      { desde: 11, hasta: 19, tipo: 'ortografia', regla: 'MORFOLOGIK_RULE_ES', mensaje: 'Posible error ortográfico', sugerencias: ['análisis', 'anaclisis', 'a', 'b', 'c', 'd', 'e'] },
       { desde: 0, hasta: 2, tipo: 'gramatica', regla: 'AGREEMENT_DET_NOUN', mensaje: 'm', sugerencias: ['La'] },
       { desde: 21, hasta: 23, tipo: 'estilo', regla: 'ES_ESTILO', mensaje: 'm', sugerencias: [] },
     ]);
+  });
+
+  // La sugerencia se calculó sobre el texto sin LaTeX: aplicarla sobre un tramo que incluye
+  // comandos o llaves los borraría.
+  it('un aviso que cruza LaTeX conserva el mensaje pero no ofrece sugerencias', async () => {
+    respuesta.matches = [
+      coincidencia(0, 19, 'CONCORDANCIA', 'grammar', ['La análisis']),       // "El \textbf{analisis" cruza la llave
+      coincidencia(11, 8, 'MORFOLOGIK_RULE_ES', 'misspelling', ['análisis']), // dentro de un solo tramo de prosa
+      coincidencia(20, 10, 'OTRA', 'grammar', ['de los textos']),            // " de~textos" cruza la tilde de espacio
+    ];
+    expect((await c.revisar(segmentos))!.map((a) => [a.desde, a.sugerencias])).toEqual([
+      [0, []], [11, ['análisis']], [20, []],
+    ]);
+  });
+
+  it('revisarVarios devuelve null para el párrafo cuya consulta falló y avisos para los demás', async () => {
+    respuesta.matches = [coincidencia(0, 2, 'R', 'grammar', [])];
+    const bueno = segmentar('Uno bueno.');
+    expect(await c.revisarVarios([bueno])).toEqual([[expect.objectContaining({ desde: 0 })]]);
+    respuesta.status = 500;
+    expect(await c.revisarVarios([bueno, segmentar('Otro que falla.'), segmentar('\\label{x}')])).toEqual([
+      [expect.objectContaining({ desde: 0 })], null, [],
+    ]);
+  });
+
+  it('revisarVarios no manda más de cuatro consultas a la vez', async () => {
+    respuesta.demoraMs = 40;
+    let enVuelo = 0;
+    let maximo = 0;
+    falso!.on('request', (_req, res) => { enVuelo++; maximo = Math.max(maximo, enVuelo); res.on('finish', () => { enVuelo--; }); });
+    await c.revisarVarios(Array.from({ length: 12 }, (_, i) => segmentar(`Párrafo número ${i}.`)));
+    expect(consultas).toHaveLength(12);
+    expect(maximo).toBeLessThanOrEqual(4);
   });
 
   it('no marca las palabras del diccionario personal, sin importar mayúsculas', async () => {
@@ -220,6 +253,50 @@ describe('arranque', () => {
     const c = corrector(1, noLanza, { esperaDeArranqueMs: 150 });
     await c.iniciar();
     expect(c.estado()).toMatchObject({ estado: 'no-disponible' });
+  });
+
+  // Java puede morir después de haber arrancado bien (memoria, antivirus, suspensión).
+  it('si el proceso se cae después de arrancar, lo relanza y vuelve a quedar listo', async () => {
+    instalarFalso();
+    const puerto = await escuchar();
+    await new Promise((r) => falso!.close(r));
+    const caidas: (() => void)[] = [];
+    const lanzar: Lanzar = (comando, args, o) => {
+      lanzamientos.push({ comando, args, cwd: o.cwd });
+      setTimeout(() => { void escuchar(puerto); }, 30);
+      return { alSalir: (f) => { caidas[lanzamientos.length - 1] = () => f('termino'); }, detener: () => undefined };
+    };
+    const c = corrector(puerto, lanzar);
+    await c.iniciar();
+    expect(c.estado()).toEqual({ estado: 'listo' });
+
+    for (const s of servidores.splice(0)) { s.closeAllConnections(); await new Promise((r) => s.close(r)); }
+    caidas[0]();
+    expect(c.estado()).toEqual({ estado: 'iniciando' });
+    for (let i = 0; i < 100 && c.estado().estado !== 'listo'; i++) await new Promise((r) => setTimeout(r, 20));
+    expect(c.estado()).toEqual({ estado: 'listo' });
+    expect(lanzamientos).toHaveLength(2);
+  });
+
+  it('si se cae una y otra vez, deja de relanzarlo y queda no disponible', async () => {
+    instalarFalso();
+    const puerto = await escuchar();
+    await new Promise((r) => falso!.close(r));
+    const caidas: (() => void)[] = [];
+    const lanzar: Lanzar = (comando, args, o) => {
+      lanzamientos.push({ comando, args, cwd: o.cwd });
+      setTimeout(() => { void escuchar(puerto); }, 20);
+      return { alSalir: (f) => { caidas[lanzamientos.length - 1] = () => f('termino'); }, detener: () => undefined };
+    };
+    const c = corrector(puerto, lanzar);
+    await c.iniciar();
+    for (let n = 0; n < 4 && c.estado().estado !== 'no-disponible'; n++) {
+      for (const s of servidores.splice(0)) { s.closeAllConnections(); await new Promise((r) => s.close(r)); }
+      caidas[n]();
+      for (let i = 0; i < 100 && c.estado().estado === 'iniciando'; i++) await new Promise((r) => setTimeout(r, 20));
+    }
+    expect(c.estado()).toMatchObject({ estado: 'no-disponible' });
+    expect(lanzamientos.length).toBeLessThanOrEqual(4);
   });
 
   it('detener termina el proceso que lanzó', async () => {

@@ -34,7 +34,7 @@ describe('decidir', () => {
       expect(decidir('modleo', aviso(['modelo', 'moldeo', 'modeló', 'moldeó']), sinExcepciones)).toBeNull();
     });
 
-    it('en palabras de menos de cuatro letras no se aplica', () => {
+    it('en palabras cortas no se aplica', () => {
       expect(decidir('uan', aviso(['una', 'un', 'van']), sinExcepciones)).toBeNull();
     });
   });
@@ -44,7 +44,7 @@ describe('decidir', () => {
       expect(decidir('ESta', aviso(['Esta', 'Está', 'Ésta', 'Este', 'Están']), sinExcepciones)).toBe('Esta');
     });
 
-    it('no toca nombres con mayúsculas internas que el corrector no propone normalizar', () => {
+    it('no toca nombres con mayúsculas internas', () => {
       expect(decidir('IDs', aviso(['Idos', 'Ods']), sinExcepciones)).toBeNull();
     });
   });
@@ -91,6 +91,43 @@ describe('decidir', () => {
     it('si el corrector no propone esa forma, no se toca', () => {
       expect(decidir('tambien', aviso(['cambien'], 'OTRA'), sinExcepciones)).toBeNull();
     });
+  });
+
+  // Un informe técnico está lleno de términos en inglés y siglas. Ante la duda, no se tocan.
+  describe('términos en inglés y siglas', () => {
+    it.each([
+      ['seed', ['sede', 'seda']],
+      ['mean', ['mena', 'mean']],
+      ['form', ['from', 'forma']],
+      ['BERT', ['BRET', 'BEST']],
+      ['IDs', ['Ids']],
+      ['GPUs', ['Gpus']],
+      ['BERTopic', ['Bertópic']],
+      ['iPhone', ['iPhóne']],
+      ['word2vec', ['wordvec']],
+    ])('%s no se corrige', (palabra, sugerencias) => {
+      expect(decidir(palabra, aviso(sugerencias), sinExcepciones)).toBeNull();
+    });
+
+    it('las letras invertidas solo se corrigen en palabras de seis letras o más', () => {
+      expect(decidir('csaa', aviso(['casa']), sinExcepciones)).toBeNull();
+      expect(decidir('modleos', aviso(['modelos']), sinExcepciones)).toBe('modelos');
+    });
+
+    it('la candidata por letras invertidas tiene que ser la primera sugerencia', () => {
+      expect(decidir('trabjao', aviso(['trabado', 'trabajo']), sinExcepciones)).toBeNull();
+      expect(decidir('trabjao', aviso(['trabajo', 'trabado']), sinExcepciones)).toBe('trabajo');
+    });
+
+    it('la doble mayúscula pide al menos dos minúsculas detrás', () => {
+      expect(decidir('ESta', aviso(['Esta', 'Está']), sinExcepciones)).toBe('Esta');
+      expect(decidir('ELa', aviso(['Ela']), sinExcepciones)).toBeNull();
+    });
+  });
+
+  // Decidir "hay una única candidata" exige ver todas las sugerencias, no las primeras cinco.
+  it('con dos candidatas de tilde no corrige, esté donde esté la segunda', () => {
+    expect(decidir('termino', aviso(['término', 'a', 'b', 'c', 'd', 'terminó']), sinExcepciones)).toBeNull();
   });
 
   describe('límites', () => {

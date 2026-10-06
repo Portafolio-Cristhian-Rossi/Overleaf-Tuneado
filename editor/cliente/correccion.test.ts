@@ -51,7 +51,7 @@ describe('crearRevisor', () => {
   const aviso = (desde: number, hasta: number): Aviso => ({ desde, hasta, tipo: 'ortografia', regla: 'R', mensaje: 'm', sugerencias: [] });
   const texto = 'Uno malo.\n\nDos\nsigue malo.\n\n\\label{x}\n\nTres.';
 
-  function conApi(responder: (parrafos: Segmento[][]) => Aviso[][] | Promise<Aviso[][]>) {
+  function conApi(responder: (parrafos: Segmento[][]) => (Aviso[] | null)[] | Promise<(Aviso[] | null)[]>) {
     const revisar = vi.fn(async (parrafos: Segmento[][]) => responder(parrafos));
     return { revisor: crearRevisor({ revisar }), revisar };
   }
@@ -101,6 +101,20 @@ describe('crearRevisor', () => {
     expect(revisor.fallo()).toBe(true);
     falla = false;
     expect(await revisor.revisarDocumento(texto)).toHaveLength(2);
+    expect(revisor.fallo()).toBe(false);
+  });
+
+  // "No se pudo revisar" no es "sin errores": ese párrafo se vuelve a pedir.
+  it('un párrafo que el servidor no pudo revisar no se recuerda y se vuelve a pedir', async () => {
+    let fallaDos = true;
+    const { revisor, revisar } = conApi((p) => marcarMalo(p).map((avisos, i) => (fallaDos && p[i][0].fuente.startsWith('Dos') ? null : avisos)));
+    const primera = await revisor.revisarDocumento(texto);
+    expect(primera.map((a) => a.desde)).toEqual([4]);
+    expect(revisor.fallo()).toBe(true);
+    fallaDos = false;
+    const segunda = await revisor.revisarDocumento(texto);
+    expect(revisar.mock.calls[1][0]).toHaveLength(1);
+    expect(segunda.map((a) => a.desde)).toEqual([4, 21]);
     expect(revisor.fallo()).toBe(false);
   });
 
