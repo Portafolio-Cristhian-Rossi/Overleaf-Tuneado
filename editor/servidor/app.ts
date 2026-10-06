@@ -111,7 +111,7 @@ export function crearApp(d: Dependencias): express.Express {
       res.status(400).json({ mensaje: 'Pedido de revisión mal formado.' });
       return;
     }
-    res.json(await Promise.all(parrafos.map((p) => d.corrector.revisar(p))));
+    res.json(await d.corrector.revisarVarios(parrafos));
   });
   // Una palabra inválida es un error de quien pide, no del servidor.
   const guardarPalabra = (guardar: (palabra: string) => Promise<void>): RequestHandler => async (req, res) => {

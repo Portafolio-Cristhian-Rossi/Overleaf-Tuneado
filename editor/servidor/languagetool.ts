@@ -19,6 +19,8 @@ export interface Corrector {
   // Avisos de un párrafo, con posiciones relativas a su texto original. Nunca falla: ante
   // cualquier problema devuelve una lista vacía.
   revisar(segmentos: Segmento[]): Promise<Aviso[]>;
+  // Varios párrafos, de a pocos por vez. null en el lugar de cada uno que no se pudo revisar.
+  revisarVarios(parrafos: Segmento[][]): Promise<(Aviso[] | null)[]>;
   olvidarCache(): void;
   detener(): void;
 }
@@ -36,7 +38,9 @@ export interface OpcionesCorrector {
 const REGLA_NO_EXISTE = 'MORFOLOGIK_RULE_ES';
 // WHITESPACE_RULE marca los espacios dobles, que en LaTeX no significan nada.
 const REGLAS_DESACTIVADAS = 'WHITESPACE_RULE';
-const MAXIMO_DE_SUGERENCIAS = 5;
+// Suficientes para que la autocorrección vea todas las candidatas; la pantalla muestra menos.
+const MAXIMO_DE_SUGERENCIAS = 20;
+const CONSULTAS_A_LA_VEZ = 4;
 const MAXIMO_EN_CACHE = 3000;
 const INTENTOS_DE_ARRANQUE = 3;
 const HAY_LETRA = /\p{L}/u;
@@ -121,8 +125,11 @@ export function crearCorrector(o: OpcionesCorrector): Corrector {
     return 'sin-respuesta';
   }
 
-  async function iniciar(): Promise<void> {
-    detenido = false;
+  // Arranca (o vuelve a arrancar) el corrector. `relanzamientos` cuenta las veces que Java
+  // se cayó después de haber estado listo; no las de un mismo arranque que no prende.
+  let relanzamientos = 0;
+
+  async function arrancar(): Promise<void> {
     estado = { estado: 'iniciando' };
     // Puede haber quedado uno andando de una sesión anterior que se cerró de golpe.
     if (await responde()) { estado = { estado: 'listo' }; return; }
@@ -135,9 +142,13 @@ export function crearCorrector(o: OpcionesCorrector): Corrector {
     for (let intento = 0; intento < INTENTOS_DE_ARRANQUE && !detenido; intento++) {
       const resultado = await intentar(carpeta);
       if (resultado === 'listo') {
+        // La primera consulta tarda varios segundos: se hace antes de avisar que está listo,
+        // y no cuando el usuario escribe.
+        await consultar([{ tipo: 'texto', fuente: 'Una oración para empezar.' }]).catch(() => undefined);
+        if (detenido) return;
         estado = { estado: 'listo' };
-        // La primera consulta tarda varios segundos: se hace ahora y no cuando el usuario escribe.
-        void consultar([{ tipo: 'texto', fuente: 'Una oración para empezar.' }]).catch(() => undefined);
+        // Java puede morir más tarde (memoria, antivirus, suspensión): hay que enterarse.
+        proceso?.alSalir(() => { void alCaer(); });
         return;
       }
       if (resultado === 'no-encontrado') {
@@ -147,6 +158,24 @@ export function crearCorrector(o: OpcionesCorrector): Corrector {
       if (resultado === 'sin-respuesta') break;
     }
     if (!detenido) estado = { estado: 'no-disponible', motivo: 'El corrector no pudo iniciar. Cerrá el editor y volvé a abrirlo; si sigue igual, mirá INSTALACION.md.' };
+  }
+
+  async function alCaer(): Promise<void> {
+    if (detenido) return;
+    proceso = null;
+    if (relanzamientos >= INTENTOS_DE_ARRANQUE) {
+      estado = { estado: 'no-disponible', motivo: 'El corrector se cerró varias veces. Cerrá el editor y volvé a abrirlo; si sigue igual, mirá INSTALACION.md.' };
+      return;
+    }
+    relanzamientos++;
+    estado = { estado: 'iniciando' };
+    await arrancar();
+  }
+
+  function iniciar(): Promise<void> {
+    detenido = false;
+    relanzamientos = 0;
+    return arrancar();
   }
 
   async function consultar(segmentos: Segmento[]): Promise<any[]> {
@@ -165,43 +194,75 @@ export function crearCorrector(o: OpcionesCorrector): Corrector {
     return Array.isArray(cuerpo?.matches) ? cuerpo.matches : [];
   }
 
-  async function revisar(segmentos: Segmento[]): Promise<Aviso[]> {
-    if (estado.estado !== 'listo') return [];
+  // Avisos de un párrafo, o null si no se pudo revisar. "No se pudo" no es "sin errores".
+  async function revisarUno(segmentos: Segmento[]): Promise<Aviso[] | null> {
     if (!segmentos.some((s) => s.tipo === 'texto' && HAY_LETRA.test(s.fuente))) return [];
-
     const clave = JSON.stringify(segmentos);
     const guardado = cache.get(clave);
     if (guardado) return guardado;
+    if (estado.estado !== 'listo') return null;
 
     try {
       const [coincidencias, palabras] = await Promise.all([consultar(segmentos), o.diccionario()]);
       const propias = new Set(palabras.map((p) => p.toLowerCase()));
       const original = segmentos.map((s) => s.fuente).join('');
+
+      // Tramos de prosa del párrafo. La sugerencia del corrector está pensada sobre el texto sin
+      // LaTeX: aplicarla a un tramo que incluye comandos o llaves los borraría.
+      const prosa: { desde: number; hasta: number }[] = [];
+      let posicion = 0;
+      for (const s of segmentos) {
+        if (s.tipo === 'texto') prosa.push({ desde: posicion, hasta: posicion + s.fuente.length });
+        posicion += s.fuente.length;
+      }
+      const esSoloProsa = (desde: number, hasta: number) => prosa.some((t) => t.desde <= desde && hasta <= t.hasta);
+
       const avisos: Aviso[] = coincidencias
         .filter((m) => Number.isInteger(m?.offset) && Number.isInteger(m?.length) && m.length > 0)
-        .map((m) => ({
-          desde: m.offset as number,
-          hasta: (m.offset + m.length) as number,
-          tipo: tipoDe(m.rule?.issueType),
-          regla: String(m.rule?.id ?? ''),
-          mensaje: String(m.message ?? ''),
-          sugerencias: (Array.isArray(m.replacements) ? m.replacements : [])
-            .map((x: any) => String(x?.value ?? '')).filter(Boolean).slice(0, MAXIMO_DE_SUGERENCIAS),
-        }))
+        .map((m) => {
+          const desde = m.offset as number;
+          const hasta = (m.offset + m.length) as number;
+          return {
+            desde, hasta,
+            tipo: tipoDe(m.rule?.issueType),
+            regla: String(m.rule?.id ?? ''),
+            mensaje: String(m.message ?? ''),
+            sugerencias: esSoloProsa(desde, hasta)
+              ? (Array.isArray(m.replacements) ? m.replacements : [])
+                .map((x: any) => String(x?.value ?? '')).filter(Boolean).slice(0, MAXIMO_DE_SUGERENCIAS)
+              : [],
+          };
+        })
         .filter((a) => !(a.regla === REGLA_NO_EXISTE && propias.has(original.slice(a.desde, a.hasta).toLowerCase())));
 
       if (cache.size >= MAXIMO_EN_CACHE) cache.delete(cache.keys().next().value!);
       cache.set(clave, avisos);
       return avisos;
     } catch {
-      return [];
+      return null;
     }
+  }
+
+  // De a pocas consultas por vez: así el tiempo límite de cada una no se gasta haciendo cola,
+  // y un capítulo largo no deja párrafos sin revisar.
+  async function revisarVarios(parrafos: Segmento[][]): Promise<(Aviso[] | null)[]> {
+    const resultados: (Aviso[] | null)[] = new Array(parrafos.length).fill(null);
+    let siguiente = 0;
+    const trabajar = async () => {
+      while (siguiente < parrafos.length) {
+        const indice = siguiente++;
+        resultados[indice] = await revisarUno(parrafos[indice]);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONSULTAS_A_LA_VEZ, parrafos.length) }, trabajar));
+    return resultados;
   }
 
   return {
     iniciar,
     estado: () => estado,
-    revisar,
+    revisar: async (segmentos) => (await revisarUno(segmentos)) ?? [],
+    revisarVarios,
     olvidarCache: () => cache.clear(),
     detener() {
       detenido = true;

@@ -191,6 +191,9 @@ gramática.
 
 Tu diccionario queda en `editor/correccion.json`. No viaja a Overleaf.
 
+El corrector ocupa unos 400 MB en disco y, mientras el editor está abierto,
+hasta 1 GB de memoria.
+
 **Traer.** Baja lo que cambiaron los demás en Overleaf y lo combina con lo
 tuyo. Cuando hay algo nuevo, la barra avisa `Hay cambios nuevos en Overleaf`.
 

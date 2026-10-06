@@ -11,7 +11,8 @@ import type { Aviso, EstadoCorrector } from '../compartido/tipos';
 
 export interface ApiCorreccion {
   estado(): Promise<EstadoCorrector>;
-  revisar(parrafos: Segmento[][]): Promise<Aviso[][]>;
+  // null en el lugar de cada párrafo que no se pudo revisar.
+  revisar(parrafos: Segmento[][]): Promise<(Aviso[] | null)[]>;
   diccionario(): Promise<{ palabras: string[]; excepciones: string[] }>;
   agregarPalabra(palabra: string): Promise<void>;
   agregarExcepcion(palabra: string): Promise<void>;
@@ -55,8 +56,14 @@ export function crearRevisor(api: Pick<ApiCorreccion, 'revisar'>) {
     if (faltantes.length === 0) return true;
     try {
       const respuestas = await api.revisar(faltantes.map((p) => p.segmentos));
-      faltantes.forEach((p, i) => recordados.set(clave(p), respuestas[i] ?? []));
-      return true;
+      // "No se pudo revisar" no es "sin errores": lo que vino en null no se recuerda.
+      let completo = true;
+      faltantes.forEach((p, i) => {
+        const avisos = respuestas[i];
+        if (avisos) recordados.set(clave(p), avisos);
+        else completo = false;
+      });
+      return completo;
     } catch {
       return false;   // el fallo no se recuerda: se reintenta con la próxima edición
     }
@@ -66,7 +73,6 @@ export function crearRevisor(api: Pick<ApiCorreccion, 'revisar'>) {
     async revisarDocumento(texto: string): Promise<Aviso[]> {
       const parrafos = parrafosAnotados(texto);
       fallo = !(await completar(parrafos));
-      if (fallo) return [];
       return parrafos.flatMap((p) => (recordados.get(clave(p)) ?? []).map((a) => ({ ...a, desde: p.desde + a.desde, hasta: p.desde + a.hasta })));
     },
     async revisarParrafo(parrafo: Parrafo): Promise<Aviso[]> {
@@ -97,11 +103,19 @@ const MAXIMO_DE_BOTONES = 3;
 const DURACION_DE_MARCA_MS = 2000;
 const ESPERA_DE_REVISION_MS = 750;
 const ESPERA_DE_ESTADO_MS = 2000;
+const ESPERA_DE_REINTENTO_MS = 5000;
+const MAXIMO_DE_REINTENTOS = 6;
 
 const marcar = StateEffect.define<{ desde: number; hasta: number } | null>();
 // Pide revisar de nuevo aunque el texto no haya cambiado: el corrector terminó de arrancar,
 // o cambió el diccionario. (forceLinting no sirve: solo adelanta una revisión ya pendiente.)
 const refrescar = StateEffect.define<null>();
+
+// Identifica al documento cargado: cada archivo que se abre o se recarga desde disco estrena
+// un estado nuevo, y con él un número nuevo. Sirve para descartar lo que quedó pendiente de
+// un documento que ya no es el que está en pantalla.
+let ultimaGeneracion = 0;
+const generacion = StateField.define<number>({ create: () => ++ultimaGeneracion, update: (valor) => valor });
 const pedirRevision = (vista: EditorView) => vista.dispatch({ effects: refrescar.of(null) });
 const marcaDeAutocorreccion = Decoration.mark({ class: 'cm-autocorregida' });
 
@@ -118,7 +132,8 @@ export function extensionCorreccion(o: OpcionesCorreccion): Extension {
   let listo = false;
   const vistas = new Set<EditorView>();
   // Autocorrecciones recientes, para reconocer cuándo un Ctrl+Z deshizo una.
-  let recientes: { original: string; desde: number }[] = [];
+  let recientes: { original: string; desde: number; generacion: number }[] = [];
+  let fallosSeguidos = 0;
 
   async function seguirEstado(): Promise<void> {
     let estado: EstadoCorrector;
@@ -128,10 +143,10 @@ export function extensionCorreccion(o: OpcionesCorreccion): Extension {
       estado = { estado: 'no-disponible', motivo: 'No se pudo consultar el corrector.' };
     }
     o.alCambiarEstado?.(estado);
+    listo = estado.estado === 'listo';
     if (estado.estado === 'iniciando') { setTimeout(() => { void seguirEstado(); }, ESPERA_DE_ESTADO_MS); return; }
-    if (estado.estado !== 'listo') return;
+    if (!listo) return;
     excepciones = new Set((await o.api.diccionario().catch(() => ({ excepciones: [] as string[] }))).excepciones);
-    listo = true;
     for (const vista of vistas) pedirRevision(vista);
   }
   void seguirEstado();
@@ -140,7 +155,10 @@ export function extensionCorreccion(o: OpcionesCorreccion): Extension {
     if (!listo) return [];
     const texto = vista.state.doc.toString();
     const avisos = await revisor.revisarDocumento(texto);
-    if (revisor.fallo()) setTimeout(() => pedirRevision(vista), 5000);
+    // Si algo no se pudo revisar, puede que el corrector se haya caído: se vuelve a preguntar
+    // su estado (eso actualiza el panel) y se reintenta. Unas pocas veces, no para siempre.
+    if (!revisor.fallo()) fallosSeguidos = 0;
+    else if (++fallosSeguidos <= MAXIMO_DE_REINTENTOS) setTimeout(() => { void seguirEstado(); }, ESPERA_DE_REINTENTO_MS);
     return avisos.map((a): Diagnostic => {
       const palabra = texto.slice(a.desde, a.hasta);
       const acciones: Action[] = a.sugerencias.slice(0, MAXIMO_DE_BOTONES).map((sugerencia) => ({
@@ -178,6 +196,7 @@ export function extensionCorreccion(o: OpcionesCorreccion): Extension {
   });
 
   async function autocorregir(vista: EditorView, posicion: number): Promise<void> {
+    const documento = vista.state.field(generacion);
     const texto = vista.state.doc.toString();
     const palabra = palabraAntesDe(texto, posicion);
     if (!palabra) return;
@@ -187,8 +206,10 @@ export function extensionCorreccion(o: OpcionesCorreccion): Extension {
     const avisos = await revisor.revisarParrafo(parrafo);
     const aviso = avisos.find((a) => parrafo.desde + a.desde === palabra.desde && parrafo.desde + a.hasta === palabra.hasta) ?? null;
     const reemplazo = decidir(palabra.palabra, aviso, excepciones);
-    // Mientras llegaba la respuesta el texto pudo cambiar: solo se corrige si la palabra sigue ahí.
-    if (!reemplazo || vista.state.readOnly || vista.state.sliceDoc(palabra.desde, palabra.hasta) !== palabra.palabra) return;
+    // Mientras llegaba la respuesta pudo cambiar el texto, o abrirse otro archivo: solo se
+    // corrige si es el mismo documento y la palabra sigue ahí.
+    if (!reemplazo || vista.state.readOnly || vista.state.field(generacion) !== documento) return;
+    if (vista.state.sliceDoc(palabra.desde, palabra.hasta) !== palabra.palabra) return;
 
     vista.dispatch({
       changes: { from: palabra.desde, to: palabra.hasta, insert: reemplazo },
@@ -197,7 +218,7 @@ export function extensionCorreccion(o: OpcionesCorreccion): Extension {
       // Un paso propio en el historial: Ctrl+Z deshace la corrección y nada más.
       annotations: isolateHistory.of('full'),
     });
-    recientes = [...recientes.slice(-9), { original: palabra.palabra, desde: palabra.desde }];
+    recientes = [...recientes.slice(-9), { original: palabra.palabra, desde: palabra.desde, generacion: documento }];
     setTimeout(() => { vista.dispatch({ effects: marcar.of(null) }); }, DURACION_DE_MARCA_MS);
   }
 
@@ -208,7 +229,11 @@ export function extensionCorreccion(o: OpcionesCorreccion): Extension {
 
   const escucha = EditorView.updateListener.of((cambio) => {
     if (!listo || !cambio.docChanged) return;
+    const documento = cambio.state.field(generacion);
+    recientes = recientes.filter((r) => r.generacion === documento);
     for (const tr of cambio.transactions) {
+      // Lo que se escribió antes de una corrección la corre de lugar.
+      recientes = recientes.map((r) => ({ ...r, desde: tr.changes.mapPos(r.desde) }));
       if (tr.isUserEvent('undo')) {
         // Si tras deshacer vuelve a estar la palabra original, se deshizo una autocorrección.
         const deshechas = recientes.filter((r) => tr.state.sliceDoc(r.desde, r.desde + r.original.length) === r.original);
@@ -229,5 +254,5 @@ export function extensionCorreccion(o: OpcionesCorreccion): Extension {
 
   // Con el corrector propio andando, el del navegador sobra (subrayaría todo dos veces).
   const sinCorrectorDelNavegador = Prec.highest(EditorView.contentAttributes.of(() => (listo ? { spellcheck: 'false' } : null)));
-  return [registro, fuente, marcas, escucha, sinCorrectorDelNavegador];
+  return [generacion, registro, fuente, marcas, escucha, sinCorrectorDelNavegador];
 }
