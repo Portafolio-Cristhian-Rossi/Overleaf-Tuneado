@@ -41,9 +41,11 @@ historial solo lo que él agregó.
   CodeMirror exige para decoraciones de bloque.
 - KaTeX 0.19.0 (MIT, 4 MB) está en npm. Se empaqueta con Vite, con sus fuentes:
   funciona sin conexión.
-- Zotero 9.0.6 está instalado, sin complementos. **No verificado:** durante el
-  diseño Zotero no estuvo abierto en esta máquina, así que no se pudo probar su
-  API local (puerto 23119). Ver 6.5.
+- Zotero 9.0.6 está instalado, sin complementos. Su API local
+  (`127.0.0.1:23119/api`) se probó con Zotero abierto y la opción activada;
+  el detalle está en 6.5. Los papers no están en la biblioteca personal (dos
+  páginas web) sino en la biblioteca de grupo "Tesis2026-Cris,Pache,Nacho",
+  compartida con los compañeros: 28 ítems, casi todos artículos.
 
 ## 3. Decisión central
 
@@ -229,34 +231,43 @@ directamente. Solo lee: nunca escribe en la biblioteca de Zotero, y nada sale
 de la máquina.
 
 - `GET /api/zotero/estado` → `disponible` | `cerrado` | `sin-permiso`.
-- `GET /api/zotero/buscar?q=` → ítems (título, autores, año, DOI, clave de
-  ítem), sin adjuntos ni notas. Espera máxima 3 s.
-- Al elegir un ítem de Zotero, el servidor pide su entrada en BibTeX y la
-  agrega con la misma operación que el pegado (6.6).
+- `GET /api/zotero/items` → los ítems de todas las bibliotecas: la personal y
+  cada grupo. De cada uno: biblioteca, clave de ítem, tipo, título, autores,
+  año y DOI. Sin adjuntos ni notas. Espera máxima 3 s.
+- `POST /api/zotero/citar` `{ biblioteca, item }` → pide a Zotero la entrada
+  en BibTeX, la limpia y la agrega con la misma operación que el pegado (6.6).
+  Devuelve la clave a citar.
 
-Con Zotero `cerrado` o `sin-permiso`, el buscador lo dice en una línea (con
-la instrucción para activar la opción en Ajustes → Avanzado) y trabaja solo
-con el `.bib`.
+El buscador pide la lista al abrirse y filtra en el cliente, con la misma
+regla que usa para el `.bib` (sin tildes ni mayúsculas, todas las palabras).
+Son decenas de ítems: no hace falta buscar en Zotero por cada tecla.
 
-### 6.5 Verificación previa de Zotero
+Limpieza antes de escribir en el `.bib`, que es compartido: se quitan los
+campos `file` (trae la ruta de la carpeta personal de quien exporta),
+`abstract` y `keywords`. El resto queda como lo entrega Zotero.
 
-La conexión con Zotero no pudo probarse durante el diseño. La primera tarea de
-la entrega 2 es una sonda, con Zotero abierto por Cristhian, que comprueba:
+Con Zotero `cerrado` o `sin-permiso`, el buscador lo dice en una línea (en el
+segundo caso, con la instrucción para activar la opción en Ajustes →
+Avanzado) y trabaja solo con el `.bib`.
 
-1. que la API local responde en el puerto 23119 con la opción activada, y qué
-   responde con la opción desactivada;
-2. que se puede buscar por texto y qué campos devuelve;
-3. que entrega un ítem en BibTeX, y qué clave genera.
+### 6.5 Sonda de Zotero (hecha el 2026-10-06)
 
-Según el resultado:
-- Todo funciona: se construye lo descrito en 6.4.
-- No entrega BibTeX pero sí los datos: el editor arma la entrada a partir de
-  los campos, con clave `apellidoAñoPalabra` (por ejemplo `cohen1963independence`).
-- La API no responde: la entrega 2 sale sin Zotero, solo con pegar BibTeX, y
-  se le avisa a Cristhian. En Zotero, clic derecho → Exportar ítem → BibTeX da
-  el texto para pegar.
+Con Zotero 9.0.6 abierto en la máquina de Cristhian:
 
-El resultado de la sonda se anota en esta especificación antes de seguir.
+- Zotero cerrado: la conexión es rechazada. Abierto con la opción apagada:
+  HTTP 403 con el texto "Local API is not enabled". Con eso se distinguen
+  `cerrado` y `sin-permiso`.
+- `GET /api/users/0/groups` lista los grupos; los ítems de un grupo están en
+  `/api/groups/<id>/items/top`. La biblioteca personal es `/api/users/0`.
+- `format=json` trae `itemType`, `title`, `creators`, `date` y `DOI`.
+  La cabecera `Total-Results` da el total; se pagina de a 100.
+- `format=bibtex` funciona para una lista y para un ítem. Genera claves del
+  tipo `apellido_palabra_año` (`pham_topicgpt_2024`). Como salen de los datos
+  del ítem, un compañero que exporte el mismo paper del grupo obtiene la misma
+  clave.
+- La entrada trae `file` con la ruta local del PDF, además de `abstract` y
+  `keywords`: de ahí la limpieza de 6.4.
+- Una consulta tarda unos 12 ms.
 
 ### 6.6 Agregar una referencia
 
@@ -374,7 +385,8 @@ Automáticas (Vitest), con TDD:
 - **Referencias:** los cuatro casos de 6.6; que agregar no cambie ningún byte
   anterior del archivo; CRLF y LF.
 - **Zotero:** contra un servidor HTTP falso: disponible, cerrado, sin permiso,
-  lento.
+  lento; varias bibliotecas y paginado; limpieza de `file`, `abstract` y
+  `keywords` sobre entradas reales de la sonda.
 - **Tabla:** clasificación (simple, solo lectura, no reconocida); para cada
   operación, que el texto fuera de los rangos cambiados quede idéntico y que
   volver a analizar dé el modelo esperado; `editarCelda` con el mismo texto no
