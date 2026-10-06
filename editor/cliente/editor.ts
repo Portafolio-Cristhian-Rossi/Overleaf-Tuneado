@@ -1,7 +1,9 @@
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { codeFolding, foldEffect } from '@codemirror/language';
 import { highlightSelectionMatches, search, searchKeymap } from '@codemirror/search';
 import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, drawSelection, keymap } from '@codemirror/view';
+import { analizar } from '../compartido/analizador';
 import type { ArchivoLeido, FinDeLinea } from '../compartido/tipos';
 import { ErrorDeApi, api } from './api';
 
@@ -68,12 +70,22 @@ export function crearEditor(padre: HTMLElement, o: OpcionesEditor): ControlEdito
           clearTimeout(reloj);
           reloj = setTimeout(() => { void guardarAhora(); }, ESPERA_DE_GUARDADO_MS);
         }),
-        esTex ? o.extensiones : [],
+        esTex ? [codeFolding({ placeholderText: 'Configuración del documento' }), o.extensiones] : [],
       ],
     });
   }
 
   const vista = new EditorView({ parent: padre, state: estadoInicial('', false) });
+
+  // El preámbulo (paquetes, título, autores) queda plegado: se abre con un clic.
+  function plegarPreambulo(): void {
+    const texto = vista.state.doc.toString();
+    const preambulo = analizar(texto).find((e) => e.tipo === 'preambulo');
+    if (!preambulo) return;
+    const desde = vista.state.doc.line(1).to;
+    const hasta = texto[preambulo.hasta - 1] === '\n' ? preambulo.hasta - 1 : preambulo.hasta;
+    if (hasta > desde) vista.dispatch({ effects: foldEffect.of({ from: desde, to: hasta }) });
+  }
 
   function tomarDatos(archivo: ArchivoLeido): void {
     finDeLinea = archivo.finDeLinea;
@@ -141,7 +153,9 @@ export function crearEditor(padre: HTMLElement, o: OpcionesEditor): ControlEdito
     detenido = false;
     sucio = false;
     tomarDatos(archivo);
-    vista.setState(estadoInicial(archivo.contenido, /\.tex$/i.test(nueva)));
+    const esTex = /\.tex$/i.test(nueva);
+    vista.setState(estadoInicial(archivo.contenido, esTex));
+    if (esTex) plegarPreambulo();
     vista.scrollDOM.scrollTop = 0;
     o.alAbrir(nueva, archivo.contenido);
     o.alCambiarEstado('guardado');

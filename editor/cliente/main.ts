@@ -1,10 +1,11 @@
-import type { Proyecto } from '../compartido/tipos';
+import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api } from './api';
 import { crearEditor } from './editor';
 import { titulosDelIndice } from './indice';
 import { crearBarra } from './pantalla/barra';
 import { el, preguntar } from './pantalla/dom';
 import { crearLateral } from './pantalla/lateral';
+import { contextoCambiado, extensionVista } from './vista';
 
 const CLAVE_ULTIMO = 'editor-informe:ultimo-archivo';
 const INTERVALO_DE_LATIDO_MS = 30 * 1000;
@@ -21,6 +22,12 @@ function ultimoRecordado(): string | null {
 }
 
 let proyecto: Proyecto = { capitulos: [], etiquetas: [], paquetes: [], bibliografia: null };
+let etiquetas = new Map<string, Etiqueta>();
+
+function tomarProyecto(nuevo: Proyecto): void {
+  proyecto = nuevo;
+  etiquetas = new Map(nuevo.etiquetas.map((e) => [e.nombre, e]));
+}
 
 const barra = crearBarra(porId('barra'));
 const zonaEditor = porId('zona-editor');
@@ -55,13 +62,16 @@ function actualizarIndice(texto: string, espera = 300): void {
 
 let relojProyecto: ReturnType<typeof setTimeout> | undefined;
 async function recargarProyecto(): Promise<void> {
-  proyecto = await api.proyecto();
+  tomarProyecto(await api.proyecto());
   lateral.mostrarProyecto(proyecto, editor.rutaAbierta());
   actualizarIndice(editor.vista.state.doc.toString(), 0);
+  editor.vista.dispatch({ effects: contextoCambiado.of(null) });
 }
 
 const editor = crearEditor(porId('editor'), {
-  extensiones: [],
+  extensiones: [
+    extensionVista(() => ({ numeroCapitulo: numeroDelCapitulo(editor.rutaAbierta()), etiquetas })),
+  ],
   alAbrir(ruta, texto) {
     quitarCartel();
     recordarUltimo(ruta);
@@ -131,7 +141,7 @@ setInterval(latir, INTERVALO_DE_LATIDO_MS);
 
 async function iniciar(): Promise<void> {
   try {
-    proyecto = await api.proyecto();
+    tomarProyecto(await api.proyecto());
     lateral.mostrarProyecto(proyecto, null);
     const ruta = rutaInicial();
     if (ruta) await abrir(ruta);

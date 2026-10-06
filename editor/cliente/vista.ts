@@ -1,0 +1,127 @@
+import { StateEffect, StateField, type EditorState, type Extension, type Range } from '@codemirror/state';
+import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
+import { analizar, type Elemento, type Rango } from '../compartido/analizador';
+import { numerarTitulos } from '../compartido/numeracion';
+import type { Etiqueta } from '../compartido/tipos';
+
+export interface ContextoVista { numeroCapitulo: string | null; etiquetas: Map<string, Etiqueta> }
+
+// Texto corto que se dibuja en lugar de un comando: número de título, viñeta, referencia, cita.
+class Pastilla extends WidgetType {
+  constructor(readonly texto: string, readonly clase: string) { super(); }
+  eq(otra: Pastilla): boolean { return otra.texto === this.texto && otra.clase === this.clase; }
+  toDOM(): HTMLElement {
+    const nodo = document.createElement('span');
+    nodo.className = this.clase;
+    nodo.textContent = this.texto;
+    return nodo;
+  }
+  ignoreEvent(): boolean { return false; }
+}
+
+const CLASE_DE_ESTILO = { negrita: 'cm-negrita', cursiva: 'cm-cursiva', mono: 'cm-mono' } as const;
+const COMANDO = /\\[a-zA-Z@]+\*?/g;
+
+// Solo dibuja: el documento sigue siendo el LaTeX literal. Un elemento que la selección
+// toca queda sin reemplazos, para que se vea y se pueda editar su código; sin foco en el
+// editor no hay selección que valga y todo se muestra formateado.
+export function decorar(estado: EditorState, ctx: ContextoVista, conFoco = true): DecorationSet {
+  const texto = estado.doc.toString();
+  const elementos = analizar(texto);
+  const numeros = numerarTitulos(elementos, ctx.numeroCapitulo);
+  const rangos: Range<Decoration>[] = [];
+
+  const activo = (e: Rango) => conFoco && estado.selection.ranges.some((r) => r.from <= e.hasta && r.to >= e.desde);
+  const ocultar = (desde: number, hasta: number) => {
+    if (hasta > desde) rangos.push(Decoration.replace({ reemplaza: true }).range(desde, hasta));
+  };
+  const marcar = (desde: number, hasta: number, clase: string) => {
+    if (hasta > desde) rangos.push(Decoration.mark({ class: clase }).range(desde, hasta));
+  };
+  const reemplazar = (e: Rango, textoVisible: string, clase: string) => {
+    rangos.push(Decoration.replace({ widget: new Pastilla(textoVisible, clase), reemplaza: true }).range(e.desde, e.hasta));
+  };
+
+  // Posiciones que ya tienen dibujo propio: ahí no se aplica el resaltado genérico de comandos.
+  const reconocidos = new Set<number>();
+  const comentarios: Rango[] = [];
+
+  for (const e of elementos) {
+    if (e.tipo !== 'preambulo' && e.tipo !== 'comentario') reconocidos.add(e.desde);
+    switch (e.tipo) {
+      case 'titulo': {
+        rangos.push(Decoration.line({ class: `cm-titulo-${e.nivel}` }).range(estado.doc.lineAt(e.desde).from));
+        if (activo(e)) break;
+        ocultar(e.desde, e.contenido.desde);
+        const numero = numeros.get(e.desde);
+        if (numero) {
+          rangos.push(Decoration.widget({ widget: new Pastilla(numero, 'cm-numero-titulo'), side: -1 }).range(e.contenido.desde));
+        }
+        ocultar(e.contenido.hasta, e.hasta);
+        break;
+      }
+      case 'formato':
+        marcar(e.contenido.desde, e.contenido.hasta, CLASE_DE_ESTILO[e.estilo]);
+        if (activo(e)) break;
+        ocultar(e.desde, e.contenido.desde);
+        ocultar(e.contenido.hasta, e.hasta);
+        break;
+      case 'item':
+        if (!activo(e)) reemplazar(e, e.ordinal === null ? '•' : `${e.ordinal}.`, 'cm-vineta');
+        break;
+      case 'ref': {
+        if (activo(e)) break;
+        const destino = ctx.etiquetas.get(e.clave);
+        if (destino) reemplazar(e, [destino.numero, destino.titulo].filter(Boolean).join(' ') || e.clave, 'cm-ref');
+        else reemplazar(e, e.clave, 'cm-ref cm-ref-rota');
+        break;
+      }
+      case 'cita':
+        if (!activo(e)) reemplazar(e, e.claves.join(', '), 'cm-cita');
+        break;
+      case 'comentario':
+        comentarios.push(e);
+        marcar(e.desde, e.hasta, 'cm-atenuado');
+        break;
+      case 'inicioLista':
+      case 'finLista':
+      case 'etiqueta':
+        marcar(e.desde, e.hasta, 'cm-atenuado');
+        break;
+      case 'preambulo':
+        break;
+    }
+  }
+
+  // Todo comando que el editor no sabe dibujar se muestra como código.
+  let indiceComentario = 0;
+  for (const m of texto.matchAll(COMANDO)) {
+    const desde = m.index;
+    while (indiceComentario < comentarios.length && comentarios[indiceComentario].hasta <= desde) indiceComentario++;
+    const enComentario = indiceComentario < comentarios.length && comentarios[indiceComentario].desde <= desde;
+    if (!enComentario && !reconocidos.has(desde)) marcar(desde, desde + m[0].length, 'cm-comando');
+  }
+
+  return Decoration.set(rangos, true);
+}
+
+// Fuerza a recalcular cuando cambia algo que no está en el documento: las etiquetas del proyecto.
+export const contextoCambiado = StateEffect.define<null>();
+
+export function extensionVista(obtenerCtx: () => ContextoVista): Extension {
+  const focoCambiado = StateEffect.define<boolean>();
+  const foco = StateField.define<boolean>({
+    create: () => false,
+    update: (valor, tr) => tr.effects.reduce((v, e) => (e.is(focoCambiado) ? e.value : v), valor),
+  });
+  const decoraciones = StateField.define<DecorationSet>({
+    create: (estado) => decorar(estado, obtenerCtx(), estado.field(foco)),
+    update(valor, tr) {
+      const cambio = tr.docChanged || tr.selection !== undefined
+        || tr.effects.some((e) => e.is(contextoCambiado) || e.is(focoCambiado));
+      return cambio ? decorar(tr.state, obtenerCtx(), tr.state.field(foco)) : valor;
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
+  return [foco, decoraciones, EditorView.focusChangeEffect.of((_estado, enfocando) => focoCambiado.of(enfocando))];
+}
