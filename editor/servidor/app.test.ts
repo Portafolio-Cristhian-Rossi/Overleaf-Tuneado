@@ -7,6 +7,7 @@ import type { Config, EstadoGit } from '../compartido/tipos';
 import { copiarFixture, dirTemporal } from '../pruebas/ayudas/temporales';
 import { crearApp, type Dependencias } from './app';
 import { crearArchivos } from './archivos';
+import { crearImagenes } from './imagenes';
 import { describirProyecto } from './proyecto';
 
 let dir: string;
@@ -74,6 +75,7 @@ beforeEach(async () => {
       agregarPalabra: vi.fn(async (p: string) => { if (/\s/.test(p)) throw new Error('La palabra no es válida: tiene que ser una sola palabra.'); }),
       agregarExcepcion: vi.fn(async () => {}),
     },
+    imagenes: crearImagenes(informe),
     abrirVsCode: vi.fn(async () => {}),
     dirEstaticos: path.join(dir, 'estaticos'),
   };
@@ -321,5 +323,100 @@ describe('git y compilación', () => {
     expect(r.texto).toBe('%PDF-1.5 prueba');
     expect(r.cabeceras.get('content-type')).toContain('application/pdf');
     expect(r.cabeceras.get('cache-control')).toBe('no-store');
+  });
+});
+
+describe('imágenes', () => {
+  const enFigs = (nombre: string) => path.join(dir, 'informe', 'figs', nombre);
+  const png = () => fs.readFileSync(enFigs('ejemplo.png'));
+  async function subir(nombre: string, bytes: Buffer, cabeceras: Record<string, string> = {}) {
+    const r = await fetch(`${base}/api/imagenes?nombre=${encodeURIComponent(nombre)}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/octet-stream', ...cabeceras }, body: new Uint8Array(bytes),
+    });
+    return { status: r.status, cuerpo: await r.json().catch(() => null) };
+  }
+
+  it('sirve una imagen del informe con su tipo y sin caché', async () => {
+    const r = await fetch(`${base}/api/imagen?ruta=figs/ejemplo.png`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('image/png');
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect(Buffer.from(await r.arrayBuffer()).equals(png())).toBe(true);
+  });
+
+  it('responde a HEAD con el tipo, para distinguir un PDF de una imagen que falta', async () => {
+    fs.writeFileSync(enFigs('grafico.pdf'), '%PDF-1.4\n');
+    const r = await fetch(`${base}/api/imagen?ruta=figs/grafico`, { method: 'HEAD' });
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toBe('application/pdf');
+  });
+
+  it('una imagen que no existe da 404 con la ruta', async () => {
+    const r = await pedir('GET', '/api/imagen?ruta=figs/nada.png');
+    expect(r.status).toBe(404);
+    expect(r.cuerpo).toEqual({ mensaje: 'No se encuentra figs/nada.png' });
+  });
+
+  it.each(['../x.png', '.git/x.png', ''])('la ruta %j da 400', async (ruta) => {
+    expect((await pedir('GET', `/api/imagen?ruta=${encodeURIComponent(ruta)}`)).status).toBe(400);
+  });
+
+  it('no sirve archivos que no son imágenes', async () => {
+    expect((await pedir('GET', '/api/imagen?ruta=main.tex')).status).toBe(404);
+  });
+
+  it('lista las imágenes', async () => {
+    expect(await get('/api/imagenes')).toEqual([{ ruta: 'figs/ejemplo.png', bytes: png().length }]);
+  });
+
+  it('sube una imagen nueva', async () => {
+    const r = await subir('Nueva Imagen.png', png());
+    expect(r).toEqual({ status: 201, cuerpo: { ruta: 'figs/Nueva-Imagen.png' } });
+    expect(fs.readFileSync(enFigs('Nueva-Imagen.png')).equals(png())).toBe(true);
+  });
+
+  it('un nombre repetido da 409 con la sugerencia y no escribe', async () => {
+    const r = await subir('ejemplo.png', Buffer.concat([png(), png()]));
+    expect(r).toEqual({ status: 409, cuerpo: { ruta: 'figs/ejemplo.png', sugerido: 'ejemplo-2.png' } });
+    expect(fs.readdirSync(path.join(dir, 'informe', 'figs'))).toEqual(['ejemplo.png']);
+    expect(fs.statSync(enFigs('ejemplo.png')).size).toBe(70);
+  });
+
+  it('un archivo inválido da 400 con el motivo', async () => {
+    expect(await subir('foto.png', Buffer.from('no soy una imagen'))).toEqual({
+      status: 400, cuerpo: { mensaje: 'El archivo no es una imagen PNG, JPG o PDF válida.' },
+    });
+    expect(await subir('foto.gif', png())).toEqual({ status: 400, cuerpo: { mensaje: 'Solo se aceptan imágenes PNG, JPG o PDF.' } });
+    expect((await subir('', png())).status).toBe(400);
+  });
+
+  it('más de 20 MB da 413 y no se guarda nada', async () => {
+    const grande = Buffer.concat([png(), Buffer.alloc(20 * 1024 * 1024 + 1)]);
+    expect(await subir('grande.png', grande)).toEqual({ status: 413, cuerpo: { mensaje: 'La imagen supera los 20 MB.' } });
+    expect(fs.existsSync(enFigs('grande.png'))).toBe(false);
+  });
+
+  it('acepta una imagen de casi 20 MB', async () => {
+    const casi = Buffer.concat([png(), Buffer.alloc(19 * 1024 * 1024)]);
+    expect((await subir('casi.png', casi)).status).toBe(201);
+  });
+
+  it('rechaza una subida que viene de otro sitio', async () => {
+    const r = await subir('ajena.png', png(), { Origin: 'https://sitio-ajeno.example' });
+    expect(r.status).toBe(403);
+    expect(fs.existsSync(enFigs('ajena.png'))).toBe(false);
+  });
+
+  it('una subida espera a que termine la operación de Git en curso', async () => {
+    let soltar = () => {};
+    d.git.traer = vi.fn(() => new Promise<{ tipo: 'ok'; archivosCambiados: string[] }>((r) => { soltar = () => r({ tipo: 'ok', archivosCambiados: [] }); }));
+    const trayendo = post('/api/git/traer');
+    await vi.waitFor(() => expect(d.git.traer).toHaveBeenCalled());
+    const subiendo = subir('durante.png', png());
+    await new Promise((r) => setTimeout(r, 150));
+    expect(fs.existsSync(enFigs('durante.png'))).toBe(false);
+    soltar();
+    await trayendo;
+    expect((await subiendo).status).toBe(201);
   });
 });

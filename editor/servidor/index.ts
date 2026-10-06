@@ -6,6 +6,7 @@ import { crearCompilador } from './compilar';
 import { cargarConfig } from './config';
 import { crearDiccionario } from './diccionario';
 import { crearGit } from './git';
+import { crearImagenes } from './imagenes';
 import { crearCorrector } from './languagetool';
 import { describirProyecto } from './proyecto';
 import { crearVigia } from './vigia';
@@ -44,6 +45,7 @@ const app = crearApp({
   vigia,
   corrector,
   diccionario,
+  imagenes: crearImagenes(config.informe),
   abrirVsCode: () => new Promise<void>((resolver, rechazar) => {
     // `code` es un .cmd en Windows: hay que lanzarlo a través de cmd.
     const proceso = spawn('cmd', ['/c', 'code', config.informe], { stdio: 'ignore', windowsHide: true, detached: true });

@@ -49,22 +49,24 @@ export interface Archivos {
   }): Promise<ResultadoEscritura>;
 }
 
+// Ruta absoluta de un archivo del informe. Rechaza todo lo que salga de `raiz` o toque .git.
+export function resolverEnInforme(raiz: string, ruta: string): string {
+  if (typeof ruta !== 'string' || ruta === '' || path.isAbsolute(ruta) || /^[a-zA-Z]:/.test(ruta)) {
+    throw new RutaInvalida(`Ruta no permitida: ${ruta}`);
+  }
+  const absoluta = path.resolve(raiz, ruta);
+  const relativa = path.relative(raiz, absoluta);
+  const partes = relativa.split(path.sep);
+  // Windows no distingue mayúsculas: .GIT es la misma carpeta que .git.
+  if (relativa === '' || partes[0] === '..' || partes.some((parte) => parte.toLowerCase() === '.git')) {
+    throw new RutaInvalida(`Ruta no permitida: ${ruta}`);
+  }
+  return absoluta;
+}
+
 export function crearArchivos(dirInforme: string): Archivos {
   const raiz = path.resolve(dirInforme);
-
-  function resolver(ruta: string): string {
-    if (typeof ruta !== 'string' || ruta === '' || path.isAbsolute(ruta) || /^[a-zA-Z]:/.test(ruta)) {
-      throw new RutaInvalida(`Ruta no permitida: ${ruta}`);
-    }
-    const absoluta = path.resolve(raiz, ruta);
-    const relativa = path.relative(raiz, absoluta);
-    const partes = relativa.split(path.sep);
-    // Windows no distingue mayúsculas: .GIT es la misma carpeta que .git.
-    if (relativa === '' || partes[0] === '..' || partes.some((parte) => parte.toLowerCase() === '.git')) {
-      throw new RutaInvalida(`Ruta no permitida: ${ruta}`);
-    }
-    return absoluta;
-  }
+  const resolver = (ruta: string) => resolverEnInforme(raiz, ruta);
 
   async function leerBytes(absoluta: string): Promise<Buffer | null> {
     try {

@@ -6,13 +6,14 @@ import type { Segmento } from '../compartido/prosa';
 import type { Compilador } from './compilar';
 import type { Diccionario } from './diccionario';
 import type { Git } from './git';
+import type { Imagenes } from './imagenes';
 import type { Corrector } from './languagetool';
 import type { Vigia } from './vigia';
 
 export interface Dependencias {
   config: Config; archivos: Archivos; proyecto: () => Promise<Proyecto>;
   git: Git; compilador: Compilador; vigia: Vigia;
-  corrector: Corrector; diccionario: Diccionario;
+  corrector: Corrector; diccionario: Diccionario; imagenes: Imagenes;
   abrirVsCode: () => Promise<void>; dirEstaticos: string;
 }
 
@@ -39,6 +40,7 @@ function esEscrituraValida(c: any): c is { ruta: string; contenido: string; finD
 }
 
 const MAXIMO_DE_PARRAFOS = 2000;
+const LIMITE_DE_IMAGEN = '20mb';
 
 function sonParrafos(x: unknown): x is Segmento[][] {
   return Array.isArray(x) && x.length <= MAXIMO_DE_PARRAFOS && x.every((parrafo) =>
@@ -103,6 +105,29 @@ export function crearApp(d: Dependencias): express.Express {
     res.set('Cache-Control', 'no-store').type('application/pdf').send(pdf);
   });
 
+  app.get('/api/imagen', async (req, res) => {
+    const ruta = String(req.query.ruta ?? '');
+    const imagen = await d.imagenes.resolver(ruta);
+    if (imagen === null) {
+      res.status(404).json({ mensaje: `No se encuentra ${ruta}` });
+      return;
+    }
+    res.set('Cache-Control', 'no-store').type(imagen.tipo).send(await fs.readFile(imagen.absoluta));
+  });
+  app.get('/api/imagenes', async (_req, res) => { res.json(await d.imagenes.listar()); });
+  // El cuerpo es el archivo tal cual. Va en la misma cola que Git: una imagen no aparece en medio de un Traer.
+  app.post('/api/imagenes', express.raw({ type: () => true, limit: LIMITE_DE_IMAGEN }), async (req, res) => {
+    if (!Buffer.isBuffer(req.body)) {
+      res.status(400).json({ mensaje: 'Pedido de subida mal formado.' });
+      return;
+    }
+    const cuerpo = req.body;
+    const r = await enSerie(() => d.imagenes.guardar(String(req.query.nombre ?? ''), cuerpo));
+    if (r.tipo === 'ok') res.status(201).json({ ruta: r.ruta });
+    else if (r.tipo === 'existe') res.status(409).json({ ruta: r.ruta, sugerido: r.sugerido });
+    else res.status(400).json({ mensaje: r.mensaje });
+  });
+
   app.get('/api/correccion/estado', (_req, res) => { res.json(d.corrector.estado()); });
   app.get('/api/correccion/diccionario', async (_req, res) => { res.json(await d.diccionario.leer()); });
   app.post('/api/correccion/revisar', async (req, res) => {
@@ -132,8 +157,11 @@ export function crearApp(d: Dependencias): express.Express {
   app.use('/api', (_req, res) => { res.status(404).json({ mensaje: 'Ruta desconocida.' }); });
   app.use(express.static(d.dirEstaticos));
 
-  const alFallar: ErrorRequestHandler = (error, _req, res, _next) => {
+  const alFallar: ErrorRequestHandler = (error, req, res, _next) => {
     if (error instanceof RutaInvalida) res.status(400).json({ mensaje: error.message });
+    else if (error?.type === 'entity.too.large') {
+      res.status(413).json({ mensaje: req.path === '/api/imagenes' ? 'La imagen supera los 20 MB.' : 'El pedido es demasiado grande.' });
+    }
     else if (error instanceof ArchivoProtegido) res.status(423).json({ mensaje: error.message });
     else if (error?.code === 'ENOENT') res.status(404).json({ mensaje: 'El archivo no existe.' });
     else if (error?.type === 'entity.parse.failed') res.status(400).json({ mensaje: 'Pedido mal formado.' });
