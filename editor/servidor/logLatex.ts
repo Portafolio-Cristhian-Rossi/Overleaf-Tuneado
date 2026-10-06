@@ -1,21 +1,5 @@
 import type { ProblemaLatex } from '../compartido/tipos';
 
-const ANCHO_DE_LINEA = 79;   // TeX corta las líneas del log en esta columna
-
-// Reúne las líneas que TeX partió por ancho, para poder leer cada aviso entero.
-function lineasDe(log: string): string[] {
-  const salida: string[] = [];
-  let pendiente = '';
-  for (const linea of log.split(/\r?\n/)) {
-    pendiente += linea;
-    if (linea.length === ANCHO_DE_LINEA) continue;
-    salida.push(pendiente);
-    pendiente = '';
-  }
-  if (pendiente) salida.push(pendiente);
-  return salida;
-}
-
 function normalizarRuta(ruta: string): string {
   return ruta.replace(/\\/g, '/').replace(/^\.\//, '');
 }
@@ -49,9 +33,10 @@ function sinDuplicados(problemas: ProblemaLatex[]): ProblemaLatex[] {
   });
 }
 
-// Espera un log generado con -file-line-error: los errores vienen como ARCHIVO:LÍNEA: MENSAJE.
+// Espera un log generado con -file-line-error (los errores vienen como ARCHIVO:LÍNEA: MENSAJE)
+// y con -max-print-line amplio, para que TeX no corte cada mensaje en la columna 79.
 export function interpretarLog(log: string): ProblemaLatex[] {
-  const lineas = lineasDe(log);
+  const lineas = log.split(/\r?\n/);
   const problemas: ProblemaLatex[] = [];
 
   lineas.forEach((linea, i) => {

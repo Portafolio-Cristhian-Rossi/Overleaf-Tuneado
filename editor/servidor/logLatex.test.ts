@@ -46,10 +46,31 @@ describe('interpretarLog', () => {
     ]);
   });
 
-  it('une una advertencia cortada en la columna 79', () => {
-    expect(interpretarLog(log('envuelto.log'))).toEqual([
-      expect.objectContaining({ mensaje: 'La referencia sec:una_etiqueta_bastante_larga no existe', linea: 123 }),
+  // El compilador pide a TeX líneas largas (-max-print-line), así que el log no llega cortado:
+  // cada línea se interpreta sola, tenga el largo que tenga.
+  it('una línea de 79 columnas no se pega a la siguiente', () => {
+    const relleno = `(${'x'.repeat(77)})`;
+    expect(relleno).toHaveLength(79);
+    expect(interpretarLog(`${relleno}\n./Cap2.tex:12: Missing $ inserted.\n`)).toEqual([
+      expect.objectContaining({ ruta: 'Cap2.tex', linea: 12, mensaje: 'Hay un símbolo matemático fuera de una ecuación' }),
     ]);
+  });
+
+  it('una advertencia larga en una sola línea se lee entera', () => {
+    expect(interpretarLog("LaTeX Warning: Reference `sec:una_etiqueta_bastante_larga_de_verdad' on page 12 undefined on input line 123.\n")).toEqual([
+      expect.objectContaining({ mensaje: 'La referencia sec:una_etiqueta_bastante_larga_de_verdad no existe', linea: 123 }),
+    ]);
+  });
+
+  it('la cita sin página, como la informa apacite', () => {
+    expect(interpretarLog("LaTeX Warning: Citation `NadieNunca' undefined on input line 39.\n")).toEqual([
+      expect.objectContaining({ gravedad: 'advertencia', mensaje: 'La cita NadieNunca no está en la bibliografía', linea: 39 }),
+    ]);
+  });
+
+  it('archivo de imagen faltante, como lo informa pdftex.def', () => {
+    expect(interpretarLog("./Cap3.tex:41: Package pdftex.def Error: File `figs/no-existe.png' not found: using draft setting.\n")[0])
+      .toMatchObject({ ruta: 'Cap3.tex', linea: 41, mensaje: 'No se encontró el archivo figs/no-existe.png' });
   });
 
   it('un error no reconocido conserva el mensaje original', () => {

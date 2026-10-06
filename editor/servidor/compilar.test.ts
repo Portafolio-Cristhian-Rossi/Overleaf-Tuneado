@@ -62,7 +62,7 @@ describe('crearCompilador', () => {
     const r = await c.compilar();
     expect(r).toEqual({ tipo: 'ok', problemas: [], pdfActualizado: true });
     expect(llamadas.map((l) => l.comando)).toEqual(['pdflatex', 'bibtex', 'pdflatex']);
-    expect(llamadas[0].args).toEqual(['-interaction=nonstopmode', '-file-line-error', `-output-directory=${build}`, 'main.tex']);
+    expect(llamadas[0].args).toEqual(['-interaction=nonstopmode', '-file-line-error', '-max-print-line=10000', `-output-directory=${build}`, 'main.tex']);
     expect(llamadas[0].cwd).toBe(informe);
     expect(llamadas[1]).toMatchObject({ args: [`--include-directory=${informe}`, 'main'], cwd: build });
     expect(llamadas.every((l) => l.timeoutMs === 600000)).toBe(true);
@@ -136,6 +136,22 @@ describe('crearCompilador', () => {
     };
     const r = await crearCompilador({ informe, build, principal: 'main.tex' }, conBlg).compilar();
     expect(r).toMatchObject({ tipo: 'ok', problemas: [{ gravedad: 'advertencia', mensaje: 'La cita Perez2020 no está en la bibliografía' }] });
+  });
+
+  it('no repite una cita faltante que el log ya informó con su línea', async () => {
+    const aviso = "LaTeX Warning: Citation `Perez2020' undefined on input line 39.\n";
+    falso.logs = [aviso, aviso];
+    const blg = ['Perez2020', 'Otra2021'].map((clave) => `Warning--I didn't find a database entry for "${clave}"`).join('\n');
+    const conBlg: Ejecutar = async (comando, args, opciones) => {
+      const r = await ejecutar(comando, args, opciones);
+      if (comando === 'bibtex') fs.writeFileSync(path.join(opciones.cwd, 'main.blg'), `${blg}\n`);
+      return r;
+    };
+    const r = await crearCompilador({ informe, build, principal: 'main.tex' }, conBlg).compilar();
+    expect(r.tipo === 'ok' && r.problemas.map((p) => [p.mensaje, p.linea])).toEqual([
+      ['La cita Perez2020 no está en la bibliografía', 39],
+      ['La cita Otra2021 no está en la bibliografía', null],
+    ]);
   });
 
   it('tres pedidos simultáneos producen dos compilaciones', async () => {

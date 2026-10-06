@@ -44,7 +44,7 @@ export function crearCompilador(
     const pdfAntes = await modificado(rutaPdf());
 
     const pdflatex = () => ejecutar('pdflatex',
-      ['-interaction=nonstopmode', '-file-line-error', `-output-directory=${cfg.build}`, cfg.principal],
+      ['-interaction=nonstopmode', '-file-line-error', '-max-print-line=10000', `-output-directory=${cfg.build}`, cfg.principal],
       { cwd: cfg.informe, timeoutMs: TIEMPO_LIMITE_MS });
 
     let r = await pdflatex();
@@ -69,10 +69,11 @@ export function crearCompilador(
       corridas++;
     }
 
-    const problemas = [
-      ...interpretarLog(await leer(enBuild('log'))),
-      ...(corrioBibtex ? interpretarBlg(await leer(enBuild('blg'))) : []),
-    ];
+    // Una cita faltante la informan LaTeX (con su línea) y BibTeX (sin ella): se muestra una sola vez.
+    const delLog = interpretarLog(await leer(enBuild('log')));
+    const yaInformados = new Set(delLog.map((p) => p.mensaje));
+    const delBlg = corrioBibtex ? interpretarBlg(await leer(enBuild('blg'))).filter((p) => !yaInformados.has(p.mensaje)) : [];
+    const problemas = [...delLog, ...delBlg];
     const pdfDespues = await modificado(rutaPdf());
     return {
       tipo: problemas.some((p) => p.gravedad === 'error') ? 'con-errores' : 'ok',
