@@ -92,7 +92,9 @@ revisión independiente y se integra a `main` por separado.
 
 Reglas que se mantienen: lo que no cierra no se reporta; dentro de matemática
 y de entornos literales no se reportan otros elementos (un `\textbf` dentro de
-una fórmula no es formato de prosa).
+una fórmula no es formato de prosa). La excepción son el `\label` y los
+comentarios dentro de una ecuación, que se siguen reportando: sin esa etiqueta
+el índice no podría resolver `\ref{eq:…}`.
 
 ### 5.2 Numeración de objetos
 
@@ -143,6 +145,10 @@ analizador y el contexto, y devuelve decoraciones.
 - PNG y JPG se dibujan. Un PDF se muestra como recuadro con su nombre. Si el
   archivo no existe, recuadro rojo con la ruta.
 - Un `\includegraphics` fuera de un `figure` se dibuja igual, sin epígrafe.
+- Una figura se dibuja solo si tiene la forma de la plantilla: una imagen, a
+  lo sumo un epígrafe, y nada más que el armado (`\centering`, `\label`). Con
+  dos imágenes, texto suelto, comentarios u otros comandos se muestra como
+  código, porque ocultar el armado escondería contenido.
 
 **Código** (`bloques/codigo.ts`): el interior de `lstlisting` y `verbatim` se
 ve como recuadro monoespaciado y se edita directo; las líneas `\begin` y
@@ -168,6 +174,10 @@ Cliente, `cliente/pantalla/selectorImagen.ts`:
   `\includegraphics{…}`.
 - Arrastrar un archivo de imagen al editor lo sube e inserta la plantilla de
   Figura completa en una línea propia, con el cursor en el epígrafe.
+- Menú "/" → Figura abre el selector e inserta la figura con la imagen
+  elegida; si se cancela, no inserta nada.
+- Antes de guardar se comprueba que el contenido corresponda a la extensión:
+  una foto HEIC o WebP renombrada a `.png` se rechaza con el motivo.
 - Nombre repetido: pregunta entre usar la que ya está o guardar con otro
   nombre (`nombre-2.png`).
 

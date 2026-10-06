@@ -141,7 +141,7 @@ it('una ecuación sin cerrar no se reporta y lo que sigue sí', () => {
   - `{ tipo: 'epigrafe'; contenido: Rango } & Rango` — `\caption[corto]{…}`.
 - `Bloques.tex` no se incluye desde `main.tex` del fixture: así las pruebas de `proyecto` no cambian, y las que recorren todos los fixtures (`prosa.test.ts`, `vista.test.ts`, fidelidad) lo cubren solas.
 
-- [ ] **Step 1: Crear `Bloques.tex`** con: `\chapter{Bloques}`; un párrafo con `$k$` y `\(n\)`; un `equation` con `\label{eq:coherencia}`; un `align` de dos filas, la segunda con `\nonumber`; un `\[ … \]`; una figura con la plantilla del menú (`figs/ejemplo.png`, `\caption{Distribución de \textbf{tópicos}}`, `\label{fig:distribucion}`); una figura con dos `\includegraphics`; un `table` con `\caption`, `\label{tab:corpus}` y un `tabular{ll}` con `booktabs`; un `lstlisting` con `language=Python` y un `$` y un `\textbf` adentro; un párrafo con `\ref{fig:distribucion}`, `\ref{tab:corpus}` y `\ref{eq:coherencia}`. Fines de línea LF.
+- [ ] **Step 1: Crear `Bloques.tex`** con, en este orden: `\chapter{Bloques}`; un párrafo con `$k$` y `\(n\)`; un `equation` con `\label{eq:coherencia}`; un `align` de dos filas, la segunda con `\nonumber`; un `\[ … \]`; una figura con la plantilla del menú (`figs/ejemplo.png`, `\caption{Distribución de \textbf{tópicos}}`, `\label{fig:distribucion}`); una figura con dos `\includegraphics`, sin `\caption` ni `\label`; un `table` con `\caption`, `\label{tab:corpus}` y un `tabular{ll}` con `booktabs`; un `lstlisting` con `language=Python` y un `$` y un `\textbf` adentro; un párrafo con `\ref{fig:distribucion}`, `\ref{tab:corpus}` y `\ref{eq:coherencia}`. Fines de línea LF.
 - [ ] **Step 2: Escribir las pruebas que fallan:**
 
 ```ts
@@ -308,6 +308,7 @@ export type Decorador = (d: Dibujo) => Range<Decoration>[];
 
   `vista.ts` reexporta `ContextoVista` y sigue exportando `decorar`, `contextoCambiado` y `extensionVista` con las mismas firmas.
 - Produces, en `pruebas/ayudas/decoraciones.ts`: `decos(texto, cursor, ctx, conFoco = true): Deco[]` con `Deco = { desde; hasta; clase?; reemplaza: boolean; widget?: string; numero?: string }`. Lee del widget las propiedades `texto`, `clase` y `numero`: todo widget de `bloques/` las expone para que las pruebas no necesiten DOM.
+- Produces, en el mismo archivo: `ctxDePrueba(cambios?: Partial<ContextoVista>): ContextoVista`, con `numeroCapitulo: '2'` y la etiqueta `sec:CAP2_IA` que hoy arma `vista.test.ts`. Las pruebas de `bloques/` lo usan como `ctx`; cuando una tarea posterior agrega campos a `ContextoVista`, los completa acá.
 - Produces: `export const decorarCodigo: Decorador`.
 
 - [ ] **Step 1: Mover `decos`** de `vista.test.ts` a `pruebas/ayudas/decoraciones.ts` e importarlo. `npx vitest run cliente/vista.test.ts` → pasa igual que antes.
@@ -393,7 +394,7 @@ it.each(['', '}', '\\begin{align}', '\\', '$', '&', 'x'.repeat(20000), '\\href{j
 ```
 
 - [ ] **Step 3: Correr y ver que fallan. Implementar `formula.ts`.** `katex.renderToString` con `displayMode: enBloque`, `throwOnError: true`, `trust: false`, `strict: 'ignore'`, dentro de un `try` que atrapa cualquier excepción. Caché por `fuente + entorno + enBloque`, que se vacía al pasar de 500 entradas.
-- [ ] **Step 4: Escribir las pruebas que fallan de `ecuacion.ts`** (`ctx` con `numeroCapitulo: '2'`):
+- [ ] **Step 4: Escribir las pruebas que fallan de `ecuacion.ts`** (`ctx = ctxDePrueba()`):
 
 ```ts
 it('en línea, sin el cursor: la fórmula reemplaza al código', () => {
@@ -464,7 +465,7 @@ export function nombreDeImagen(nombre: string): string | null;
 
 - Rutas: `GET /api/imagen?ruta=`, `GET /api/imagenes`, `POST /api/imagenes?nombre=`. `Dependencias` suma `imagenes: Imagenes`.
 
-Reglas: `resolver` acepta solo `.png`, `.jpg`, `.jpeg`, `.pdf`; si la ruta no trae extensión prueba `.pdf`, `.png`, `.jpg`, `.jpeg`, en ese orden (el de `pdflatex`); devuelve `null` si no existe. `listar` recorre `figs/` con sus subcarpetas, ordenado por ruta, con `/` como separador; si `figs/` no existe, lista vacía. `guardar` normaliza el nombre con `nombreDeImagen`, comprueba que los primeros bytes correspondan a la extensión (PNG `89 50 4E 47`, JPEG `FF D8 FF`, PDF `%PDF`), crea `figs/` si falta y escribe con la bandera `wx`. La comparación de nombres existentes no distingue mayúsculas. `sugerido` es el primer `nombre-2.ext`, `nombre-3.ext`… libre.
+Reglas: `resolver` acepta solo `.png`, `.jpg`, `.jpeg`, `.pdf` y lanza `RutaInvalida` ante otra extensión; si la ruta no trae extensión prueba `.pdf`, `.png`, `.jpg`, `.jpeg`, en ese orden (el de `pdflatex`); devuelve `null` si no existe. `listar` recorre `figs/` con sus subcarpetas, ordenado por ruta, con `/` como separador; si `figs/` no existe, lista vacía. `guardar` normaliza el nombre con `nombreDeImagen`, comprueba que los primeros bytes correspondan a la extensión (PNG `89 50 4E 47`, JPEG `FF D8 FF`, PDF `%PDF`), crea `figs/` si falta y escribe con la bandera `wx`. La comparación de nombres existentes no distingue mayúsculas. `sugerido` es el primer `nombre-2.ext`, `nombre-3.ext`… libre.
 
 - [ ] **Step 1: Crear `ejemplo.png`**, un PNG de 1×1, con un script de Node de una línea que escriba en ese archivo los bytes de `iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==` (base64).
 - [ ] **Step 2: Escribir las pruebas que fallan de `imagenes.test.ts`**, sobre una copia del fixture en un directorio temporal (`copiarFixture`), con `PNG` = los bytes de `ejemplo.png`:
@@ -585,7 +586,7 @@ it.each([
 ```
 
 - [ ] **Step 2: Correr y ver que fallan. Implementar `flotante.ts`.**
-- [ ] **Step 3: Escribir las pruebas que fallan de `figura.ts`** (`T = 'antes\n' + FIGURA + '\ndespués'`, `ctx` con `numeroCapitulo: '2'` y las dos funciones nuevas):
+- [ ] **Step 3: Escribir las pruebas que fallan de `figura.ts`.** `ctxDePrueba` suma las dos funciones nuevas (`urlDeImagen: (r) => r`, `alElegirImagen: () => {}`). `SIMPLE` es `FIGURA` con el epígrafe `Una figura`, sin negrita, y `T = 'antes\n' + SIMPLE + '\ndespués'`:
 
 ```ts
 it('sin el cursor: armado oculto, imagen y prefijo', () => {
@@ -597,7 +598,7 @@ it('sin el cursor: armado oculto, imagen y prefijo', () => {
 });
 it('con el cursor dentro del epígrafe la figura sigue dibujada', () => {
   for (const pos of [T.indexOf('Una '), T.indexOf('Una ') + 2, T.indexOf('}\n  \\label')]) {
-    expect(decos(T, pos, ctx).filter((x) => x.reemplaza)).toHaveLength(4 + 2);   // armado, imagen y la negrita del epígrafe
+    expect(decos(T, pos, ctx).filter((x) => x.reemplaza)).toHaveLength(4);   // los tres tramos de armado y la imagen
   }
 });
 it('con el cursor en el armado se ve todo el código', () => {
@@ -612,11 +613,10 @@ it('una imagen fuera de una figura se dibuja sola', () => {
   expect(d).toContainEqual(expect.objectContaining({ desde: 2, reemplaza: true, widget: 'figs/b.png', clase: 'cm-imagen' }));
 });
 it('figura sin número', () => {
-  expect(decos(T, 0, { ...ctx, numeroCapitulo: null })).toContainEqual(expect.objectContaining({ widget: 'Figura: ' }));
+  expect(decos(T, 0, ctxDePrueba({ numeroCapitulo: null }))).toContainEqual(expect.objectContaining({ widget: 'Figura: ' }));
 });
 ```
 
-  (Si la cuenta de reemplazos del segundo caso no coincide con cómo quedó la negrita en la tarea 5, ajustar el número a lo que corresponda con la negrita inactiva; lo que la prueba fija es que el armado y la imagen siguen reemplazados.)
 - [ ] **Step 4: Correr y ver que fallan. Implementar `figura.ts`.** El DOM de `Imagen`: un `<img>` con `src = ctx.urlDeImagen(ruta)`. Si falla la carga, pide la misma URL con `HEAD`: si responde `application/pdf`, muestra un recuadro `<nombre> (PDF: se ve al compilar)`; si no, un recuadro rojo `No se encuentra <ruta>`. Un clic en la imagen llama `ctx.alElegirImagen(vista, vista.posAtDOM(nodo))`. Un botón `Ver código`, visible al pasar el cursor, pone la selección en el `desde` de la figura (o de la imagen suelta) y enfoca el editor.
 - [ ] **Step 5: Cablear.** `vista.ts` suma `decorarFiguras`. En `main.ts`, el contexto recibe `urlDeImagen` y un `alElegirImagen` que por ahora no hace nada (la tarea 9 lo completa). Estilos: `.cm-imagen` en bloque y centrada, `max-width: 80%`, `max-height: 320px`; `.cm-epigrafe` centrado y más chico; los dos recuadros.
 - [ ] **Step 6: Correr** `npx vitest run compartido cliente` → pasa.
