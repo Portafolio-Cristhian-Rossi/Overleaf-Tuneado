@@ -5,8 +5,9 @@ export interface EntradaBib {
   tipo: string;                      // en minúsculas: 'article', 'inproceedings'…
   clave: string;
   campos: Record<string, string>;    // nombre en minúsculas → valor sin sus delimitadores
-  // Dónde está cada campo en el texto: del comienzo de su nombre al final de su valor.
-  tramos: Record<string, { desde: number; hasta: number }>;
+  // Dónde está cada campo en el texto: del comienzo de su nombre al final de su valor. Un campo
+  // puede repetirse (Zotero escribe un `annote` por nota): están todas sus apariciones.
+  tramos: Record<string, { desde: number; hasta: number }[]>;
   desde: number; hasta: number;      // de la arroba a la llave de cierre
 }
 export interface ProblemaBib { linea: number; mensaje: string }   // línea desde 1
@@ -23,7 +24,19 @@ export function analizarBib(texto: string, o: { conRepetidas?: boolean } = {}): 
   const entradas: EntradaBib[] = [];
   const problemas: ProblemaBib[] = [];
   const lineaDeClave = new Map<string, number>();
-  const lineaDe = (posicion: number) => texto.slice(0, posicion).split('\n').length;
+  // Las posiciones de los saltos se calculan una vez: el número de línea sale por búsqueda binaria.
+  const saltos: number[] = [];
+  for (let k = texto.indexOf('\n'); k !== -1; k = texto.indexOf('\n', k + 1)) saltos.push(k);
+  const lineaDe = (posicion: number) => {
+    let bajo = 0;
+    let alto = saltos.length;
+    while (bajo < alto) {
+      const medio = (bajo + alto) >> 1;
+      if (saltos[medio] < posicion) bajo = medio + 1;
+      else alto = medio;
+    }
+    return bajo + 1;
+  };
 
   const saltarBlancos = (i: number) => {
     while (i < n && ES_BLANCO.test(texto[i])) i++;
@@ -140,7 +153,7 @@ export function analizarBib(texto: string, o: { conRepetidas?: boolean } = {}): 
       // El valor termina donde termina su último trozo, sin los blancos que le siguen.
       let finCampo = leido.sigue;
       while (finCampo > inicioCampo && ES_BLANCO.test(texto[finCampo - 1])) finCampo--;
-      tramos[nombre.toLowerCase()] = { desde: inicioCampo, hasta: finCampo };
+      (tramos[nombre.toLowerCase()] ??= []).push({ desde: inicioCampo, hasta: finCampo });
       j = leido.sigue;
     }
     if (hasta === -1) { i = fallar(); continue; }

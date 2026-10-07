@@ -5,8 +5,8 @@ import { candidatos, type Bibliografia, type Candidato } from '../compartido/cit
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api, urlDeImagen } from './api';
 import { aplicarEdicion, darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
-import { agregarPegado, avisoDelBuscador, resolverClaves, type Citador } from './citar';
-import { agregarPaquete, cambiarCita, cambiarRutaDeImagen, citaEn, insertarCita, puedeCitarse } from './comandos';
+import { agregarPegado, avisoDelBuscador, colocarCita, resolverClaves, type Citador } from './citar';
+import { agregarPaquete, cambiarRutaDeImagen, citaEn, puedeCitarse } from './comandos';
 import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
 import { crearSubida, evitarAbrirArchivosSoltados, extensionArrastre } from './imagenes';
@@ -193,8 +193,20 @@ async function candidatosConZotero(): Promise<{ lista: Candidato[]; aviso: strin
 
 // Abre el buscador para citar en el cursor o, si `enCita` es una posición dentro de una cita
 // (clic sobre ella), para cambiarla. El cursor dentro de una cita también la cambia.
+let citando = false;
 async function citar(vista: EditorView, enCita?: number): Promise<void> {
-  if (vista.state.readOnly) return;
+  // Una sola a la vez: un segundo Ctrl+K mientras se agrega la referencia no abre otro buscador.
+  if (citando || vista.state.readOnly) return;
+  citando = true;
+  try {
+    await citarAhora(vista, enCita);
+  } finally {
+    citando = false;
+  }
+}
+
+async function citarAhora(vista: EditorView, enCita?: number): Promise<void> {
+  const archivo = editor.rutaAbierta();
   const texto = vista.state.doc.toString();
   const posicion = enCita ?? vista.state.selection.main.head;
   const existente = citaEn(texto, posicion);
@@ -215,18 +227,35 @@ async function citar(vista: EditorView, enCita?: number): Promise<void> {
     return;
   }
   const claves = await resolverClaves(elegido.elegidos, citador);
-  if (claves === null || claves.length === 0 || vista.state.readOnly) return;
+  if (claves === null || claves.length === 0) return;
 
-  // Se edita sobre el texto de este momento: agregar la referencia no toca el capítulo abierto.
-  const ahora = vista.state.doc.toString();
+  // Mientras se agregaba la referencia pudo cambiar todo: el archivo abierto, el texto, el
+  // permiso para editar. La cita se pone sobre lo que hay ahora, o no se pone y se avisa.
+  const noSePuso = (motivo: string) => barra.avisar(`${motivo} La referencia ya está en el buscador.`, 'error');
+  if (editor.rutaAbierta() !== archivo) {
+    noSePuso('La cita no se insertó: cambiaste de archivo mientras se agregaba la referencia.');
+    return;
+  }
+  if (vista.state.readOnly) {
+    noSePuso('La cita no se insertó: el editor no admite cambios en este momento.');
+    return;
+  }
+  const { from, to } = vista.state.selection.main;
+  const colocacion = colocarCita({
+    texto: vista.state.doc.toString(), seleccion: { desde: from, hasta: to },
+    enCita: existente ? { posicion, claves: existente.claves } : null, forma: elegido.forma, claves,
+  });
+  if (colocacion.tipo === 'no') {
+    noSePuso(colocacion.mensaje);
+    return;
+  }
+  // Al cambiar una cita no se mueve el cursor: si cayera en ella, se vería su código.
   if (existente) {
-    const edicion = cambiarCita(ahora, posicion, elegido.forma, claves);
-    if (edicion && edicion.cambios.length > 0) {
-      vista.dispatch({ changes: edicion.cambios.map((c) => ({ from: c.desde, to: c.hasta, insert: c.insertar })), userEvent: 'input' });
-    }
+    const cambios = colocacion.edicion.cambios.map((c) => ({ from: c.desde, to: c.hasta, insert: c.insertar }));
+    if (cambios.length > 0) vista.dispatch({ changes: cambios, userEvent: 'input' });
+    vista.focus();
   } else {
-    const { from, to } = vista.state.selection.main;
-    aplicarEdicion(vista, insertarCita(ahora, { desde: from, hasta: to }, elegido.forma, claves));
+    aplicarEdicion(vista, colocacion.edicion);
   }
 }
 

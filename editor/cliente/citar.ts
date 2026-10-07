@@ -1,6 +1,8 @@
+import type { Rango } from '../compartido/analizador';
 import type { ProblemaBib } from '../compartido/bib';
 import type { Candidato } from '../compartido/citas';
 import type { EstadoZotero, ResultadoAgregar } from '../compartido/tipos';
+import { cambiarCita, citaEn, insertarCita, puedeCitarse, type Edicion, type FormaDeCita } from './comandos';
 import type { preguntar } from './pantalla/dom';
 
 type AlRepetir = 'preguntar' | 'renombrar';
@@ -34,6 +36,31 @@ export function avisoDelBuscador(estado: EstadoZotero, problemas: ProblemaBib[],
   return lineas.length > 0 ? lineas.join('\n') : null;
 }
 
+export type Colocacion = { tipo: 'ok'; edicion: Edicion } | { tipo: 'no'; mensaje: string };
+
+// Entre abrir el buscador y poner la cita pasan un guardado, Zotero y quizás una pregunta: el
+// texto pudo cambiar. La cita se coloca sobre el texto de ese momento, o no se coloca.
+// `enCita`: la cita que se estaba cambiando (dónde estaba y qué claves tenía), o null si es nueva.
+export function colocarCita(p: {
+  texto: string; seleccion: Rango; enCita: { posicion: number; claves: string[] } | null; forma: FormaDeCita; claves: string[];
+}): Colocacion {
+  if (p.enCita) {
+    const actual = citaEn(p.texto, p.enCita.posicion);
+    const esLaMisma = actual !== null && actual.claves.length === p.enCita.claves.length
+      && actual.claves.every((clave, n) => clave === p.enCita!.claves[n]);
+    const edicion = esLaMisma ? cambiarCita(p.texto, p.enCita.posicion, p.forma, p.claves) : null;
+    return edicion
+      ? { tipo: 'ok', edicion }
+      : { tipo: 'no', mensaje: 'La cita no se cambió: el texto cambió mientras se buscaba. Hacele clic de nuevo para cambiarla.' };
+  }
+  // La cita va después de lo seleccionado: abrir el buscador con texto marcado no lo borra.
+  const donde = { desde: p.seleccion.hasta, hasta: p.seleccion.hasta };
+  if (p.claves.length > 0 && !puedeCitarse(p.texto, donde.desde)) {
+    return { tipo: 'no', mensaje: 'La cita no se insertó: el cursor quedó donde no se puede citar. Volvé a abrir el buscador para ponerla.' };
+  }
+  return { tipo: 'ok', edicion: insertarCita(p.texto, donde, p.forma, p.claves) };
+}
+
 const NO_SE_GUARDO = 'No se pudo guardar referencias.bib. Probá de nuevo.';
 const NO_SE_PUDO = 'No se pudo agregar la referencia. Probá de nuevo.';
 
@@ -49,9 +76,10 @@ function crearTanda(c: Citador) {
       const anotar = (resultado: ResultadoAgregar) => {
         if (resultado.tipo !== 'ok') return;
         for (const referencia of resultado.referencias) {
-          if (referencia.tipo !== 'agregada') continue;
-          seAgrego = true;
-          advertencias.push(...referencia.advertencias);
+          if (referencia.tipo === 'clave-repetida') continue;
+          if (referencia.tipo === 'agregada') seAgrego = true;
+          // También las de lo que ya estaba: ahí va el "ya estaba cargada como…".
+          for (const advertencia of referencia.advertencias) if (!advertencias.includes(advertencia)) advertencias.push(advertencia);
         }
       };
       anotar(r);

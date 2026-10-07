@@ -1,4 +1,4 @@
-import { filtrarCandidatos, type Candidato } from '../../compartido/citas';
+import { elegidosDe, filtrarCandidatos, idDeCandidato, type Candidato } from '../../compartido/citas';
 import type { FormaDeCita } from '../comandos';
 import { el } from './dom';
 
@@ -16,7 +16,9 @@ export interface OpcionesDeBuscador {
   agregarPegado(bibtex: string, avisar: Avisar): Promise<string[] | null>;
 }
 
-const idDe = (c: Candidato) => (c.clave !== null ? `clave:${c.clave}` : `zotero:${c.zotero?.biblioteca}/${c.zotero?.item}`);
+const idDe = idDeCandidato;
+// Dibujar miles de filas traba el diálogo; más allá de estas hay que acotar la búsqueda.
+const MAXIMO_A_LA_VISTA = 200;
 
 // Una clave citada que no está en el .bib se conserva: cambiar una cita no debe hacerla desaparecer.
 function conLasQueFaltan(lista: Candidato[], claves: string[]): Candidato[] {
@@ -42,6 +44,7 @@ export function buscarCita(o: OpcionesDeBuscador): Promise<{ forma: FormaDeCita;
 
     const resultados = el('div', { clase: 'buscador-lista', role: 'listbox', 'aria-label': 'Referencias' });
     const sinResultados = el('p', { clase: 'buscador-vacio', hidden: true }, 'Ninguna referencia coincide. Probá con otra palabra, o usá "Agregar referencia…".');
+    const hayMas = el('p', { clase: 'buscador-vacio', hidden: true });
     const aviso = el('p', { clase: 'buscador-aviso', role: 'status' }, 'Buscando en Zotero…');
     const mostrarAviso = (texto: string | null, tipo: 'info' | 'error' = 'info') => {
       aviso.textContent = texto ?? '';
@@ -49,44 +52,53 @@ export function buscarCita(o: OpcionesDeBuscador): Promise<{ forma: FormaDeCita;
       aviso.dataset.tipo = tipo;
     };
 
-    function elegidos(): Candidato[] {
-      const porId = new Map(lista.map((c) => [idDe(c), c]));
-      const delOrden = marcados.flatMap((id) => porId.get(id) ?? []);
-      return delOrden.length > 0 || visibles.length === 0 ? delOrden : [visibles[Math.min(resaltado, visibles.length - 1)]];
+    const elegidos = () => elegidosDe(lista, marcados, visibles[resaltado] ?? null, o.marcadas.length > 0);
+
+    function actualizarBoton(): void {
+      botonCitar.disabled = elegidos().length === 0;
+      botonCitar.textContent = marcados.length > 1 ? `Citar (${marcados.length})` : 'Citar';
     }
 
+    // Marcar no redibuja la lista: la casilla conserva el foco y la lista no salta.
     function alternar(c: Candidato): void {
       const id = idDe(c);
       marcados = marcados.includes(id) ? marcados.filter((otro) => otro !== id) : [...marcados, id];
-      mostrar();
+      actualizarBoton();
     }
 
+    function resaltar(n: number, conDesplazamiento: boolean): void {
+      resaltado = Math.max(0, Math.min(n, visibles.length - 1));
+      [...resultados.children].forEach((fila, indice) => fila.classList.toggle('resaltada', indice === resaltado));
+      if (conDesplazamiento) resultados.children[resaltado]?.scrollIntoView({ block: 'nearest' });
+      actualizarBoton();
+    }
+
+    // Se dibuja de nuevo solo cuando cambia qué hay para mostrar: al escribir o al llegar Zotero.
     function mostrar(): void {
-      visibles = filtrarCandidatos(lista, filtro.value);
-      resaltado = Math.max(0, Math.min(resaltado, visibles.length - 1));
-      resultados.replaceChildren(...visibles.map((c, n) => {
+      const todos = filtrarCandidatos(lista, filtro.value);
+      visibles = todos.slice(0, MAXIMO_A_LA_VISTA);
+      resultados.replaceChildren(...visibles.map((c) => {
         const casilla = el('input', { type: 'checkbox', checked: marcados.includes(idDe(c)), alChange: () => alternar(c) });
-        return el('label', { clase: n === resaltado ? 'buscador-opcion resaltada' : 'buscador-opcion', role: 'option' },
+        return el('label', { clase: 'buscador-opcion' },
           casilla,
           el('span', { clase: 'buscador-texto' },
             el('strong', {}, c.anio ? `${c.autores} (${c.anio})` : c.autores),
             el('span', { clase: 'buscador-titulo' }, c.titulo)),
           el('span', { clase: c.origen === 'zotero' ? 'buscador-detalle de-zotero' : 'buscador-detalle' }, c.origen === 'zotero' ? `Zotero · ${c.detalle}` : c.detalle));
       }));
-      sinResultados.hidden = visibles.length > 0;
-      botonCitar.disabled = elegidos().length === 0;
-      botonCitar.textContent = marcados.length > 1 ? `Citar (${marcados.length})` : 'Citar';
-      resultados.querySelector('.resaltada')?.scrollIntoView({ block: 'nearest' });
+      sinResultados.hidden = todos.length > 0;
+      hayMas.hidden = todos.length <= visibles.length;
+      hayMas.textContent = `Hay ${todos.length - visibles.length} más: escribí algo para acotar la búsqueda.`;
+      resaltar(resaltado, false);
     }
 
     const filtro = el('input', {
       type: 'search', clase: 'buscador-filtro', placeholder: 'Buscar por autor, título o año', 'aria-label': 'Buscar por autor, título o año',
-      alInput: () => { resaltado = 0; mostrar(); },
+      alInput: () => { resaltado = 0; mostrar(); resultados.scrollTop = 0; },
       alKeydown: (evento: KeyboardEvent) => {
         if (evento.key !== 'ArrowDown' && evento.key !== 'ArrowUp') return;
         evento.preventDefault();
-        resaltado = Math.max(0, Math.min(resaltado + (evento.key === 'ArrowDown' ? 1 : -1), visibles.length - 1));
-        mostrar();
+        resaltar(resaltado + (evento.key === 'ArrowDown' ? 1 : -1), true);
       },
     });
 
@@ -123,7 +135,7 @@ export function buscarCita(o: OpcionesDeBuscador): Promise<{ forma: FormaDeCita;
       },
     }, 'Agregar');
 
-    const vistaLista = el('div', { clase: 'buscador-vista' }, filtro, resultados, sinResultados, formas);
+    const vistaLista = el('div', { clase: 'buscador-vista' }, filtro, resultados, sinResultados, hayMas, formas);
     const vistaPegar = el('div', { clase: 'buscador-vista', hidden: true }, pegado);
     const botonesLista = el('div', { clase: 'dialogo-botones' },
       el('button', { type: 'button', alClick: () => verLista(false) }, 'Agregar referencia…'),

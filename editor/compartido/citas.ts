@@ -1,5 +1,5 @@
 import { anioDe, apellidos, autoresCortos, nombrarAutores, sinLatex, type EntradaBib } from './bib';
-import { mismaObra, obraDe, type Obra } from './referencias';
+import { crearIndiceDeObras, obraDe, type Obra } from './referencias';
 import type { ItemZotero } from './tipos';
 
 // Las entradas del .bib por su clave, tal como está escrita.
@@ -11,8 +11,17 @@ export interface TextoDeCita { texto: string; faltan: string[] }   // faltan: cl
 export function textoDeCita(
   comando: string, claves: string[], previo: string | null, posterior: string | null, bib: Bibliografia,
 ): TextoDeCita {
-  const faltan = claves.filter((clave) => !bib.has(clave));
+  // bibtex busca las claves sin distinguir mayúsculas; si no está escrita igual, se busca así.
+  const buscar = (clave: string): EntradaBib | undefined => {
+    const exacta = bib.get(clave);
+    if (exacta) return exacta;
+    const enMinusculas = clave.toLowerCase();
+    for (const [otra, entrada] of bib) if (otra.toLowerCase() === enMinusculas) return entrada;
+    return undefined;
+  };
   const forma = comando.replace(/^(?:full|short)/, '');
+  // `\nocite{*}` pide toda la bibliografía: el asterisco no es una clave.
+  const faltan = claves.filter((clave) => !(forma === 'nocite' && clave === '*') && !buscar(clave));
   if (forma === 'nocite') return { texto: claves.join(', '), faltan };
 
   const antes = previo ? sinLatex(previo) : '';
@@ -20,7 +29,7 @@ export function textoDeCita(
   // De cada clave, lo que se muestra; una clave que falta se muestra tal cual.
   const cada = (dibujar: (entrada: EntradaBib, esUltima: boolean) => string) =>
     claves.map((clave, n) => {
-      const entrada = bib.get(clave);
+      const entrada = buscar(clave);
       return entrada ? dibujar(entrada, n === claves.length - 1) : clave;
     }).join('; ');
   const conOpcionales = (interior: string) => `${antes ? `${antes} ` : ''}${interior}${despues ? `, ${despues}` : ''}`;
@@ -67,12 +76,14 @@ export function candidatos(entradas: EntradaBib[], items: ItemZotero[]): Candida
     };
   });
 
-  const vistas: Obra[] = entradas.map(obraDe);
+  // Con un índice: comparar cada ítem contra todos los anteriores cuelga la pestaña con miles.
+  const vistas = crearIndiceDeObras();
+  for (const entrada of entradas) vistas.agregar(obraDe(entrada));
   const deZotero: Candidato[] = [];
   for (const item of items) {
-    const obra: Obra = { doi: item.doi, titulo: item.titulo, anio: item.anio };
-    if (vistas.some((vista) => mismaObra(vista, obra))) continue;
-    vistas.push(obra);
+    const obra: Obra = { doi: item.doi, titulo: item.titulo, anio: item.anio, autor: item.autores[0] ?? null };
+    if (vistas.tiene(obra)) continue;
+    vistas.agregar(obra);
     deZotero.push({
       origen: 'zotero', clave: null, zotero: { biblioteca: item.biblioteca, item: item.item },
       autores: nombrarAutores(item.autores, item.titulo) || 'Sin título', anio: item.anio ?? 's.f.', titulo: item.titulo,
@@ -82,6 +93,19 @@ export function candidatos(entradas: EntradaBib[], items: ItemZotero[]): Candida
   }
   deZotero.sort((a, b) => a.autores.localeCompare(b.autores, 'es', { sensitivity: 'base' }) || a.anio.localeCompare(b.anio));
   return [...delInforme, ...deZotero];
+}
+
+// Con qué se reconoce a un candidato mientras el buscador está abierto.
+export const idDeCandidato = (c: Candidato) => (c.clave !== null ? `clave:${c.clave}` : `zotero:${c.zotero?.biblioteca}/${c.zotero?.item}`);
+
+// Qué se cita al aceptar: lo marcado, en el orden en que se marcó. Sin nada marcado, en una
+// cita nueva vale lo resaltado; al cambiar una cita existente, no: quedarse sin marcas no es
+// pedir que la reemplacen por la primera de la lista.
+export function elegidosDe(lista: Candidato[], marcados: string[], resaltado: Candidato | null, cambiando: boolean): Candidato[] {
+  const porId = new Map(lista.map((c) => [idDeCandidato(c), c]));
+  const delOrden = marcados.flatMap((id) => porId.get(id) ?? []);
+  if (delOrden.length > 0 || cambiando || resaltado === null) return delOrden;
+  return [resaltado];
 }
 
 // Sin tildes ni mayúsculas; todas las palabras tienen que aparecer en autores, título, año o clave.

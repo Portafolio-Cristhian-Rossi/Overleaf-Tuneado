@@ -99,6 +99,22 @@ describe('BibTeX de un ítem', () => {
   });
 });
 
+describe('solo esta máquina', () => {
+  it.each(['http://ejemplo.com/api', 'https://api.zotero.org', 'http://192.168.0.10:23119/api', 'http://127.0.0.1.ejemplo.com/api', 'file:///c:/x', 'cualquier cosa'])(
+    'se niega a usar %s', (base) => {
+      expect(() => crearZotero({ base })).toThrow('Zotero solo se consulta en esta máquina.');
+    });
+
+  it.each(['http://127.0.0.1:23119/api', 'http://localhost:23119/api', 'http://[::1]:23119/api'])('acepta %s', (base) => {
+    expect(() => crearZotero({ base })).not.toThrow();
+  });
+
+  it('sin base, o con una vacía, usa la de Zotero', async () => {
+    expect(() => crearZotero({ base: '' })).not.toThrow();
+    expect(() => crearZotero({ base: undefined })).not.toThrow();
+  });
+});
+
 describe('solo lectura', () => {
   it('solo hace pedidos GET', async () => {
     await zotero.items();

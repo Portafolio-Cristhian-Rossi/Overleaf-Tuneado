@@ -89,8 +89,22 @@ describe('analizarBib', () => {
   it('informa dónde está cada campo, de su nombre al final de su valor', () => {
     const t = '@misc{k,\n\ttitle = {Un {BTM}} ,\n\tyear = 2014\n}';
     const { tramos } = una(t);
-    expect(t.slice(tramos.title.desde, tramos.title.hasta)).toBe('title = {Un {BTM}}');
-    expect(t.slice(tramos.year.desde, tramos.year.hasta)).toBe('year = 2014');
+    expect(tramos.title.map((r) => t.slice(r.desde, r.hasta))).toEqual(['title = {Un {BTM}}']);
+    expect(tramos.year.map((r) => t.slice(r.desde, r.hasta))).toEqual(['year = 2014']);
+  });
+
+  it('de un campo repetido informa todas las apariciones; el valor es el de la última, como para bibtex', () => {
+    const t = '@misc{k, annote = {uno}, Annote = {dos}, title = {T}}';
+    const e = una(t);
+    expect(e.tramos.annote.map((r) => t.slice(r.desde, r.hasta))).toEqual(['annote = {uno}', 'Annote = {dos}']);
+    expect(e.campos.annote).toBe('dos');
+  });
+
+  it('leer un archivo grande no tarda', () => {
+    const grande = Array.from({ length: 3000 }, (_, n) => `@article{clave_${n},\n  title = {Título número ${n} de un artículo cualquiera},\n  author = {Autor, Nombre},\n  year = {2020}\n}\n`).join('\n');
+    const inicio = performance.now();
+    expect(analizarBib(grande).entradas).toHaveLength(3000);
+    expect(performance.now() - inicio).toBeLessThan(400);
   });
 
   it('con conRepetidas devuelve todas las entradas y no informa la repetición', () => {

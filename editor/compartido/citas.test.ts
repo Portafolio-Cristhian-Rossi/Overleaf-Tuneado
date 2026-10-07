@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leerFixture } from '../pruebas/ayudas/temporales';
 import { analizarBib } from './bib';
-import { candidatos, filtrarCandidatos, textoDeCita, type Bibliografia } from './citas';
+import { candidatos, elegidosDe, filtrarCandidatos, idDeCandidato, textoDeCita, type Bibliografia } from './citas';
 import type { ItemZotero } from './tipos';
 
 const entradas = analizarBib(leerFixture('referencias.bib')).entradas;
@@ -51,9 +51,13 @@ describe('textoDeCita', () => {
     expect(textoDeCita('cite', [], null, null, bib)).toEqual({ texto: '()', faltan: [] });
   });
 
-  // bibtex da error ante una clave que difiere solo en mayúsculas: acá también falta.
-  it('una clave con otras mayúsculas no es la misma', () => {
-    expect(textoDeCita('cite', ['citekeyarticle'], null, null, bib)).toEqual({ texto: '(citekeyarticle)', faltan: ['citekeyarticle'] });
+  // bibtex busca las claves sin distinguir mayúsculas: esa cita compila, así que no se marca.
+  it('una clave con otras mayúsculas se resuelve igual', () => {
+    expect(textoDeCita('cite', ['citekeyarticle'], null, null, bib)).toEqual({ texto: '(Cohen, 1963)', faltan: [] });
+  });
+
+  it('\\nocite{*} no es una clave que falte', () => {
+    expect(textoDeCita('nocite', ['*'], null, null, bib)).toEqual({ texto: '*', faltan: [] });
   });
 });
 
@@ -118,6 +122,53 @@ describe('candidatos del buscador', () => {
     expect(filtrarCandidatos(lista, 'citekeybook').map((c) => c.clave)).toEqual(['CitekeyBook']);
     expect(filtrarCandidatos(lista, '2013').map((c) => c.autores)).toEqual(['Yan y Guo']);
     expect(filtrarCandidatos(lista, '  ')).toEqual(lista);
+  });
+
+  it('dos trabajos de Zotero con el mismo título y año pero otro primer autor aparecen los dos', () => {
+    const smith = item({ item: 'INTR0001', titulo: 'Introduction', autores: ['Smith'], anio: '2020', doi: null });
+    const jones = item({ item: 'INTR0002', titulo: 'Introduction', autores: ['Jones'], anio: '2020', doi: null });
+    expect(candidatos([], [smith, jones]).map((c) => c.autores)).toEqual(['Jones', 'Smith']);
+    const cargado = analizarBib('@incollection{smith_introduction_2020, title = {Introduction}, author = {Smith, Ana}, year = {2020}}').entradas;
+    expect(candidatos(cargado, [smith, jones]).filter((c) => c.origen === 'zotero').map((c) => c.autores)).toEqual(['Jones']);
+  });
+
+  it('con una biblioteca de miles de ítems no se cuelga', () => {
+    const titulo = (n: number) => `Un estudio número ${n} sobre el modelado de tópicos en textos cortos de redes sociales`;
+    const muchas = analizarBib(Array.from({ length: 150 }, (_, n) => `@article{k${n}, title = {${titulo(n)}}, author = {Autor${n}, A.}, year = {2020}}`).join('\n')).entradas;
+    const muchos = Array.from({ length: 2000 }, (_, n) => item({ item: `I${String(n).padStart(7, '0')}`, titulo: titulo(n), autores: [`Autor${n}`], anio: '2020', doi: n % 2 ? `10.1/${n}` : null }));
+    const inicio = performance.now();
+    const lista = candidatos(muchas, muchos);
+    expect(performance.now() - inicio).toBeLessThan(1500);
+    expect(lista).toHaveLength(2000);
+  });
+
+  describe('qué se cita al aceptar', () => {
+    const lista = candidatos(entradas, items);
+    const [cohen, libro] = lista;
+    const pham = lista.find((c) => c.zotero?.item === 'ZXBADSCP')!;
+
+    it('lo marcado, en el orden en que se marcó', () => {
+      expect(elegidosDe(lista, [idDeCandidato(pham), idDeCandidato(cohen)], libro, false)).toEqual([pham, cohen]);
+    });
+
+    it('sin nada marcado, en una cita nueva vale lo resaltado', () => {
+      expect(elegidosDe(lista, [], libro, false)).toEqual([libro]);
+      expect(elegidosDe(lista, [], null, false)).toEqual([]);
+    });
+
+    it('sin nada marcado, al cambiar una cita no se elige nada: no se la reemplaza por lo resaltado', () => {
+      expect(elegidosDe(lista, [], libro, true)).toEqual([]);
+    });
+
+    it('una marca que ya no está en la lista se ignora', () => {
+      expect(elegidosDe(lista, ['clave:ya-no-esta', idDeCandidato(cohen)], null, true)).toEqual([cohen]);
+    });
+
+    it('cada candidato tiene un identificador distinto', () => {
+      expect(new Set(lista.map(idDeCandidato)).size).toBe(lista.length);
+      expect(idDeCandidato(cohen)).toBe('clave:CitekeyArticle');
+      expect(idDeCandidato(pham)).toBe('zotero:groups/6491700/ZXBADSCP');
+    });
   });
 
   it('busca en todos los autores, no solo en el que se muestra', () => {

@@ -519,6 +519,20 @@ describe('zotero', () => {
     expect(d.zotero.bibtex).toHaveBeenCalledWith('groups/6491700', 'ZXBADSCP');
   });
 
+  // Zotero escribe un `annote` por cada nota del ítem y puede listar varios archivos.
+  it('un ítem con dos notas y dos adjuntos: ninguna nota ni ruta llega al .bib', async () => {
+    d.zotero.bibtex = vi.fn(async () => '\n@article{k_2020,\n\ttitle = {Un paper},\n\tjournal = {Rev},\n\tyear = {2020},\n'
+      + '\tannote = {NOTA PRIVADA UNO},\n\tannote = {NOTA PRIVADA DOS},\n'
+      + '\tfile = {PDF:C\\:\\\\Users\\\\Cris\\\\a.pdf:application/pdf},\n\tfile = {Snapshot:C\\:\\\\Users\\\\Cris\\\\b.html:text/html},\n}\n');
+    const antes = fs.readFileSync(path.join(dir, 'informe', 'referencias.bib'));
+    expect((await citar({ biblioteca: 'groups/6491700', item: 'ZXBADSCP' })).cuerpo).toMatchObject({ tipo: 'ok', referencias: [{ tipo: 'agregada', clave: 'k_2020' }] });
+    const despues = fs.readFileSync(path.join(dir, 'informe', 'referencias.bib'));
+    expect(despues.subarray(0, antes.length).equals(antes)).toBe(true);
+    const agregado = despues.subarray(antes.length).toString('utf8');
+    expect(agregado).not.toMatch(/NOTA|Users|annote|file/);
+    expect(agregado.replace(/\r\n/g, '\n')).toBe('\n@article{k_2020,\n\ttitle = {Un paper},\n\tjournal = {Rev},\n\tyear = {2020},\n}\n');
+  });
+
   it('citar dos veces no duplica', async () => {
     await citar({ biblioteca: 'groups/6491700', item: 'ZXBADSCP' });
     const despues = leerDisco('referencias.bib');

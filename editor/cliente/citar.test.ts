@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Candidato } from '../compartido/citas';
 import type { ResultadoAgregar, ResultadoDeReferencia } from '../compartido/tipos';
-import { agregarPegado, avisoDelBuscador, resolverClaves, type Citador } from './citar';
+import { agregarPegado, avisoDelBuscador, colocarCita, resolverClaves, type Citador } from './citar';
 
 const delInforme = (clave: string): Candidato =>
   ({ origen: 'informe', clave, zotero: null, autores: 'A', anio: '2020', titulo: 'T', detalle: 'en el informe', busqueda: '' });
@@ -112,10 +112,61 @@ describe('resolverClaves', () => {
     expect(p.avisar).toHaveBeenCalledWith('A "a" le falta la revista.\n"b" trae una nota.', 'error');
   });
 
+  it('si ya estaba cargada con otra clave, lo dice', async () => {
+    const aviso = '"pham_topicgpt_2024" ya estaba cargada como "Pham2024" (Pham y Hoyle, 2024): se cita esa.';
+    const p = preparar([ok({ tipo: 'ya-estaba', clave: 'Pham2024', advertencias: [aviso] })]);
+    expect(await resolverClaves([deZotero('ZXBADSCP')], p.citador)).toEqual(['Pham2024']);
+    expect(p.avisar).toHaveBeenCalledWith(aviso, 'error');
+    expect(p.despuesDeAgregar).not.toHaveBeenCalled();
+  });
+
   it('sin nada elegido no hace nada', async () => {
     const p = preparar([]);
     expect(await resolverClaves([], p.citador)).toEqual([]);
     expect(p.antesDeAgregar).not.toHaveBeenCalled();
+  });
+});
+
+// Entre abrir el buscador y poner la cita pasan un guardado, Zotero y quizás una pregunta: el
+// texto pudo cambiar. La cita se coloca sobre el texto de ese momento, o no se coloca.
+describe('colocarCita', () => {
+  const colocar = (texto: string, seleccion: { desde: number; hasta: number }, enCita: { posicion: number; claves: string[] } | null, claves = ['k']) =>
+    colocarCita({ texto, seleccion, enCita, forma: 'parentetica', claves });
+  const aplicar = (texto: string, r: ReturnType<typeof colocarCita>) => {
+    if (r.tipo !== 'ok') throw new Error(r.mensaje);
+    let salida = texto;
+    for (const c of [...r.edicion.cambios].sort((a, b) => b.desde - a.desde)) salida = salida.slice(0, c.desde) + c.insertar + salida.slice(c.hasta);
+    return salida;
+  };
+
+  it('inserta en el cursor', () => {
+    expect(aplicar('según  x', colocar('según  x', { desde: 6, hasta: 6 }, null))).toBe('según \\cite{k} x');
+  });
+
+  it('con texto seleccionado, la cita va después y la selección no se borra', () => {
+    expect(aplicar('según Cohen x', colocar('según Cohen x', { desde: 6, hasta: 11 }, null))).toBe('según Cohen\\cite{k} x');
+  });
+
+  it('si el cursor quedó donde no se puede citar, no inserta y lo explica', () => {
+    expect(colocar('sea $a+b$ x', { desde: 6, hasta: 6 }, null)).toEqual({
+      tipo: 'no', mensaje: 'La cita no se insertó: el cursor quedó donde no se puede citar. Volvé a abrir el buscador para ponerla.',
+    });
+  });
+
+  it('cambia la cita si sigue siendo la misma', () => {
+    const t = 'x \\cite{a, b} y';
+    expect(aplicar(t, colocar(t, { desde: 0, hasta: 0 }, { posicion: 2, claves: ['a', 'b'] }, ['a', 'c']))).toBe('x \\cite{a, c} y');
+  });
+
+  it('si la cita ya no está ahí, o es otra, no toca nada y lo explica', () => {
+    const noCambio = { tipo: 'no', mensaje: 'La cita no se cambió: el texto cambió mientras se buscaba. Hacele clic de nuevo para cambiarla.' };
+    expect(colocar('hola x \\cite{a, b} y', { desde: 0, hasta: 0 }, { posicion: 2, claves: ['a', 'b'] })).toEqual(noCambio);
+    expect(colocar('x \\cite{z} y', { desde: 0, hasta: 0 }, { posicion: 2, claves: ['a', 'b'] })).toEqual(noCambio);
+    expect(colocar('\\cite{z}\\cite{a, b}', { desde: 0, hasta: 0 }, { posicion: 0, claves: ['a', 'b'] })).toEqual(noCambio);
+  });
+
+  it('sin claves no hace nada', () => {
+    expect(colocar('x', { desde: 1, hasta: 1 }, null, [])).toMatchObject({ tipo: 'ok', edicion: { cambios: [] } });
   });
 });
 

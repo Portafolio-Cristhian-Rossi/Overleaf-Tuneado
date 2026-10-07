@@ -17,9 +17,16 @@ const NO_SE_CITAN = new Set(['attachment', 'note', 'annotation']);
 
 class SinPermiso extends Error {}
 
+const EN_ESTA_MAQUINA = new Set(['127.0.0.1', 'localhost', '[::1]']);
+
 export function crearZotero(o: { base?: string; esperaMs?: number } = {}): Zotero {
-  const base = o.base ?? 'http://127.0.0.1:23119/api';
+  const base = o.base || 'http://127.0.0.1:23119/api';
   const esperaMs = o.esperaMs ?? 3000;
+  // La biblioteca de Zotero no se le pide a ninguna otra máquina, se configure lo que se configure.
+  const direccion = URL.canParse(base) ? new URL(base) : null;
+  if (direccion?.protocol !== 'http:' || !EN_ESTA_MAQUINA.has(direccion.hostname)) {
+    throw new Error('Zotero solo se consulta en esta máquina.');
+  }
 
   async function pedir(ruta: string): Promise<Response> {
     const respuesta = await fetch(`${base}/${ruta}`, { method: 'GET', signal: AbortSignal.timeout(esperaMs) });
