@@ -239,16 +239,21 @@ export function apellidos(entrada: EntradaBib): string[] {
 
 const PALABRAS_DE_TITULO = 4;
 
-// 'Cohen' | 'Susskind y Hrabovsky' | 'Holleis et al.' | el comienzo del título si no hay autores
-export function autoresCortos(entrada: EntradaBib): string {
-  const { lista, hayMas } = autoresDe(entrada);
+// Cómo se nombra a los autores en una cita: uno, dos con "y", tres o más con "et al.".
+// Sin autores se usa el comienzo del título; '' si tampoco hay título.
+export function nombrarAutores(lista: string[], titulo: string, hayMas = false): string {
   if (lista.length === 0) {
-    const palabras = sinLatex(entrada.campos.title ?? '').split(' ').filter(Boolean);
-    if (palabras.length === 0) return entrada.clave;
+    const palabras = titulo.split(' ').filter(Boolean);
     return palabras.slice(0, PALABRAS_DE_TITULO).join(' ') + (palabras.length > PALABRAS_DE_TITULO ? '…' : '');
   }
   if (lista.length === 2 && !hayMas) return `${lista[0]} y ${lista[1]}`;
   return lista.length === 1 && !hayMas ? lista[0] : `${lista[0]} et al.`;
+}
+
+// 'Cohen' | 'Susskind y Hrabovsky' | 'Holleis et al.' | el comienzo del título si no hay autores
+export function autoresCortos(entrada: EntradaBib): string {
+  const { lista, hayMas } = autoresDe(entrada);
+  return nombrarAutores(lista, sinLatex(entrada.campos.title ?? ''), hayMas) || entrada.clave;
 }
 
 // El primer número de cuatro cifras de `year` (o de `date`); 's.f.' si no hay.

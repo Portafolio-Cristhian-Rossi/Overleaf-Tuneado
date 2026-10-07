@@ -136,6 +136,59 @@ export function insertarFigura(texto: string, posicion: number, ruta: string): E
   return { cambios: [cambio], seleccion: { ancla, cabeza: ancla + EPIGRAFE_INICIAL.length } };
 }
 
+// Las dos formas de citar de apacite que ofrece el buscador: \cite → (Autor, año); \citeA → Autor (año).
+export type FormaDeCita = 'parentetica' | 'textual';
+type Cita = Extract<Elemento, { tipo: 'cita' }>;
+
+const PREFIJO_DE_CITA = /^(?:full|short)/;
+const formaDe = (comando: string): FormaDeCita => (comando.replace(PREFIJO_DE_CITA, '') === 'citeA' ? 'textual' : 'parentetica');
+
+function citaQueContiene(texto: string, posicion: number): Cita | null {
+  return analizar(texto).find((e): e is Cita => e.tipo === 'cita' && e.desde <= posicion && posicion < e.hasta) ?? null;
+}
+
+// La cita que contiene la posición (desde su barra hasta antes de lo que le sigue), o null.
+export function citaEn(texto: string, posicion: number): { forma: FormaDeCita; claves: string[] } | null {
+  const cita = citaQueContiene(texto, posicion);
+  return cita ? { forma: formaDe(cita.comando), claves: cita.claves } : null;
+}
+
+// false donde una cita no compila o no se vería: dentro de una fórmula, de un bloque de
+// código, de un comentario o del encabezado del documento.
+export function puedeCitarse(texto: string, posicion: number): boolean {
+  return !analizar(texto).some((e) => {
+    if (e.tipo === 'preambulo') return posicion < e.hasta;
+    if (e.tipo === 'comentario') return e.desde < posicion && posicion <= e.hasta;
+    const literal = e.tipo === 'matematica' || (e.tipo === 'entorno' && (e.nombre === 'lstlisting' || e.nombre === 'verbatim'));
+    return literal && e.desde < posicion && posicion < e.hasta;
+  });
+}
+
+// Inserta \cite{a, b} o \citeA{a, b} reemplazando la selección; el cursor queda después de la cita.
+export function insertarCita(texto: string, sel: Rango, forma: FormaDeCita, claves: string[]): Edicion {
+  if (claves.length === 0) return { cambios: [], seleccion: { ancla: sel.desde, cabeza: sel.hasta } };
+  const cita = `\\${forma === 'textual' ? 'citeA' : 'cite'}{${claves.join(', ')}}`;
+  const fin = Math.min(sel.desde, texto.length) + cita.length;
+  return { cambios: [{ desde: sel.desde, hasta: sel.hasta, insertar: cita }], seleccion: { ancla: fin, cabeza: fin } };
+}
+
+// Cambia solo el nombre del comando y las claves de la cita que contiene la posición; conserva
+// sus argumentos opcionales y sus prefijos. null si no hay cita ahí.
+export function cambiarCita(texto: string, posicion: number, forma: FormaDeCita, claves: string[]): Edicion | null {
+  const cita = citaQueContiene(texto, posicion);
+  if (!cita) return null;
+  const cambios: Edicion['cambios'] = [];
+  // Un comando que el buscador no ofrece (\citeNP, \citeyear) se respeta mientras no se pida la otra forma.
+  if (formaDe(cita.comando) !== forma) {
+    const prefijo = PREFIJO_DE_CITA.exec(cita.comando)?.[0] ?? '';
+    cambios.push({ ...cita.comandoRango, insertar: `${prefijo}${forma === 'textual' ? 'citeA' : 'cite'}` });
+  }
+  const mismasClaves = claves.length === cita.claves.length && claves.every((clave, n) => clave === cita.claves[n]);
+  if (!mismasClaves) cambios.push({ ...cita.clavesRango, insertar: claves.join(', ') });
+  const fin = cita.hasta + cambios.reduce((suma, c) => suma + c.insertar.length - (c.hasta - c.desde), 0);
+  return { cambios, seleccion: { ancla: fin, cabeza: fin } };
+}
+
 // Devuelve el archivo principal con \usepackage{paquete} agregado al preámbulo, o el mismo
 // texto si ya lo carga. Nunca toca nada fuera de la línea que inserta.
 export function agregarPaquete(principal: string, paquete: string, configuracion?: string): string {

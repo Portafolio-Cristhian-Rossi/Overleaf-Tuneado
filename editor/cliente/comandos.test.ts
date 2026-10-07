@@ -3,7 +3,8 @@ import { leerFixture } from '../pruebas/ayudas/temporales';
 import { analizar } from '../compartido/analizador';
 import { partesDeFigura } from '../compartido/flotante';
 import {
-  agregarPaquete, alternarFormato, cambiarNivelTitulo, cambiarRutaDeImagen, insertarFigura, nivelEnPosicion, type Edicion,
+  agregarPaquete, alternarFormato, cambiarCita, cambiarNivelTitulo, cambiarRutaDeImagen, citaEn, insertarCita, insertarFigura,
+  nivelEnPosicion, puedeCitarse, type Edicion,
 } from './comandos';
 
 // Aplica una edición y devuelve el texto resultante y el tramo que queda seleccionado.
@@ -246,5 +247,83 @@ describe('insertarFigura', () => {
     const elementos = analizar(texto);
     const figura = elementos.find((x) => x.tipo === 'entorno');
     expect(figura?.tipo === 'entorno' && partesDeFigura(texto, figura, elementos)).not.toBeNull();
+  });
+});
+
+describe('insertarCita', () => {
+  it('en el cursor y sobre una selección', () => {
+    expect(aplicar('según  x', insertarCita('según  x', { desde: 6, hasta: 6 }, 'parentetica', ['a', 'b'])).texto).toBe('según \\cite{a, b} x');
+    expect(aplicar('según XX x', insertarCita('según XX x', { desde: 6, hasta: 8 }, 'textual', ['a'])).texto).toBe('según \\citeA{a} x');
+  });
+
+  it('el cursor queda después de la cita', () => {
+    expect(insertarCita('ab', { desde: 1, hasta: 1 }, 'parentetica', ['k']).seleccion).toEqual({ ancla: 9, cabeza: 9 });
+    expect(insertarCita('aXXb', { desde: 1, hasta: 3 }, 'textual', ['k']).seleccion).toEqual({ ancla: 10, cabeza: 10 });
+  });
+
+  it('sin claves no cambia nada', () => {
+    expect(insertarCita('ab', { desde: 1, hasta: 1 }, 'parentetica', [])).toEqual({ cambios: [], seleccion: { ancla: 1, cabeza: 1 } });
+  });
+});
+
+describe('cambiarCita', () => {
+  const t = 'x \\cite<ver>[p.~3]{ a , b } y';
+
+  it('toca solo el comando y las claves', () => {
+    expect(aplicar(t, cambiarCita(t, 4, 'textual', ['c'])!).texto).toBe('x \\citeA<ver>[p.~3]{c} y');
+    expect(aplicar(t, cambiarCita(t, 4, 'parentetica', ['a', 'b', 'c'])!).texto).toBe('x \\cite<ver>[p.~3]{a, b, c} y');
+    expect(cambiarCita(t, 4, 'textual', ['a', 'b'])!.cambios).toEqual([{ desde: 3, hasta: 7, insertar: 'citeA' }]);
+  });
+
+  it('con la misma forma y las mismas claves no cambia nada, ni el espaciado', () => {
+    expect(cambiarCita(t, 4, 'parentetica', ['a', 'b'])!.cambios).toEqual([]);
+  });
+
+  it('fuera de una cita no hay nada que cambiar', () => {
+    expect(cambiarCita(t, 0, 'textual', ['c'])).toBeNull();
+    expect(cambiarCita('sin citas', 3, 'textual', ['c'])).toBeNull();
+  });
+
+  it('conserva los prefijos y los comandos que no conoce', () => {
+    expect(aplicar('\\fullcite{a}', cambiarCita('\\fullcite{a}', 3, 'textual', ['a'])!).texto).toBe('\\fullciteA{a}');
+    expect(aplicar('\\shortciteA{a}', cambiarCita('\\shortciteA{a}', 3, 'parentetica', ['a'])!).texto).toBe('\\shortcite{a}');
+    expect(aplicar('\\citeNP{a}', cambiarCita('\\citeNP{a}', 3, 'parentetica', ['b'])!).texto).toBe('\\citeNP{b}');
+    expect(aplicar('\\citeNP{a}', cambiarCita('\\citeNP{a}', 3, 'textual', ['b'])!).texto).toBe('\\citeA{b}');
+    expect(aplicar('\\citeyear{a}', cambiarCita('\\citeyear{a}', 3, 'parentetica', ['a', 'b'])!).texto).toBe('\\citeyear{a, b}');
+  });
+
+  it('con dos citas pegadas cambia la que empieza en esa posición', () => {
+    const pegadas = '\\cite{a}\\cite{b}';
+    expect(aplicar(pegadas, cambiarCita(pegadas, 8, 'parentetica', ['z'])!).texto).toBe('\\cite{a}\\cite{z}');
+    expect(aplicar(pegadas, cambiarCita(pegadas, 0, 'parentetica', ['z'])!).texto).toBe('\\cite{z}\\cite{b}');
+  });
+});
+
+describe('citaEn', () => {
+  it('da la forma y las claves de la cita que contiene la posición', () => {
+    expect(citaEn('x \\citeA{a, b} y', 5)).toEqual({ forma: 'textual', claves: ['a', 'b'] });
+    expect(citaEn('x \\fullciteA{a} y', 5)).toEqual({ forma: 'textual', claves: ['a'] });
+    expect(citaEn('x \\citeyear{a} y', 2)).toEqual({ forma: 'parentetica', claves: ['a'] });
+    expect(citaEn('x \\cite{a} y', 0)).toBeNull();
+    expect(citaEn('x \\cite{a} y', 11)).toBeNull();
+  });
+});
+
+describe('puedeCitarse', () => {
+  it.each([
+    ['en un párrafo', 'hola mundo', 4, true],
+    ['en un título', '\\section{Hola}', 10, true],
+    ['en un epígrafe', '\\begin{figure}\\includegraphics{a}\\caption{Hola}\\end{figure}', 44, true],
+    ['en una celda de una tabla', '\\begin{tabular}{l}\nx\n\\end{tabular}', 19, true],
+    ['en una fórmula en línea', 'sea $a+b$ x', 6, false],
+    ['en una ecuación', '\\begin{equation}\na\n\\end{equation}', 18, false],
+    ['en un bloque de código', '\\begin{lstlisting}\nx\n\\end{lstlisting}', 19, false],
+    ['en el preámbulo', '\\documentclass{book}\n\\begin{document}\nx', 5, false],
+    ['en un comentario', 'hola % nota\nmás', 8, false],
+    ['justo antes de una fórmula', 'sea $a$ x', 4, true],
+    ['justo después de una fórmula', 'sea $a$ x', 7, true],
+    ['después del preámbulo', '\\documentclass{book}\n\\begin{document}\nx', 38, true],
+  ])('%s', (_nombre, t, posicion, esperado) => {
+    expect(puedeCitarse(t, posicion)).toBe(esperado);
   });
 });
