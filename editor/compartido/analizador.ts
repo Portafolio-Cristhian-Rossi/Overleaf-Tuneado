@@ -6,7 +6,8 @@ export type Elemento =
   | ({ tipo: 'inicioLista' | 'finLista'; clase: 'itemize' | 'enumerate' } & Rango)
   | ({ tipo: 'item'; ordinal: number | null } & Rango)
   | ({ tipo: 'ref'; clave: string } & Rango)
-  | ({ tipo: 'cita'; comando: string; claves: string[] } & Rango)
+  // `previo` y `posterior` son el interior de <…> y de […]; `comandoRango`, el nombre sin la barra.
+  | ({ tipo: 'cita'; comando: string; claves: string[]; comandoRango: Rango; previo: Rango | null; posterior: Rango | null; clavesRango: Rango } & Rango)
   | ({ tipo: 'etiqueta'; nombre: string } & Rango)
   | ({ tipo: 'matematica'; enLinea: boolean; entorno: EntornoMatematico | null; contenido: Rango } & Rango)
   | ({ tipo: 'entorno'; nombre: NombreDeEntorno; interior: Rango } & Rango)
@@ -221,11 +222,24 @@ export function analizar(texto: string): Elemento[] {
         i = arg.hasta;
       }
     } else if (ES_CITA.test(nombre)) {
-      const pos = saltearOpcionales(j, '<[');
+      // apacite: \cite<antes>[después]{claves}. Un opcional que no cierra deja la cita sin reportar.
+      let previo: Rango | null = null;
+      let posterior: Rango | null = null;
+      let pos = j;
+      while (pos !== -1 && (texto[pos] === '<' || texto[pos] === '[')) {
+        const fin = texto.indexOf(texto[pos] === '<' ? '>' : ']', pos + 1);
+        if (fin === -1) { pos = -1; break; }
+        if (texto[pos] === '<') previo = { desde: pos + 1, hasta: fin };
+        else posterior = { desde: pos + 1, hasta: fin };
+        pos = fin + 1;
+      }
       const arg = pos === -1 ? null : argumento(pos);
       if (arg) {
         const claves = texto.slice(arg.contenido.desde, arg.contenido.hasta).split(',').map((k) => k.trim()).filter(Boolean);
-        salida.push({ tipo: 'cita', comando: nombre, claves, desde, hasta: arg.hasta });
+        salida.push({
+          tipo: 'cita', comando: nombre, claves, desde, hasta: arg.hasta,
+          comandoRango: { desde: desde + 1, hasta: j }, previo, posterior, clavesRango: arg.contenido,
+        });
         i = arg.hasta;
       }
     } else if (nombre === 'includegraphics') {

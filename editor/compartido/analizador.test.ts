@@ -170,6 +170,37 @@ describe('analizar', () => {
   });
 });
 
+describe('partes de una cita', () => {
+  it('informa sus argumentos opcionales, su comando y el rango de sus claves', () => {
+    const t = 'x \\citeA<ver>[p.~3]{a, b} y';
+    const [c] = deTipo(analizar(t), 'cita');
+    expect(tramo(t, c.comandoRango)).toBe('citeA');
+    expect(tramo(t, c.previo!)).toBe('ver');
+    expect(tramo(t, c.posterior!)).toBe('p.~3');
+    expect(tramo(t, c.clavesRango)).toBe('a, b');
+    expect(c).toMatchObject({ comando: 'citeA', claves: ['a', 'b'], desde: 2, hasta: t.length - 2 });
+  });
+
+  it('sin opcionales, o con uno solo', () => {
+    expect(deTipo(analizar('\\cite{a}'), 'cita')[0]).toMatchObject({ previo: null, posterior: null, clavesRango: { desde: 6, hasta: 7 } });
+    const soloPosterior = '\\cite[p. 2]{a}';
+    expect(deTipo(analizar(soloPosterior), 'cita')[0].previo).toBeNull();
+    expect(tramo(soloPosterior, deTipo(analizar(soloPosterior), 'cita')[0].posterior!)).toBe('p. 2');
+    const soloPrevio = '\\cite<ver>{a}';
+    expect(tramo(soloPrevio, deTipo(analizar(soloPrevio), 'cita')[0].previo!)).toBe('ver');
+    expect(deTipo(analizar(soloPrevio), 'cita')[0].posterior).toBeNull();
+  });
+
+  it('un opcional vacío es un rango vacío, no null', () => {
+    expect(deTipo(analizar('\\cite[]{a}'), 'cita')[0].posterior).toEqual({ desde: 6, hasta: 6 });
+  });
+
+  it('un opcional que no cierra deja la cita sin reportar', () => {
+    expect(analizar('\\cite[p. 2{a}')).toEqual([]);
+    expect(analizar('\\cite<ver{a}')).toEqual([]);
+  });
+});
+
 describe('entornos de bloque, imagen y epígrafe', () => {
   const FIGURA = '\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{ figs/a.png }\n'
     + '  \\caption{Una \\textbf{figura}}\n  \\label{fig:a}\n\\end{figure}';
