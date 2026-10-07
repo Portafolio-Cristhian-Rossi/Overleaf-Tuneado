@@ -49,7 +49,8 @@ const app = crearApp({
   diccionario,
   imagenes: crearImagenes(config.informe),
   referencias: crearReferencias(config.informe, async () => (await describirProyecto(config.informe, config.principal)).bibliografia),
-  zotero: crearZotero(),
+  // EDITOR_ZOTERO permite probar contra un Zotero de mentira; normalmente no está definida.
+  zotero: crearZotero({ base: process.env.EDITOR_ZOTERO }),
   abrirVsCode: () => new Promise<void>((resolver, rechazar) => {
     // `code` es un .cmd en Windows: hay que lanzarlo a través de cmd.
     const proceso = spawn('cmd', ['/c', 'code', config.informe], { stdio: 'ignore', windowsHide: true, detached: true });

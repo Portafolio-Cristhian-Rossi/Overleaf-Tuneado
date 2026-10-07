@@ -1,6 +1,6 @@
 import type { Segmento } from '../compartido/prosa';
 import type {
-  ArchivoLeido, Aviso, EstadoCorrector, EstadoGit, FinDeLinea, Proyecto, ResultadoCompilacion, ResultadoEnviar,
+  ArchivoLeido, Aviso, EstadoCorrector, EstadoGit, EstadoZotero, FinDeLinea, ItemZotero, Proyecto, ResultadoAgregar, ResultadoCompilacion, ResultadoEnviar,
   ResultadoEscritura, ResultadoTerminar, ResultadoTraer,
 } from '../compartido/tipos';
 
@@ -56,6 +56,15 @@ export const api = {
   abrirVsCode: () => pedir<void>('POST', '/api/git/abrir-vscode'),
   compilar: () => pedir<ResultadoCompilacion>('POST', '/api/compilar'),
   latido: () => pedir<void>('POST', '/api/latido'),
+  referencias: {
+    agregar: (bibtex: string, alRepetir?: 'preguntar' | 'renombrar') =>
+      pedir<ResultadoAgregar>('POST', '/api/referencias', { bibtex, alRepetir }),
+  },
+  zotero: {
+    items: () => pedir<{ estado: EstadoZotero; items: ItemZotero[] }>('GET', '/api/zotero/items'),
+    citar: (biblioteca: string, item: string, alRepetir?: 'preguntar' | 'renombrar') =>
+      pedir<ResultadoAgregar>('POST', '/api/zotero/citar', { biblioteca, item, alRepetir }),
+  },
   imagenes: {
     listar: () => pedir<{ ruta: string; bytes: number }[]>('GET', '/api/imagenes'),
     // No lanza por un rechazo del servidor: quien llama decide qué hacer con cada estado.

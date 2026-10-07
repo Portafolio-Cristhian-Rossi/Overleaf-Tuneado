@@ -13,6 +13,8 @@ export interface ContextoMenu {
   asegurarPaquete(paquete: string, configuracion?: string): Promise<boolean>;
   // Abre el selector de imágenes; null si se cancela.
   elegirImagen(): Promise<string | null>;
+  // Abre el buscador de citas para insertar una donde está el cursor.
+  citar(vista: EditorView): void;
 }
 
 const normalizar = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
@@ -46,6 +48,10 @@ export function extensionMenu(ctx: ContextoMenu): Extension {
     vista.dispatch({ changes: { from: desde, to: hasta, insert: '' } });
     if (plantilla.paquete && !ctx.paquetes().includes(plantilla.paquete)) {
       if (!(await ctx.asegurarPaquete(plantilla.paquete, plantilla.configuracion))) return;
+    }
+    if ('accion' in plantilla && plantilla.accion === 'buscar-cita') {
+      ctx.citar(vista);
+      return;
     }
     if ('accion' in plantilla) {
       const ruta = await ctx.elegirImagen();

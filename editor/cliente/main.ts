@@ -1,11 +1,12 @@
 import type { EditorView } from '@codemirror/view';
 import 'katex/dist/katex.min.css';
 import { analizarBib, type ProblemaBib } from '../compartido/bib';
-import type { Bibliografia } from '../compartido/citas';
+import { candidatos, type Bibliografia, type Candidato } from '../compartido/citas';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api, urlDeImagen } from './api';
-import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
-import { agregarPaquete, cambiarRutaDeImagen } from './comandos';
+import { aplicarEdicion, darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
+import { agregarPegado, avisoDelBuscador, resolverClaves, type Citador } from './citar';
+import { agregarPaquete, cambiarCita, cambiarRutaDeImagen, citaEn, insertarCita, puedeCitarse } from './comandos';
 import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
 import { crearSubida, evitarAbrirArchivosSoltados, extensionArrastre } from './imagenes';
@@ -13,6 +14,7 @@ import { titulosDelIndice } from './indice';
 import { extensionMenu } from './menuBarra';
 import { crearBarra } from './pantalla/barra';
 import { crearBloqueoConflicto } from './pantalla/bloqueoConflicto';
+import { buscarCita } from './pantalla/buscadorCitas';
 import { el, preguntar } from './pantalla/dom';
 import { crearLateral } from './pantalla/lateral';
 import { crearPanelGramatica, extensionPanelGramatica } from './pantalla/panelGramatica';
@@ -163,6 +165,71 @@ async function cambiarImagen(vista: EditorView, posicion: number): Promise<void>
   vista.dispatch({ changes: edicion.cambios.map((c) => ({ from: c.desde, to: c.hasta, insert: c.insertar })), userEvent: 'input' });
 }
 
+// Citas: lo que hace falta para pasar de lo elegido en el buscador a claves de referencias.bib.
+const citador: Citador = {
+  agregar: api.referencias.agregar,
+  citarDeZotero: api.zotero.citar,
+  preguntar,
+  avisar: (mensaje, tipo) => barra.avisar(mensaje, tipo),
+  // El servidor va a escribir en el .bib: antes no puede quedar nada sin guardar.
+  antesDeAgregar: async () => {
+    await editor.guardarAhora();
+    return !editor.hayCambiosSinGuardar();
+  },
+  despuesDeAgregar: async () => {
+    if (editor.rutaAbierta() === proyecto.bibliografia) await editor.recargar();
+    await recargarProyecto();
+  },
+};
+
+// Las referencias del informe más las de Zotero, y lo que haya que avisar.
+async function candidatosConZotero(): Promise<{ lista: Candidato[]; aviso: string | null }> {
+  const zotero = await api.zotero.items().catch(() => ({ estado: 'cerrado' as const, items: [] }));
+  return {
+    lista: candidatos([...bibliografia.values()], zotero.items),
+    aviso: avisoDelBuscador(zotero.estado, problemasDeBibliografia, proyecto.bibliografia),
+  };
+}
+
+// Abre el buscador para citar en el cursor o, si `enCita` es una posición dentro de una cita
+// (clic sobre ella), para cambiarla. El cursor dentro de una cita también la cambia.
+async function citar(vista: EditorView, enCita?: number): Promise<void> {
+  if (vista.state.readOnly) return;
+  const texto = vista.state.doc.toString();
+  const posicion = enCita ?? vista.state.selection.main.head;
+  const existente = citaEn(texto, posicion);
+  if (!existente && !puedeCitarse(texto, posicion)) {
+    barra.avisar('Acá no se puede citar: el cursor está dentro de una fórmula, de un bloque de código o del encabezado del documento.', 'info');
+    return;
+  }
+
+  const elegido = await buscarCita({
+    inicial: candidatos([...bibliografia.values()], []),
+    completos: candidatosConZotero,
+    formaInicial: existente?.forma ?? 'parentetica',
+    marcadas: existente?.claves ?? [],
+    agregarPegado: (bibtex, avisar) => agregarPegado(bibtex, { ...citador, avisar }),
+  });
+  if (!elegido) {
+    vista.focus();
+    return;
+  }
+  const claves = await resolverClaves(elegido.elegidos, citador);
+  if (claves === null || claves.length === 0 || vista.state.readOnly) return;
+
+  // Se edita sobre el texto de este momento: agregar la referencia no toca el capítulo abierto.
+  const ahora = vista.state.doc.toString();
+  if (existente) {
+    const edicion = cambiarCita(ahora, posicion, elegido.forma, claves);
+    if (edicion && edicion.cambios.length > 0) {
+      vista.dispatch({ changes: edicion.cambios.map((c) => ({ from: c.desde, to: c.hasta, insert: c.insertar })), userEvent: 'input' });
+    }
+  } else {
+    const { from, to } = vista.state.selection.main;
+    aplicarEdicion(vista, insertarCita(ahora, { desde: from, hasta: to }, elegido.forma, claves));
+  }
+}
+
 const editor = crearEditor(porId('editor'), {
   extensiones: [
     extensionVista(() => ({
@@ -170,14 +237,18 @@ const editor = crearEditor(porId('editor'), {
       urlDeImagen,
       alElegirImagen: (vista, posicion) => { void cambiarImagen(vista, posicion); },
       bibliografia,
-      alElegirCita: () => {},
+      alElegirCita: (vista, posicion) => { void citar(vista, posicion); },
     })),
     extensionMenu({
       paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete,
       elegirImagen: abrirSelectorDeImagen,
+      citar: (vista) => { void citar(vista); },
     }),
     extensionArrastre({ subir: subirImagen, avisar: (mensaje) => barra.avisar(mensaje, 'error') }),
-    extensionAtajos((nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); }),
+    extensionAtajos(
+      (nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); },
+      (vista) => { void citar(vista); },
+    ),
     extensionCorreccion({ api: api.correccion, alCambiarEstado: (estado) => panelGramatica.mostrarEstado(estado) }),
     extensionPanelGramatica(() => panelGramatica.actualizar()),
   ],

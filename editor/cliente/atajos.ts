@@ -26,12 +26,14 @@ export function darNivel(vista: EditorView, nivel: Nivel): void {
   aplicarEdicion(vista, cambiarNivelTitulo(vista.state.doc.toString(), vista.state.selection.main.head, nivel));
 }
 
-// Ctrl+B y Ctrl+I, y aviso del nivel de título de la línea donde está el cursor.
-export function extensionAtajos(alCambiarNivel: (nivel: Nivel) => void): Extension {
+// Ctrl+B, Ctrl+I y Ctrl+K (citar), y aviso del nivel de título de la línea donde está el cursor.
+export function extensionAtajos(alCambiarNivel: (nivel: Nivel) => void, alCitar: (vista: EditorView) => void): Extension {
   return [
     keymap.of([
       { key: 'Mod-b', run: (vista) => darFormato(vista, 'textbf') },
       { key: 'Mod-i', run: (vista) => darFormato(vista, 'textit') },
+      // Sin preventDefault el navegador se lleva el foco a su barra de búsqueda.
+      { key: 'Mod-k', preventDefault: true, run: (vista) => { alCitar(vista); return true; } },
     ]),
     EditorView.updateListener.of((cambio) => {
       if (cambio.docChanged || cambio.selectionSet) {

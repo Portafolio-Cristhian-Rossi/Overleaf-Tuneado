@@ -151,6 +151,32 @@ select {
 .selector-nombre { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--texto-2); }
 .selector-aviso { margin: 0; color: var(--texto-2); }
 
+/* Buscador de citas */
+.buscador-citas { width: min(44rem, 92vw); max-width: none; max-height: 86vh; }
+.buscador-citas[open] { display: flex; flex-direction: column; gap: 10px; }
+.buscador-vista { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.buscador-filtro, .buscador-pegado {
+  padding: 6px 10px; border: 1px solid var(--borde); border-radius: 6px;
+  background: var(--superficie); color: var(--texto); font: inherit;
+}
+.buscador-pegado { font-family: var(--mono); font-size: 13px; resize: vertical; }
+.buscador-lista { display: flex; flex-direction: column; min-height: 6rem; max-height: 46vh; overflow-y: auto; border: 1px solid var(--borde); border-radius: 6px; }
+.buscador-opcion {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 4px 10px;
+  padding: 6px 10px; border-bottom: 1px solid var(--borde); cursor: pointer;
+}
+.buscador-opcion:last-child { border-bottom: 0; }
+.buscador-opcion.resaltada { background: var(--acento-fondo); }
+.buscador-texto { display: flex; flex-direction: column; min-width: 0; }
+.buscador-titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--texto-2); font-size: 13px; }
+.buscador-detalle { color: var(--texto-3); font-size: 12px; white-space: nowrap; }
+.buscador-detalle.de-zotero { padding: 1px 6px; border-radius: 4px; background: var(--superficie-2); color: var(--texto-2); }
+.buscador-vacio, .buscador-aviso { margin: 0; color: var(--texto-2); font-size: 13px; white-space: pre-line; }
+.buscador-aviso[data-tipo="error"] { color: var(--peligro); }
+.buscador-formas { display: flex; gap: 16px; }
+.buscador-forma { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.buscador-citas .dialogo-botones { margin-top: 4px; }
+
 /* Cartel sobre el editor (archivo inexistente, conflicto) */
 .cartel {
   position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;

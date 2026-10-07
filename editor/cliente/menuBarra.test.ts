@@ -96,16 +96,18 @@ describe('PLANTILLAS', () => {
   it('las plantillas con campos quedan con su texto de ejemplo y sin marcas de snippet', () => {
     expect(expandir(plantilla('seccion').texto)).toBe('\\section{Título}\n\n');
     expect(expandir(plantilla('ecuacion').texto)).toBe('\\begin{equation}\n  a = b\n  \\label{eq:nombre}\n\\end{equation}\n');
-    expect(expandir(plantilla('cita').texto)).toBe('\\cite{clave}');
     expect(expandir(plantilla('referencia').texto)).toBe('\\ref{}');
     expect(expandir(plantilla('codigo').texto)).toBe(
       '\\begin{lstlisting}[language=Python, caption={Descripción}, label={lst:nombre}]\n\n\\end{lstlisting}\n');
     for (const p of conTexto) expect(expandir(p.texto), p.id).not.toMatch(/\$\{|#\{/);
   });
 
-  // La figura no trae un texto a completar: el menú abre el selector de imágenes.
-  it('la figura es la única plantilla que elige una imagen en vez de insertar un texto', () => {
-    expect(PLANTILLAS.filter((p) => !('texto' in p))).toEqual([{ id: 'figura', nombre: 'Figura', paquete: 'graphicx', accion: 'elegir-imagen' }]);
+  // La figura y la cita no traen un texto a completar: abren el selector de imágenes y el buscador.
+  it('las plantillas que abren un diálogo en vez de insertar un texto son la figura y la cita', () => {
+    expect(PLANTILLAS.filter((p) => !('texto' in p))).toEqual([
+      { id: 'figura', nombre: 'Figura', paquete: 'graphicx', accion: 'elegir-imagen' },
+      { id: 'cita', nombre: 'Cita', accion: 'buscar-cita' },
+    ]);
   });
 
   it('declaran el paquete que necesitan', () => {
