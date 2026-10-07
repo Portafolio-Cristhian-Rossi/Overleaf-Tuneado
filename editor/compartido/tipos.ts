@@ -56,6 +56,14 @@ export type ResultadoCompilacion =
   | { tipo: 'ok' | 'con-errores'; problemas: ProblemaLatex[]; pdfActualizado: boolean }
   | { tipo: 'sin-latex' } | { tipo: 'vencido' };
 
+// Lo que pasó con cada referencia que se quiso agregar a referencias.bib.
+export type ResultadoDeReferencia =
+  | { tipo: 'agregada' | 'ya-estaba'; clave: string; advertencias: string[] }
+  | { tipo: 'clave-repetida'; clave: string; sugerida: string };
+export type ResultadoAgregar =
+  | { tipo: 'ok'; referencias: ResultadoDeReferencia[] }
+  | { tipo: 'invalido'; mensaje: string };
+
 // Corrección ortográfica y gramatical. Las posiciones son relativas al párrafo revisado.
 export interface Aviso {
   desde: number; hasta: number;

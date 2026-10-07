@@ -5,6 +5,8 @@ export interface EntradaBib {
   tipo: string;                      // en minúsculas: 'article', 'inproceedings'…
   clave: string;
   campos: Record<string, string>;    // nombre en minúsculas → valor sin sus delimitadores
+  // Dónde está cada campo en el texto: del comienzo de su nombre al final de su valor.
+  tramos: Record<string, { desde: number; hasta: number }>;
   desde: number; hasta: number;      // de la arroba a la llave de cierre
 }
 export interface ProblemaBib { linea: number; mensaje: string }   // línea desde 1
@@ -14,7 +16,9 @@ const MAL_FORMADA = 'La entrada que empieza acá está mal formada.';
 const ES_BLANCO = /\s/;
 const CIERRE: Record<string, string> = { '{': '}', '(': ')' };
 
-export function analizarBib(texto: string): { entradas: EntradaBib[]; problemas: ProblemaBib[] } {
+// Con `conRepetidas`, una clave que se repite no es un problema y sus entradas se devuelven
+// todas: sirve para leer un texto pegado, donde la repetición se resuelve después.
+export function analizarBib(texto: string, o: { conRepetidas?: boolean } = {}): { entradas: EntradaBib[]; problemas: ProblemaBib[] } {
   const n = texto.length;
   const entradas: EntradaBib[] = [];
   const problemas: ProblemaBib[] = [];
@@ -106,10 +110,11 @@ export function analizarBib(texto: string): { entradas: EntradaBib[]; problemas:
       return proxima ? arroba + 1 + proxima.index + 1 : n;
     };
 
+    // La clave va hasta la coma. Si trae espacios queda tal cual: no sirve para citar, y se informa al usarla.
     j = saltarBlancos(abre + 1);
     const inicioClave = j;
-    while (j < n && texto[j] !== ',' && texto[j] !== cierre && !ES_BLANCO.test(texto[j])) j++;
-    const clave = texto.slice(inicioClave, j);
+    while (j < n && texto[j] !== ',' && texto[j] !== cierre && texto[j] !== '\n') j++;
+    const clave = texto.slice(inicioClave, j).trim();
     if (clave === '') {
       if (finEntero === -1) { i = fallar(); continue; }
       problemas.push({ linea: lineaDe(arroba), mensaje: 'Falta la clave de la entrada.' });
@@ -118,11 +123,13 @@ export function analizarBib(texto: string): { entradas: EntradaBib[]; problemas:
     }
 
     const campos: Record<string, string> = {};
+    const tramos: EntradaBib['tramos'] = {};
     let hasta = -1;
     for (;;) {
       j = saltarBlancos(j);
       if (texto[j] === ',') { j++; continue; }
       if (texto[j] === cierre) { hasta = j + 1; break; }
+      const inicioCampo = j;
       const nombre = /^[^=\s,{}()"#]+/.exec(texto.slice(j, j + 200))?.[0];
       if (!nombre) break;
       j = saltarBlancos(j + nombre.length);
@@ -130,16 +137,20 @@ export function analizarBib(texto: string): { entradas: EntradaBib[]; problemas:
       const leido = leerValor(j + 1);
       if (!leido) break;
       campos[nombre.toLowerCase()] = leido.valor;
+      // El valor termina donde termina su último trozo, sin los blancos que le siguen.
+      let finCampo = leido.sigue;
+      while (finCampo > inicioCampo && ES_BLANCO.test(texto[finCampo - 1])) finCampo--;
+      tramos[nombre.toLowerCase()] = { desde: inicioCampo, hasta: finCampo };
       j = leido.sigue;
     }
     if (hasta === -1) { i = fallar(); continue; }
 
     const yaVista = lineaDeClave.get(clave.toLowerCase());
-    if (yaVista !== undefined) {
+    if (yaVista !== undefined && !o.conRepetidas) {
       problemas.push({ linea: lineaDe(arroba), mensaje: `La clave "${clave}" ya se usó en la línea ${yaVista}.` });
     } else {
-      lineaDeClave.set(clave.toLowerCase(), lineaDe(arroba));
-      entradas.push({ tipo, clave, campos, desde: arroba, hasta });
+      if (yaVista === undefined) lineaDeClave.set(clave.toLowerCase(), lineaDe(arroba));
+      entradas.push({ tipo, clave, campos, tramos, desde: arroba, hasta });
     }
     i = hasta;
   }

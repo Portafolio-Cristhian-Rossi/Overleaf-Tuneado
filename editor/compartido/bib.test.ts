@@ -83,7 +83,24 @@ describe('analizarBib', () => {
     });
 
   it('una entrada sin campos es válida', () => {
-    expect(analizarBib('@misc{solo}')).toEqual({ entradas: [{ tipo: 'misc', clave: 'solo', campos: {}, desde: 0, hasta: 11 }], problemas: [] });
+    expect(analizarBib('@misc{solo}')).toEqual({ entradas: [{ tipo: 'misc', clave: 'solo', campos: {}, tramos: {}, desde: 0, hasta: 11 }], problemas: [] });
+  });
+
+  it('informa dónde está cada campo, de su nombre al final de su valor', () => {
+    const t = '@misc{k,\n\ttitle = {Un {BTM}} ,\n\tyear = 2014\n}';
+    const { tramos } = una(t);
+    expect(t.slice(tramos.title.desde, tramos.title.hasta)).toBe('title = {Un {BTM}}');
+    expect(t.slice(tramos.year.desde, tramos.year.hasta)).toBe('year = 2014');
+  });
+
+  it('con conRepetidas devuelve todas las entradas y no informa la repetición', () => {
+    const r = analizarBib('@misc{a, title = {x}}\n@misc{a, title = {y}}', { conRepetidas: true });
+    expect(r.entradas.map((e) => e.campos.title)).toEqual(['x', 'y']);
+    expect(r.problemas).toEqual([]);
+  });
+
+  it('una clave con espacios se lee entera, hasta la coma', () => {
+    expect(una('@misc{mi clave, title = {x}}').clave).toBe('mi clave');
   });
 });
 
@@ -101,7 +118,7 @@ describe('sinLatex', () => {
 
 describe('autores y año', () => {
   const con = (author: string, otros: Record<string, string> = {}): EntradaBib =>
-    ({ tipo: 'article', clave: 'k', campos: { ...(author ? { author } : {}), ...otros }, desde: 0, hasta: 0 });
+    ({ tipo: 'article', clave: 'k', campos: { ...(author ? { author } : {}), ...otros }, tramos: {}, desde: 0, hasta: 0 });
 
   it.each([
     ['P. J. Cohen', ['Cohen'], 'Cohen'],

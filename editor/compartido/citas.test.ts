@@ -39,7 +39,7 @@ describe('textoDeCita', () => {
 
   it('autor institucional y entrada sin año', () => {
     expect(t('cite', ['CitekeyManual'])).toBe('(R Core Team, 2018)');
-    const sinAnio: Bibliografia = new Map([['x', { tipo: 'misc', clave: 'x', campos: { author: 'Pérez, Ana' }, desde: 0, hasta: 0 }]]);
+    const sinAnio: Bibliografia = new Map([['x', { tipo: 'misc', clave: 'x', campos: { author: 'Pérez, Ana' }, tramos: {}, desde: 0, hasta: 0 }]]);
     expect(textoDeCita('cite', ['x'], null, null, sinAnio).texto).toBe('(Pérez, s.f.)');
   });
 
