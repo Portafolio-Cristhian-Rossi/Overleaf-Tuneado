@@ -13,6 +13,7 @@ export async function crearZoteroFalso(o: {
   modo?: 'disponible' | 'sin-permiso' | 'lento';
   itemsDeGrupo?: number;        // genera esa cantidad de artículos en el grupo 6491700, en lugar de los del fixture
   grupoQueFalla?: number;       // responde 500 al pedir los ítems de ese grupo
+  puerto?: number;              // por defecto, uno libre cualquiera
 } = {}): Promise<ZoteroFalso> {
   const fixture = JSON.parse(fs.readFileSync(path.join(DIR, 'items.json'), 'utf8'));
   const bibtex = fs.readFileSync(path.join(DIR, 'entrada.bib'), 'utf8');
@@ -64,7 +65,7 @@ export async function crearZoteroFalso(o: {
     else responder();
   });
 
-  await new Promise<void>((resolver) => { servidor.listen(0, '127.0.0.1', resolver); });
+  await new Promise<void>((resolver) => { servidor.listen(o.puerto ?? 0, '127.0.0.1', resolver); });
   return {
     base: `http://127.0.0.1:${(servidor.address() as AddressInfo).port}/api`,
     pedidos,

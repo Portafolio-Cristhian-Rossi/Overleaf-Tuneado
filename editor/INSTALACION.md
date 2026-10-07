@@ -87,6 +87,13 @@ propio, y en su lugar queda el del navegador.
 **VS Code** es opcional. Sirve para resolver un conflicto cuando dos personas
 cambiaron el mismo párrafo, y como plan B si el editor no arranca.
 
+**Zotero** es opcional. Si guardás ahí los papers que leés, el editor los
+ofrece al citar. Hay que permitírselo una sola vez: en Zotero, Editar →
+Ajustes → Avanzado, tildá "Permitir que otras aplicaciones de este equipo se
+comuniquen con Zotero". El editor solo lee tu biblioteca; nunca la modifica.
+Sin Zotero el editor funciona igual: cita lo que ya esté en el archivo de
+referencias del informe.
+
 ## 3. Conectar con Overleaf
 
 1. En Overleaf, entrá a **Account Settings → Git Integration** y creá un token.
@@ -211,6 +218,47 @@ también las figuras, tablas y ecuaciones del informe ("Figura 2.1",
 "Ecuación 2.2"). En el texto se ve su número. Como con los títulos, ese número
 es orientativo: el definitivo es el del PDF.
 
+**Citas.** Una cita se ve como se va a leer: "(Cohen, 1963)". Si está en
+rojo, su clave no está en el archivo de referencias del informe
+(`referencias.bib`).
+
+- Para citar, abrí el buscador: `/` → Cita, o `Ctrl+K` donde quieras la cita.
+  Escribí el autor, parte del título o el año, y apretá Enter.
+- Hay dos formas, que elegís abajo en el buscador: "(Autor, año)" para una
+  cita entre paréntesis, y "Autor (año)" cuando el autor es parte de la
+  oración ("como muestra Cohen (1963)").
+- Para citar varios trabajos juntos, tildá cada uno y apretá *Citar*.
+- Para cambiar una cita, hacele clic: se abre el buscador con lo que ya tiene
+  marcado.
+- El buscador muestra las referencias del informe y, si Zotero está abierto,
+  también tus papers de Zotero. Al elegir uno de Zotero, el editor agrega su
+  ficha al final de `referencias.bib` y pone la cita. No hay que exportar
+  nada a mano.
+- Antes de escribir esa ficha en el archivo compartido, el editor le saca la
+  ubicación del PDF en tu computadora, tus notas personales, el resumen y las
+  palabras clave. Lo demás queda como está en Zotero.
+- Si el paper ya estaba en `referencias.bib`, aunque lo haya cargado otra
+  persona con otra clave, se usa esa ficha y no se duplica.
+- La ficha nueva viaja a Overleaf con el próximo **Enviar**.
+- Si Zotero está cerrado, el buscador lo avisa y sigue funcionando con las
+  referencias del informe.
+- *Agregar referencia…* sirve para lo que no tengas en Zotero: pegás la ficha
+  en formato BibTeX (la que ofrecen Google Scholar o la página del artículo) y
+  el editor la revisa antes de sumarla.
+
+Dos avisos que pueden aparecer al agregar una referencia:
+
+- **"Le falta la revista (journal)".** Pasa con tesis o informes guardados en
+  Zotero como "artículo de revista". La bibliografía puede dar error al
+  compilar. Se arregla en Zotero, cambiando el tipo del ítem (por ejemplo, a
+  Tesis), y después corrigiendo o borrando esa ficha en `referencias.bib`.
+- **"Trae una nota que se va a imprimir".** El texto de la nota va a aparecer
+  en la bibliografía del informe. Si no lo querés, borrá la línea `note = …`
+  de esa ficha en `referencias.bib`.
+
+Dentro de una fórmula o de un bloque de código no se puede citar: el editor
+lo avisa.
+
 **Corrección.** Unos segundos después de abrir el editor, el corrector queda
 listo y empieza a subrayar: rojo ondulado para ortografía, ámbar para
 gramática.
@@ -257,8 +305,10 @@ terminar.
   sigue leyendo en la web de Overleaf.
 - **No revisa el estilo ni la redacción.** Marca errores de ortografía y
   gramática, no si un párrafo está bien escrito.
-- **Todavía no dibuja las tablas ni busca citas.** Las tablas se ven y se
-  editan como código, y las citas se escriben con su clave.
+- **Todavía no dibuja las tablas.** Se ven y se editan como código.
+- **No modifica Zotero ni mantiene las fichas al día.** Si corregís un paper
+  en Zotero después de haberlo citado, la ficha que ya está en
+  `referencias.bib` no cambia sola.
 
 ## 7. Opciones de `config.json`
 
