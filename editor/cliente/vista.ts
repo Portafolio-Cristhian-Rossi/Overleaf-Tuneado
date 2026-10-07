@@ -4,7 +4,7 @@ import { analizar, type Elemento, type Rango } from '../compartido/analizador';
 import { numerarObjetos, numerarTitulos } from '../compartido/numeracion';
 import { decorarCodigo, esCodigo } from './bloques/codigo';
 import { decorarEcuaciones, esMatematica } from './bloques/ecuacion';
-import { decorarFiguras } from './bloques/figura';
+import { decorarFiguras, protegerEpigrafe } from './bloques/figura';
 import { Pastilla } from './bloques/pastilla';
 import type { ContextoVista, Decorador, Dibujo } from './bloques/tipos';
 
@@ -124,5 +124,5 @@ export function extensionVista(obtenerCtx: () => ContextoVista): Extension {
     },
     provide: (f) => EditorView.decorations.from(f),
   });
-  return [foco, decoraciones, EditorView.focusChangeEffect.of((_estado, enfocando) => focoCambiado.of(enfocando))];
+  return [foco, decoraciones, protegerEpigrafe, EditorView.focusChangeEffect.of((_estado, enfocando) => focoCambiado.of(enfocando))];
 }

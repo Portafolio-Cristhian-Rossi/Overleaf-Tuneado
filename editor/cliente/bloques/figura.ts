@@ -1,6 +1,6 @@
-import type { Range } from '@codemirror/state';
+import { EditorState, type Extension, type Range } from '@codemirror/state';
 import { Decoration, WidgetType, type EditorView } from '@codemirror/view';
-import type { Elemento } from '../../compartido/analizador';
+import { analizar, type Elemento } from '../../compartido/analizador';
 import { partesDeFigura } from '../../compartido/flotante';
 import { Pastilla } from './pastilla';
 import type { ContextoVista, Decorador } from './tipos';
@@ -25,6 +25,8 @@ class Imagen extends WidgetType {
     imagen.src = this.url;
     imagen.alt = this.texto;
     imagen.title = 'Clic para cambiar la imagen';
+    // Arrastrarla sin querer no debe confundirse con soltar un archivo nuevo.
+    imagen.draggable = false;
     imagen.addEventListener('click', elegir);
     imagen.addEventListener('error', () => { void this.mostrarRecuadro(imagen, elegir); }, { once: true });
 
@@ -55,12 +57,37 @@ class Imagen extends WidgetType {
     imagen.replaceWith(recuadro);
   }
 
-  // Los clics son de la imagen (elegir otra, ver el código): no mueven el cursor.
-  ignoreEvent(): boolean { return true; }
+  // Los clics son de la imagen (elegir otra, ver el código): no mueven el cursor. El arrastre de
+  // archivos sí llega al editor: si no, soltar uno sobre la imagen lo abriría en la pestaña.
+  ignoreEvent(evento: Event): boolean { return !/^drag|^drop$/.test(evento.type); }
 }
 
 const esFigura = (e: Elemento): e is Entorno => e.tipo === 'entorno' && e.nombre === 'figure';
 const esImagen = (e: Elemento): e is ElementoImagen => e.tipo === 'imagen';
+
+// Con el cursor en el epígrafe de una figura dibujada, lo que lo rodea (`\caption{`, `}`) está
+// oculto. Un Retroceso al comienzo o un Suprimir al final borrarían esa llave a ciegas y la
+// figura se desarmaría: esos borrados no se aplican. Para tocar el armado está "Ver código".
+export const protegerEpigrafe: Extension = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged || !tr.isUserEvent('delete')) return tr;
+  const seleccion = tr.startState.selection;
+  if (seleccion.ranges.length !== 1 || !seleccion.main.empty) return tr;
+  const cursor = seleccion.main.head;
+
+  const texto = tr.startState.doc.toString();
+  const elementos = analizar(texto);
+  for (const figura of elementos.filter(esFigura)) {
+    if (cursor < figura.desde || cursor > figura.hasta) continue;
+    const contenido = partesDeFigura(texto, figura, elementos)?.epigrafe?.contenido;
+    if (!contenido || cursor < contenido.desde || cursor > contenido.hasta) continue;
+    let saleDelEpigrafe = false;
+    tr.changes.iterChangedRanges((desde, hasta) => {
+      if (desde < contenido.desde || hasta > contenido.hasta) saleDelEpigrafe = true;
+    });
+    return saleDelEpigrafe ? [] : tr;
+  }
+  return tr;
+});
 
 // Una figura con la forma de la plantilla se ve como imagen y epígrafe; el armado se oculta.
 // El epígrafe sigue siendo texto del documento: tener el cursor ahí no hace aparecer el código.

@@ -85,6 +85,17 @@ describe('numerarObjetos', () => {
     expect(numeros('\\begin{align}a &= \\text{uno \\\\ dos} \\\\ b\\end{align}')).toEqual([['ecuacion', ['2.1', '2.2']]]);
   });
 
+  it('los \\\\ de un entorno anidado no son filas del align', () => {
+    expect(numeros('\\begin{align}f &= \\begin{cases}1 \\\\ 0\\end{cases}\\end{align}')).toEqual([['ecuacion', ['2.1']]]);
+    expect(numeros('\\begin{align}a &= \\begin{pmatrix}1 \\\\ 2\\end{pmatrix} \\\\ b &= c\\end{align}\n\\begin{equation}d\\end{equation}'))
+      .toEqual([['ecuacion', ['2.1', '2.2']], ['ecuacion', ['2.3']]]);
+  });
+
+  it('una equation con \\nonumber o \\notag no lleva número ni avanza el contador', () => {
+    expect(numeros('\\begin{equation}a \\nonumber\\end{equation}\n\\begin{equation}b \\notag\\end{equation}\n\\begin{equation}c\\end{equation}'))
+      .toEqual([['ecuacion', []], ['ecuacion', []], ['ecuacion', ['2.1']]]);
+  });
+
   it('el epígrafe de la tabla no numera a la figura que la rodea', () => {
     const t = '\\begin{figure}\\includegraphics{a}\\begin{table}\\caption{x}\\end{table}\\end{figure}';
     expect(numeros(t)).toEqual([['figura', []], ['tabla', ['2.1']]]);

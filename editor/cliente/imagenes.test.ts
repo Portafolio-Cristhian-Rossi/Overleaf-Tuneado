@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { crearSubida, esImagenAdmitida, type Subida } from './imagenes';
+import { crearSubida, esImagenAdmitida, evitarAbrirArchivosSoltados, type Subida } from './imagenes';
 
 type Respuesta = Awaited<ReturnType<Subida['subir']>>;
 const archivo = (nombre = 'a.png') => new File([new Uint8Array([1, 2, 3])], nombre);
@@ -76,6 +76,51 @@ describe('crearSubida', () => {
       const p = preparar([respuesta]);
       expect(await p.subida(archivo())).toBeNull();
       expect(p.avisar).toHaveBeenCalledWith('No se pudo subir la imagen. Probá de nuevo.');
+    }
+  });
+});
+
+// Un archivo soltado fuera del texto (el lateral, el PDF, los márgenes) haría que el navegador
+// lo abriera en la pestaña, y el editor desaparecería.
+describe('evitarAbrirArchivosSoltados', () => {
+  function evento(tipo: string, tipos: string[]) {
+    const e = new Event(tipo, { cancelable: true });
+    Object.assign(e, { dataTransfer: { types: tipos, dropEffect: 'copy' } });
+    return e as Event & { dataTransfer: { types: string[]; dropEffect: string } };
+  }
+
+  it.each(['dragover', 'drop'])('cancela %s cuando lo arrastrado son archivos', (tipo) => {
+    const destino = new EventTarget();
+    evitarAbrirArchivosSoltados(destino);
+    const e = evento(tipo, ['Files']);
+    destino.dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(true);
+  });
+
+  it('fuera del editor, el cursor indica que ahí no se puede soltar', () => {
+    const destino = new EventTarget();
+    evitarAbrirArchivosSoltados(destino);
+    const e = evento('dragover', ['Files']);
+    destino.dispatchEvent(e);
+    expect(e.dataTransfer.dropEffect).toBe('none');
+  });
+
+  it('si el editor ya aceptó el arrastre, no le cambia el cursor', () => {
+    const destino = new EventTarget();
+    evitarAbrirArchivosSoltados(destino);
+    const e = evento('dragover', ['Files']);
+    e.preventDefault();
+    destino.dispatchEvent(e);
+    expect(e.dataTransfer.dropEffect).toBe('copy');
+  });
+
+  it('no toca el arrastre de texto', () => {
+    const destino = new EventTarget();
+    evitarAbrirArchivosSoltados(destino);
+    for (const tipo of ['dragover', 'drop']) {
+      const e = evento(tipo, ['text/plain']);
+      destino.dispatchEvent(e);
+      expect(e.defaultPrevented, tipo).toBe(false);
     }
   });
 });

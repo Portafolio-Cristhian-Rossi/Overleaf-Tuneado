@@ -6,7 +6,7 @@ import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
 import { agregarPaquete, cambiarRutaDeImagen } from './comandos';
 import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
-import { crearSubida, extensionArrastre } from './imagenes';
+import { crearSubida, evitarAbrirArchivosSoltados, extensionArrastre } from './imagenes';
 import { titulosDelIndice } from './indice';
 import { extensionMenu } from './menuBarra';
 import { crearBarra } from './pantalla/barra';
@@ -134,6 +134,8 @@ async function asegurarPaquete(paquete: string, configuracion?: string): Promise
 // Imágenes: las que ya están en figs/ o una nueva desde la computadora, que se copia ahí.
 const subirImagen = crearSubida({ subir: api.imagenes.subir, preguntar, avisar: (mensaje) => barra.avisar(mensaje, 'error') });
 const abrirSelectorDeImagen = () => elegirImagen({ listar: api.imagenes.listar, url: urlDeImagen, subir: subirImagen });
+
+evitarAbrirArchivosSoltados(window);
 
 // Clic en una imagen dibujada: se elige otra y cambia solo la ruta de ese \includegraphics.
 async function cambiarImagen(vista: EditorView, posicion: number): Promise<void> {

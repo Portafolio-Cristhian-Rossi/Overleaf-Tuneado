@@ -41,6 +41,20 @@ export function crearSubida(s: Subida): (archivo: File) => Promise<string | null
   };
 }
 
+// Un archivo soltado fuera del texto (el lateral, el panel del PDF, los márgenes) haría que el
+// navegador lo abriera en la pestaña y el editor desapareciera: ahí el arrastre no hace nada.
+export function evitarAbrirArchivosSoltados(destino: EventTarget): void {
+  const alArrastrar = (evento: Event) => {
+    const datos = (evento as DragEvent).dataTransfer;
+    if (!datos || !Array.from(datos.types).includes('Files')) return;
+    // Si el editor ya lo aceptó, el cursor queda como él lo dejó.
+    if (evento.type === 'dragover' && !evento.defaultPrevented) datos.dropEffect = 'none';
+    evento.preventDefault();
+  };
+  destino.addEventListener('dragover', alArrastrar);
+  destino.addEventListener('drop', alArrastrar);
+}
+
 // Soltar una imagen sobre el editor la sube e inserta la figura completa en ese lugar.
 export function extensionArrastre(o: { subir(archivo: File): Promise<string | null>; avisar(mensaje: string): void }): Extension {
   const traeArchivos = (evento: DragEvent) => evento.dataTransfer?.types.includes('Files') === true;

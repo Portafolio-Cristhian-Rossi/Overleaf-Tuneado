@@ -90,8 +90,10 @@ export function cambiarNivelTitulo(texto: string, posicion: number, nivel: 0 | 1
 
 // Cambia solo la ruta de la imagen que contiene `posicion`; null si no hay ninguna ahí.
 export function cambiarRutaDeImagen(texto: string, posicion: number, ruta: string): Edicion | null {
-  const imagen = analizar(texto).find((e) => e.tipo === 'imagen' && e.desde <= posicion && posicion <= e.hasta);
-  if (imagen?.tipo !== 'imagen') return null;
+  // Entre dos imágenes pegadas, la posición es el comienzo de la segunda, no el final de la primera.
+  const imagenes = analizar(texto).filter((e) => e.tipo === 'imagen');
+  const imagen = imagenes.find((e) => e.desde <= posicion && posicion < e.hasta) ?? imagenes.find((e) => e.hasta === posicion);
+  if (!imagen) return null;
   const { desde, hasta } = imagen.rutaRango;
   const igual = texto.slice(desde, hasta) === ruta;
   // El cursor queda donde estaba, corrido lo que haya cambiado el largo de la ruta.
@@ -115,11 +117,18 @@ function etiquetaDe(ruta: string): string {
 export function insertarFigura(texto: string, posicion: number, ruta: string): Edicion {
   const figura = `\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{${ruta}}\n`
     + `  \\caption{${EPIGRAFE_INICIAL}}\n  \\label{fig:${etiquetaDe(ruta)}}\n\\end{figure}\n`;
-  const linea = lineaDe(texto, posicion);
+
+  // Una figura dentro de otro bloque (ecuación, tabla, código, otra figura, el preámbulo) es
+  // LaTeX roto: en ese caso va después del bloque más externo que contiene la posición.
+  const bloque = analizar(texto)
+    .filter((e) => e.tipo === 'entorno' || e.tipo === 'preambulo' || (e.tipo === 'matematica' && !e.enLinea))
+    .filter((e) => e.desde <= posicion && posicion <= e.hasta)
+    .reduce<Rango | null>((afuera, e) => (afuera === null || e.hasta > afuera.hasta ? e : afuera), null);
+  const linea = lineaDe(texto, bloque ? bloque.hasta : posicion);
 
   // Una línea vacía se reemplaza; si tiene texto, la figura va en la línea siguiente.
   let cambio: Edicion['cambios'][number];
-  if (texto.slice(linea.desde, linea.hasta).trim() === '') cambio = { desde: linea.desde, hasta: linea.hasta, insertar: figura };
+  if (!bloque && texto.slice(linea.desde, linea.hasta).trim() === '') cambio = { desde: linea.desde, hasta: linea.hasta, insertar: figura };
   else if (linea.hasta < texto.length) cambio = { desde: linea.hasta + 1, hasta: linea.hasta + 1, insertar: figura };
   else cambio = { desde: linea.hasta, hasta: linea.hasta, insertar: `\n${figura}` };
 

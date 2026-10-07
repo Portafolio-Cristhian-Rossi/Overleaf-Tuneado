@@ -158,6 +158,13 @@ describe('cambiarRutaDeImagen', () => {
     expect(cambiarRutaDeImagen('sin imágenes', 3, 'x.png')).toBeNull();
   });
 
+  it('con dos imágenes pegadas cambia la que empieza en esa posición, no la anterior', () => {
+    const pegadas = '\\includegraphics{a.png}\\includegraphics{b.png}';
+    expect(cambiarRutaDeImagen(pegadas, 23, 'figs/n.png')!.cambios).toEqual([{ desde: 40, hasta: 45, insertar: 'figs/n.png' }]);
+    expect(cambiarRutaDeImagen(pegadas, 0, 'figs/n.png')!.cambios).toEqual([{ desde: 17, hasta: 22, insertar: 'figs/n.png' }]);
+    expect(cambiarRutaDeImagen(pegadas, pegadas.length, 'figs/n.png')!.cambios).toEqual([{ desde: 40, hasta: 45, insertar: 'figs/n.png' }]);
+  });
+
   it('con la misma ruta no produce cambios', () => {
     expect(cambiarRutaDeImagen('\\includegraphics{figs/a.png}', 3, 'figs/a.png')!.cambios).toEqual([]);
   });
@@ -201,6 +208,37 @@ describe('insertarFigura', () => {
     ['figs/a__b.png', 'a-b'], ['figs/___.png', 'figura'],
   ])('la etiqueta de %s es fig:%s', (ruta, etiqueta) => {
     expect(insertarFigura('', 0, ruta).cambios[0].insertar).toContain(`\\label{fig:${etiqueta}}`);
+  });
+
+  // Una figura dentro de otro bloque es LaTeX roto: va después del bloque más externo.
+  it.each([
+    ['al comienzo de una ecuación', 'a\n\\begin{equation}\n  x\n\\end{equation}\nb', 2, 'a\n\\begin{equation}\n  x\n\\end{equation}\n'],
+    ['en medio de una ecuación', 'a\n\\begin{equation}\n  x\n\\end{equation}\nb', 21, 'a\n\\begin{equation}\n  x\n\\end{equation}\n'],
+    ['en una línea vacía dentro de un bloque de código', '\\begin{lstlisting}\nx\n\ny\n\\end{lstlisting}\nb', 21, '\\begin{lstlisting}\nx\n\ny\n\\end{lstlisting}\n'],
+    ['dentro de \\[ … \\]', 'a\n\\[\n  x\n\\]\nb', 6, 'a\n\\[\n  x\n\\]\n'],
+    ['en un tabular dentro de un table', '\\begin{table}\n\\begin{tabular}{l}\nx\n\\end{tabular}\n\\end{table}\nb', 32, '\\begin{table}\n\\begin{tabular}{l}\nx\n\\end{tabular}\n\\end{table}\n'],
+    ['en el preámbulo', '\\documentclass{book}\n\\title{T}\n\\begin{document}\nHola\n', 25, '\\documentclass{book}\n\\title{T}\n\\begin{document}\n'],
+  ])('%s, la figura va después del bloque', (_nombre, t, posicion, antes) => {
+    const r = aplicar(t, insertarFigura(t, posicion, 'figs/a.png'));
+    expect(r.texto).toBe(antes + plantilla('figs/a.png', 'a') + t.slice(antes.length));
+    expect(r.seleccionado).toBe('Descripción de la figura');
+  });
+
+  it('en el epígrafe de otra figura, va después de esa figura y no la parte', () => {
+    const otra = plantilla('figs/b.png', 'b');
+    const t = `x\n${otra}y`;
+    const r = aplicar(t, insertarFigura(t, t.indexOf('Descripción') + 3, 'figs/a.png'));
+    expect(r.texto).toBe(`x\n${otra}${plantilla('figs/a.png', 'a')}y`);
+  });
+
+  it('un bloque al final del archivo sin salto de línea', () => {
+    const t = '\\begin{equation}x\\end{equation}';
+    expect(aplicar(t, insertarFigura(t, 5, 'figs/a.png')).texto).toBe(`${t}\n${plantilla('figs/a.png', 'a')}`);
+  });
+
+  it('una fórmula dentro de un párrafo no cambia nada: va después de esa línea', () => {
+    const t = 'sea $k$ aquí\nfin';
+    expect(aplicar(t, insertarFigura(t, 5, 'figs/a.png')).texto).toBe(`sea $k$ aquí\n${plantilla('figs/a.png', 'a')}fin`);
   });
 
   it('lo insertado es una figura dibujable', () => {

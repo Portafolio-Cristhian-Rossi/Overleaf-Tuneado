@@ -36,11 +36,14 @@ export interface ObjetoNumerado {
 
 type Matematica = Extract<Elemento, { tipo: 'matematica' }>;
 
-// Filas de un `align`: se separan con `\\` fuera de llaves.
+const SIN_NUMERO = /\\(?:nonumber|notag)(?![a-zA-Z@])/;
+
+// Filas de un `align`: se separan con `\\` fuera de llaves y de entornos anidados (cases, pmatrix).
 function filasDe(texto: string, contenido: Rango): Rango[] {
   const filas: Rango[] = [];
   let inicio = contenido.desde;
   let profundidad = 0;
+  let anidados = 0;
   for (let j = contenido.desde; j < contenido.hasta; j++) {
     const c = texto[j];
     if (c === '%') {
@@ -51,7 +54,9 @@ function filasDe(texto: string, contenido: Rango): Rango[] {
     } else if (c === '}') {
       profundidad--;
     } else if (c === '\\') {
-      if (texto[j + 1] === '\\' && profundidad === 0) {
+      if (texto.startsWith('\\begin{', j)) anidados++;
+      else if (texto.startsWith('\\end{', j)) anidados--;
+      else if (texto[j + 1] === '\\' && profundidad === 0 && anidados === 0) {
         filas.push({ desde: inicio, hasta: j + 2 });
         inicio = j + 2;
       }
@@ -77,10 +82,13 @@ export function numerarObjetos(texto: string, elementos: Elemento[], numeroCapit
   }
 
   const tramosDeMatematica = (e: Matematica): ObjetoNumerado['tramos'] => {
-    if (e.entorno === 'equation') return [{ desde: e.desde, hasta: e.hasta, numero: siguiente('ecuacion') }];
+    if (e.entorno === 'equation') {
+      const sinNumero = SIN_NUMERO.test(texto.slice(e.contenido.desde, e.contenido.hasta));
+      return sinNumero ? [] : [{ desde: e.desde, hasta: e.hasta, numero: siguiente('ecuacion') }];
+    }
     if (e.entorno !== 'align') return [];
     return filasDe(texto, e.contenido)
-      .filter((fila) => !/\\(?:nonumber|notag)(?![a-zA-Z@])/.test(texto.slice(fila.desde, fila.hasta)))
+      .filter((fila) => !SIN_NUMERO.test(texto.slice(fila.desde, fila.hasta)))
       .map((fila) => ({ ...fila, numero: siguiente('ecuacion') }));
   };
 
