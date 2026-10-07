@@ -1,0 +1,90 @@
+{
+  "grupos": [
+    {
+      "id": 6491700,
+      "version": 310,
+      "links": { "self": { "href": "http://localhost:23119/api/groups/6491700", "type": "application/json" } },
+      "meta": { "created": "2026-03-30T12:00:00Z", "lastModified": "2026-10-05T12:00:00Z", "numItems": 184 },
+      "data": { "id": 6491700, "version": 310, "name": "Tesis2026-Cris,Pache,Nacho", "owner": 20104431, "type": "Private" }
+    }
+  ],
+  "items": {
+    "users/0": [
+      {
+        "key": "2RNMK434",
+        "version": 36,
+        "library": { "type": "user", "id": 20104431, "name": "Mi biblioteca" },
+        "meta": { "numChildren": 1 },
+        "data": {
+          "key": "2RNMK434", "version": 36, "itemType": "webpage",
+          "title": "Zotero | Your personal research assistant", "url": "https://www.zotero.org/start",
+          "accessDate": "2026-03-31T12:34:22Z", "creators": [], "tags": [], "collections": [], "relations": {}
+        }
+      },
+      {
+        "key": "B00KED1T",
+        "version": 40,
+        "library": { "type": "user", "id": 20104431, "name": "Mi biblioteca" },
+        "meta": { "creatorSummary": "Jurafsky y Martin", "parsedDate": "2009", "numChildren": 0 },
+        "data": {
+          "key": "B00KED1T", "version": 40, "itemType": "book",
+          "title": "Speech and Language Processing", "date": "2009", "publisher": "Prentice Hall",
+          "creators": [
+            { "creatorType": "editor", "firstName": "Daniel", "lastName": "Jurafsky" },
+            { "creatorType": "editor", "firstName": "James H.", "lastName": "Martin" }
+          ],
+          "tags": [], "collections": [], "relations": {}
+        }
+      }
+    ],
+    "groups/6491700": [
+      {
+        "key": "ZXBADSCP",
+        "version": 283,
+        "library": { "type": "group", "id": 6491700, "name": "Tesis2026-Cris,Pache,Nacho" },
+        "meta": { "creatorSummary": "Pham et al.", "parsedDate": "2024-06", "numChildren": 1 },
+        "data": {
+          "key": "ZXBADSCP", "version": 283, "itemType": "conferencePaper",
+          "title": "TopicGPT: A Prompt-based Topic Modeling Framework",
+          "date": "2024-06", "DOI": "10.18653/v1/2024.naacl-long.164",
+          "url": "https://aclanthology.org/2024.naacl-long.164/",
+          "proceedingsTitle": "Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics",
+          "creators": [
+            { "creatorType": "author", "firstName": "Chau Minh", "lastName": "Pham" },
+            { "creatorType": "author", "firstName": "Alexander", "lastName": "Hoyle" },
+            { "creatorType": "author", "firstName": "Simeng", "lastName": "Sun" },
+            { "creatorType": "author", "firstName": "Philip", "lastName": "Resnik" },
+            { "creatorType": "author", "firstName": "Mohit", "lastName": "Iyyer" },
+            { "creatorType": "editor", "firstName": "Kevin", "lastName": "Duh" },
+            { "creatorType": "editor", "firstName": "Helena", "lastName": "Gomez" },
+            { "creatorType": "editor", "firstName": "Steven", "lastName": "Bethard" }
+          ],
+          "tags": [], "collections": [], "relations": {}
+        }
+      },
+      {
+        "key": "1NST1TUC",
+        "version": 120,
+        "library": { "type": "group", "id": 6491700, "name": "Tesis2026-Cris,Pache,Nacho" },
+        "meta": { "numChildren": 0 },
+        "data": {
+          "key": "1NST1TUC", "version": 120, "itemType": "journalArticle",
+          "title": "Informe anual de actividades", "date": "", "DOI": "",
+          "creators": [{ "creatorType": "author", "name": "Universidad de la República" }],
+          "tags": [], "collections": [], "relations": {}
+        }
+      },
+      {
+        "key": "ADJUNT0S",
+        "version": 121,
+        "library": { "type": "group", "id": 6491700, "name": "Tesis2026-Cris,Pache,Nacho" },
+        "meta": { "numChildren": 0 },
+        "data": {
+          "key": "ADJUNT0S", "version": 121, "itemType": "attachment", "linkMode": "imported_file",
+          "title": "apuntes.pdf", "filename": "apuntes.pdf", "contentType": "application/pdf",
+          "tags": [], "relations": {}
+        }
+      }
+    ]
+  }
+}

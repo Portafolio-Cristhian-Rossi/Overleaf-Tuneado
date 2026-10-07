@@ -11,6 +11,7 @@ import { crearCorrector } from './languagetool';
 import { describirProyecto } from './proyecto';
 import { crearReferencias } from './referencias';
 import { crearVigia } from './vigia';
+import { crearZotero } from './zotero';
 
 const DIR_EDITOR = path.resolve(import.meta.dirname, '..');
 const LIMITE_SIN_PESTANAS_MS = 10 * 60 * 1000;
@@ -48,6 +49,7 @@ const app = crearApp({
   diccionario,
   imagenes: crearImagenes(config.informe),
   referencias: crearReferencias(config.informe, async () => (await describirProyecto(config.informe, config.principal)).bibliografia),
+  zotero: crearZotero(),
   abrirVsCode: () => new Promise<void>((resolver, rechazar) => {
     // `code` es un .cmd en Windows: hay que lanzarlo a través de cmd.
     const proceso = spawn('cmd', ['/c', 'code', config.informe], { stdio: 'ignore', windowsHide: true, detached: true });

@@ -10,11 +10,12 @@ import type { Imagenes } from './imagenes';
 import type { Corrector } from './languagetool';
 import type { Referencias } from './referencias';
 import type { Vigia } from './vigia';
+import type { Zotero } from './zotero';
 
 export interface Dependencias {
   config: Config; archivos: Archivos; proyecto: () => Promise<Proyecto>;
   git: Git; compilador: Compilador; vigia: Vigia;
-  corrector: Corrector; diccionario: Diccionario; imagenes: Imagenes; referencias: Referencias;
+  corrector: Corrector; diccionario: Diccionario; imagenes: Imagenes; referencias: Referencias; zotero: Zotero;
   abrirVsCode: () => Promise<void>; dirEstaticos: string;
 }
 
@@ -138,6 +139,22 @@ export function crearApp(d: Dependencias): express.Express {
     const bibtex = req.body?.bibtex;
     if (typeof bibtex !== 'string' || bibtex.length > MAXIMO_DE_BIBTEX) {
       res.status(400).json({ mensaje: 'Pedido mal formado.' });
+      return;
+    }
+    res.json(await enSerie(() => d.referencias.agregar(bibtex, alRepetirDe(req.body))));
+  });
+
+  // Zotero se lee, nunca se escribe. Citar un ítem es pedirle su BibTeX y agregarlo al .bib.
+  app.get('/api/zotero/items', async (_req, res) => { res.json(await d.zotero.items()); });
+  app.post('/api/zotero/citar', async (req, res) => {
+    const { biblioteca, item } = req.body ?? {};
+    if (typeof biblioteca !== 'string' || typeof item !== 'string') {
+      res.status(400).json({ mensaje: 'Pedido mal formado.' });
+      return;
+    }
+    const bibtex = await d.zotero.bibtex(biblioteca, item);
+    if (bibtex === null) {
+      res.json({ tipo: 'invalido', mensaje: 'Zotero ya no tiene ese ítem, o no respondió. Actualizá la búsqueda y probá de nuevo.' });
       return;
     }
     res.json(await enSerie(() => d.referencias.agregar(bibtex, alRepetirDe(req.body))));

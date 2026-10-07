@@ -64,6 +64,17 @@ export type ResultadoAgregar =
   | { tipo: 'ok'; referencias: ResultadoDeReferencia[] }
   | { tipo: 'invalido'; mensaje: string };
 
+// Zotero, leído por su API local. 'sin-respuesta': no contestó a tiempo.
+export type EstadoZotero = 'disponible' | 'cerrado' | 'sin-permiso' | 'sin-respuesta';
+export interface ItemZotero {
+  biblioteca: string;          // 'users/0' o 'groups/<id>'
+  nombreBiblioteca: string;    // 'Mi biblioteca' o el nombre del grupo
+  item: string;                // clave de ítem de Zotero, ocho caracteres
+  tipo: string; titulo: string;
+  autores: string[];           // apellidos (o el nombre, si es institucional); editores si no hay autores
+  anio: string | null; doi: string | null;
+}
+
 // Corrección ortográfica y gramatical. Las posiciones son relativas al párrafo revisado.
 export interface Aviso {
   desde: number; hasta: number;

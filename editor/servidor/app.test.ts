@@ -3,10 +3,10 @@ import http, { type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Config, EstadoGit } from '../compartido/tipos';
+import type { Config, EstadoGit, ItemZotero } from '../compartido/tipos';
 import { copiarFixture, dirTemporal } from '../pruebas/ayudas/temporales';
 import { crearApp, type Dependencias } from './app';
-import { crearArchivos } from './archivos';
+import { crearArchivos, RutaInvalida } from './archivos';
 import { crearImagenes } from './imagenes';
 import { describirProyecto } from './proyecto';
 import { crearReferencias } from './referencias';
@@ -16,7 +16,13 @@ let servidor: Server;
 let base: string;
 let d: Dependencias;
 
-const ESTADO: EstadoGit = { cambiosLocales: true, commitsSinEnviar: 1, commitsSinTraer: 2, combinacionEnCurso: false, archivosEnConflicto: [] };
+const BIBTEX_DE_ZOTERO = fs.readFileSync(path.resolve(import.meta.dirname, '../pruebas/fixtures/zotero/entrada.bib'), 'utf8');
+const ITEM_DE_ZOTERO: ItemZotero = {
+  biblioteca: 'groups/6491700', nombreBiblioteca: 'Tesis2026-Cris,Pache,Nacho', item: 'ZXBADSCP', tipo: 'conferencePaper',
+  titulo: 'TopicGPT: A Prompt-based Topic Modeling Framework', autores: ['Pham', 'Hoyle'], anio: '2024', doi: '10.18653/v1/2024.naacl-long.164',
+};
+
+const ESTADO: EstadoGit ={ cambiosLocales: true, commitsSinEnviar: 1, commitsSinTraer: 2, combinacionEnCurso: false, archivosEnConflicto: [] };
 
 async function pedir(metodo: string, ruta: string, cuerpo?: unknown) {
   const r = await fetch(base + ruta, {
@@ -78,6 +84,13 @@ beforeEach(async () => {
     },
     imagenes: crearImagenes(informe),
     referencias: crearReferencias(informe, async () => 'referencias.bib'),
+    zotero: {
+      items: vi.fn(async () => ({ estado: 'disponible' as const, items: [ITEM_DE_ZOTERO] })),
+      bibtex: vi.fn(async (biblioteca: string, item: string) => {
+        if (!/^(users\/0|groups\/\d+)$/.test(biblioteca) || !/^[A-Z0-9]{8}$/.test(item)) throw new RutaInvalida('Identificador de Zotero no válido.');
+        return item === 'ZXBADSCP' ? BIBTEX_DE_ZOTERO : null;
+      }),
+    },
     abrirVsCode: vi.fn(async () => {}),
     dirEstaticos: path.join(dir, 'estaticos'),
   };
@@ -480,5 +493,63 @@ describe('referencias', () => {
     });
     expect(r.status).toBe(403);
     expect(leerDisco('referencias.bib')).toBe(antes);
+  });
+});
+
+describe('zotero', () => {
+  const citar = (cuerpo: unknown) => pedir('POST', '/api/zotero/citar', cuerpo);
+
+  it('items devuelve el estado y los ítems', async () => {
+    expect(await get('/api/zotero/items')).toEqual({ estado: 'disponible', items: [ITEM_DE_ZOTERO] });
+    d.zotero.items = vi.fn(async () => ({ estado: 'cerrado' as const, items: [] }));
+    expect(await get('/api/zotero/items')).toEqual({ estado: 'cerrado', items: [] });
+  });
+
+  it('citar agrega la entrada al .bib sin la ruta del PDF, las notas, el resumen ni las palabras clave', async () => {
+    const antes = leerDisco('referencias.bib');
+    const r = await citar({ biblioteca: 'groups/6491700', item: 'ZXBADSCP' });
+    expect(r.status).toBe(200);
+    expect(r.cuerpo).toMatchObject({ tipo: 'ok', referencias: [{ tipo: 'agregada', clave: 'pham_topicgpt_2024' }, { tipo: 'agregada', clave: 'inzua_herken_extraccion_2025' }] });
+    const despues = leerDisco('referencias.bib');
+    expect(despues.startsWith(antes)).toBe(true);
+    const agregado = despues.slice(antes.length);
+    expect(agregado).toContain('@inproceedings{pham_topicgpt_2024,');
+    expect(agregado).not.toMatch(/\b(file|annote|abstract|keywords)\s*=/);
+    expect(agregado).not.toMatch(/Users|interesante/);
+    expect(d.zotero.bibtex).toHaveBeenCalledWith('groups/6491700', 'ZXBADSCP');
+  });
+
+  it('citar dos veces no duplica', async () => {
+    await citar({ biblioteca: 'groups/6491700', item: 'ZXBADSCP' });
+    const despues = leerDisco('referencias.bib');
+    expect((await citar({ biblioteca: 'groups/6491700', item: 'ZXBADSCP' })).cuerpo).toMatchObject({ referencias: [{ tipo: 'ya-estaba' }, { tipo: 'ya-estaba' }] });
+    expect(leerDisco('referencias.bib')).toBe(despues);
+  });
+
+  it('un ítem que ya no existe se explica y no cambia el .bib', async () => {
+    const antes = leerDisco('referencias.bib');
+    const r = await citar({ biblioteca: 'groups/6491700', item: 'N0EX1STE' });
+    expect(r.status).toBe(200);
+    expect(r.cuerpo).toEqual({ tipo: 'invalido', mensaje: 'Zotero ya no tiene ese ítem, o no respondió. Actualizá la búsqueda y probá de nuevo.' });
+    expect(leerDisco('referencias.bib')).toBe(antes);
+  });
+
+  it.each([
+    [{ biblioteca: 'groups/6491700/../x', item: 'ZXBADSCP' }], [{ biblioteca: 'groups/6491700', item: '../../x' }],
+    [{ biblioteca: 'groups/6491700' }], [{ item: 'ZXBADSCP' }], [{ biblioteca: 7, item: 'ZXBADSCP' }], [{}],
+  ])('identificadores con otra forma dan 400 (%#)', async (cuerpo) => {
+    const antes = leerDisco('referencias.bib');
+    expect((await citar(cuerpo)).status).toBe(400);
+    expect(leerDisco('referencias.bib')).toBe(antes);
+  });
+
+  it('rechaza un pedido que viene de otro sitio', async () => {
+    const r = await fetch(`${base}/api/zotero/citar`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://sitio-ajeno.example' },
+      body: JSON.stringify({ biblioteca: 'groups/6491700', item: 'ZXBADSCP' }),
+    });
+    expect(r.status).toBe(403);
+    expect(d.zotero.bibtex).not.toHaveBeenCalled();
+    expect((await fetch(`${base}/api/zotero/items`, { headers: { Origin: 'https://sitio-ajeno.example' } })).status).toBe(403);
   });
 });
