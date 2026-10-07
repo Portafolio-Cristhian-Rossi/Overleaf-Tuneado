@@ -102,9 +102,9 @@ describe('decorar', () => {
       expect.objectContaining({ widget: 'tab:a', clase: 'cm-ref' }));
   });
 
-  it('cita muestra las claves', () => {
-    expect(decos('según \\cite{Perez2020, Lopez2019} x', 0, ctx)).toContainEqual(
-      expect.objectContaining({ widget: 'Perez2020, Lopez2019', clase: 'cm-cita', reemplaza: true }));
+  it('cita muestra autor y año', () => {
+    expect(decos('según \\cite{CitekeyArticle} x', 0, ctx)).toContainEqual(
+      { desde: 6, hasta: 27, reemplaza: true, widget: '(Cohen, 1963)', clase: 'cm-cita' });
   });
 
   it('ítems de enumerate muestran 1. y 2.; los de itemize •', () => {

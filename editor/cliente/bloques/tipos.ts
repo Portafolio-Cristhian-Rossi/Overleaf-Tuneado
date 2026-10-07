@@ -1,6 +1,7 @@
 import type { EditorState, Range } from '@codemirror/state';
 import type { Decoration, EditorView } from '@codemirror/view';
 import type { Elemento, Rango } from '../../compartido/analizador';
+import type { Bibliografia } from '../../compartido/citas';
 import type { ObjetoNumerado } from '../../compartido/numeracion';
 import type { Etiqueta } from '../../compartido/tipos';
 
@@ -11,6 +12,10 @@ export interface ContextoVista {
   urlDeImagen(ruta: string): string;
   // Clic en una imagen dibujada: `posicion` cae dentro de su \includegraphics.
   alElegirImagen(vista: EditorView, posicion: number): void;
+  // Las entradas de referencias.bib; vacía mientras no se leyó.
+  bibliografia: Bibliografia;
+  // Clic en una cita dibujada: `posicion` cae dentro de esa cita.
+  alElegirCita(vista: EditorView, posicion: number): void;
 }
 
 // Lo que cada bloque necesita para dibujarse: el documento ya analizado y numerado.

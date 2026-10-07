@@ -183,7 +183,8 @@ select {
   background: var(--acento-fondo); color: var(--acento); cursor: text;
 }
 #editor .cm-cita { background: var(--superficie-2); color: var(--texto-2); }
-#editor .cm-ref-rota { background: var(--peligro-fondo); color: var(--peligro); }
+#editor .cm-cita { cursor: pointer; }
+#editor .cm-ref-rota, #editor .cm-cita-rota { background: var(--peligro-fondo); color: var(--peligro); }
 /* Bloques: código */
 #editor .cm-codigo {
   padding-left: 12px; background: var(--superficie-2);

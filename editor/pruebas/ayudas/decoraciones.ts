@@ -1,6 +1,8 @@
 import { EditorState } from '@codemirror/state';
 import { decorar, type ContextoVista } from '../../cliente/vista';
+import { analizarBib } from '../../compartido/bib';
 import type { Etiqueta } from '../../compartido/tipos';
+import { leerFixture } from './temporales';
 
 export interface Deco { desde: number; hasta: number; clase?: string; reemplaza: boolean; widget?: string; numero?: string }
 
@@ -30,6 +32,7 @@ export function ctxDePrueba(cambios: Partial<ContextoVista> = {}): ContextoVista
   return {
     numeroCapitulo: '2', etiquetas: new Map([[ETIQUETA_DE_PRUEBA.nombre, ETIQUETA_DE_PRUEBA]]),
     urlDeImagen: (ruta) => ruta, alElegirImagen: () => {},
+    bibliografia: new Map(analizarBib(leerFixture('referencias.bib')).entradas.map((e) => [e.clave, e])), alElegirCita: () => {},
     ...cambios,
   };
 }

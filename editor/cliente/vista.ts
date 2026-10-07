@@ -2,6 +2,7 @@ import { StateEffect, StateField, type EditorState, type Extension, type Range }
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 import { analizar, type Elemento, type Rango } from '../compartido/analizador';
 import { numerarObjetos, numerarTitulos } from '../compartido/numeracion';
+import { decorarCitas } from './bloques/cita';
 import { decorarCodigo, esCodigo } from './bloques/codigo';
 import { decorarEcuaciones, esMatematica } from './bloques/ecuacion';
 import { decorarFiguras, protegerEpigrafe } from './bloques/figura';
@@ -11,7 +12,7 @@ import type { ContextoVista, Decorador, Dibujo } from './bloques/tipos';
 export type { ContextoVista } from './bloques/tipos';
 
 // Cada clase de bloque se dibuja en su archivo; acá queda la prosa: títulos, formato, listas, referencias.
-const BLOQUES: Decorador[] = [decorarCodigo, decorarEcuaciones, decorarFiguras];
+const BLOQUES: Decorador[] = [decorarCodigo, decorarEcuaciones, decorarFiguras, decorarCitas];
 
 const CLASE_DE_ESTILO = { negrita: 'cm-negrita', cursiva: 'cm-cursiva', mono: 'cm-mono' } as const;
 const COMANDO = /\\[a-zA-Z@]+\*?/g;
@@ -73,9 +74,6 @@ export function decorar(estado: EditorState, ctx: ContextoVista, conFoco = true)
         else reemplazar(e, e.clave, 'cm-ref cm-ref-rota');
         break;
       }
-      case 'cita':
-        if (!activo(e)) reemplazar(e, e.claves.join(', '), 'cm-cita');
-        break;
       case 'comentario':
         sinComandos.push(e);
         marcar(e.desde, e.hasta, 'cm-atenuado');

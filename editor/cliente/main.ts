@@ -1,5 +1,7 @@
 import type { EditorView } from '@codemirror/view';
 import 'katex/dist/katex.min.css';
+import { analizarBib, type ProblemaBib } from '../compartido/bib';
+import type { Bibliografia } from '../compartido/citas';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api, urlDeImagen } from './api';
 import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
@@ -41,6 +43,19 @@ let compilarAlGuardar = false;
 function tomarProyecto(nuevo: Proyecto): void {
   proyecto = nuevo;
   etiquetas = new Map(nuevo.etiquetas.map((e) => [e.nombre, e]));
+}
+
+// Las referencias del informe, para dibujar las citas y para el buscador.
+let bibliografia: Bibliografia = new Map();
+let problemasDeBibliografia: ProblemaBib[] = [];
+
+// Si el informe no tiene archivo de referencias o no se puede leer, queda vacía.
+async function cargarBibliografia(): Promise<void> {
+  const ruta = proyecto.bibliografia;
+  const leido = ruta === null ? null : await api.leer(ruta).catch(() => null);
+  const { entradas, problemas } = analizarBib(leido?.contenido ?? '');
+  bibliografia = new Map(entradas.map((e) => [e.clave, e]));
+  problemasDeBibliografia = problemas;
 }
 
 const barra = crearBarra(porId('barra'));
@@ -93,6 +108,7 @@ function actualizarIndice(texto: string, espera = 300): void {
 let relojProyecto: ReturnType<typeof setTimeout> | undefined;
 async function recargarProyecto(): Promise<void> {
   tomarProyecto(await api.proyecto());
+  await cargarBibliografia();
   lateral.mostrarProyecto(proyecto, editor.rutaAbierta());
   actualizarIndice(editor.vista.state.doc.toString(), 0);
   editor.vista.dispatch({ effects: contextoCambiado.of(null) });
@@ -153,6 +169,8 @@ const editor = crearEditor(porId('editor'), {
       numeroCapitulo: numeroDelCapitulo(editor.rutaAbierta()), etiquetas,
       urlDeImagen,
       alElegirImagen: (vista, posicion) => { void cambiarImagen(vista, posicion); },
+      bibliografia,
+      alElegirCita: () => {},
     })),
     extensionMenu({
       paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete,
@@ -300,6 +318,7 @@ async function iniciar(): Promise<void> {
     ({ principal, compilarAlGuardar } = config);
     if (config.problema) barra.avisar(config.problema, 'error');
     tomarProyecto(await api.proyecto());
+    await cargarBibliografia();
     lateral.mostrarProyecto(proyecto, null);
     const ruta = rutaInicial();
     if (ruta) await abrir(ruta);
