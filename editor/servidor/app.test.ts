@@ -9,6 +9,7 @@ import { crearApp, type Dependencias } from './app';
 import { crearArchivos } from './archivos';
 import { crearImagenes } from './imagenes';
 import { describirProyecto } from './proyecto';
+import { crearReferencias } from './referencias';
 
 let dir: string;
 let servidor: Server;
@@ -76,6 +77,7 @@ beforeEach(async () => {
       agregarExcepcion: vi.fn(async () => {}),
     },
     imagenes: crearImagenes(informe),
+    referencias: crearReferencias(informe, async () => 'referencias.bib'),
     abrirVsCode: vi.fn(async () => {}),
     dirEstaticos: path.join(dir, 'estaticos'),
   };
@@ -418,5 +420,65 @@ describe('imágenes', () => {
     soltar();
     await trayendo;
     expect((await subiendo).status).toBe(201);
+  });
+});
+
+describe('referencias', () => {
+  const PHAM = '@inproceedings{pham_topicgpt_2024,\n\ttitle = {{TopicGPT}: {A} {Prompt}-based {Topic} {Modeling} {Framework}},\n'
+    + '\tdoi = {10.18653/v1/2024.naacl-long.164},\n\tauthor = {Pham, Chau Minh and Hoyle, Alexander},\n\tyear = {2024},\n}';
+  const agregar = (cuerpo: unknown) => pedir('POST', '/api/referencias', cuerpo);
+
+  it('agrega una referencia al final del .bib', async () => {
+    const antes = leerDisco('referencias.bib');
+    const r = await agregar({ bibtex: PHAM });
+    expect(r.status).toBe(200);
+    expect(r.cuerpo).toEqual({ tipo: 'ok', referencias: [{ tipo: 'agregada', clave: 'pham_topicgpt_2024', advertencias: [] }] });
+    expect(leerDisco('referencias.bib').startsWith(antes)).toBe(true);
+    expect(leerDisco('referencias.bib')).toContain('@inproceedings{pham_topicgpt_2024,');
+  });
+
+  it('un texto que no es una referencia es una respuesta, no un error', async () => {
+    const antes = leerDisco('referencias.bib');
+    const r = await agregar({ bibtex: 'hola' });
+    expect(r.status).toBe(200);
+    expect(r.cuerpo).toMatchObject({ tipo: 'invalido' });
+    expect(leerDisco('referencias.bib')).toBe(antes);
+  });
+
+  it.each([[{}], [{ bibtex: 42 }], [{ bibtex: 'x'.repeat(200001) }], [null]])('un pedido mal formado da 400 (%#)', async (cuerpo) => {
+    const r = await agregar(cuerpo);
+    expect(r.status).toBe(400);
+    expect(r.cuerpo).toEqual({ mensaje: 'Pedido mal formado.' });
+  });
+
+  it('alRepetir llega a la unidad, y un valor desconocido se trata como preguntar', async () => {
+    const otro = '@book{CitekeyBook, title = {Otro libro distinto}, year = {1999}}';
+    expect((await agregar({ bibtex: otro, alRepetir: 'cualquiera' })).cuerpo).toMatchObject({ referencias: [{ tipo: 'clave-repetida' }] });
+    expect((await agregar({ bibtex: otro })).cuerpo).toMatchObject({ referencias: [{ tipo: 'clave-repetida' }] });
+    expect((await agregar({ bibtex: otro, alRepetir: 'renombrar' })).cuerpo).toMatchObject({ referencias: [{ tipo: 'agregada', clave: 'CitekeyBook-2' }] });
+  });
+
+  it('espera a que termine la operación de Git en curso', async () => {
+    let soltar = () => {};
+    d.git.traer = vi.fn(() => new Promise<{ tipo: 'ok'; archivosCambiados: string[] }>((r) => { soltar = () => r({ tipo: 'ok', archivosCambiados: [] }); }));
+    const antes = leerDisco('referencias.bib');
+    const trayendo = post('/api/git/traer');
+    await vi.waitFor(() => expect(d.git.traer).toHaveBeenCalled());
+    const agregando = agregar({ bibtex: PHAM });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(leerDisco('referencias.bib')).toBe(antes);
+    soltar();
+    await trayendo;
+    expect((await agregando).cuerpo).toMatchObject({ tipo: 'ok' });
+    expect(leerDisco('referencias.bib')).toContain('pham_topicgpt_2024');
+  });
+
+  it('rechaza un pedido que viene de otro sitio', async () => {
+    const antes = leerDisco('referencias.bib');
+    const r = await fetch(`${base}/api/referencias`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://sitio-ajeno.example' }, body: JSON.stringify({ bibtex: PHAM }),
+    });
+    expect(r.status).toBe(403);
+    expect(leerDisco('referencias.bib')).toBe(antes);
   });
 });

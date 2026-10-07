@@ -8,12 +8,13 @@ import type { Diccionario } from './diccionario';
 import type { Git } from './git';
 import type { Imagenes } from './imagenes';
 import type { Corrector } from './languagetool';
+import type { Referencias } from './referencias';
 import type { Vigia } from './vigia';
 
 export interface Dependencias {
   config: Config; archivos: Archivos; proyecto: () => Promise<Proyecto>;
   git: Git; compilador: Compilador; vigia: Vigia;
-  corrector: Corrector; diccionario: Diccionario; imagenes: Imagenes;
+  corrector: Corrector; diccionario: Diccionario; imagenes: Imagenes; referencias: Referencias;
   abrirVsCode: () => Promise<void>; dirEstaticos: string;
 }
 
@@ -41,6 +42,9 @@ function esEscrituraValida(c: any): c is { ruta: string; contenido: string; finD
 
 const MAXIMO_DE_PARRAFOS = 2000;
 const LIMITE_DE_IMAGEN = '20mb';
+const MAXIMO_DE_BIBTEX = 200000;
+
+const alRepetirDe = (cuerpo: any): 'preguntar' | 'renombrar' => (cuerpo?.alRepetir === 'renombrar' ? 'renombrar' : 'preguntar');
 
 function sonParrafos(x: unknown): x is Segmento[][] {
   return Array.isArray(x) && x.length <= MAXIMO_DE_PARRAFOS && x.every((parrafo) =>
@@ -126,6 +130,17 @@ export function crearApp(d: Dependencias): express.Express {
     if (r.tipo === 'ok') res.status(201).json({ ruta: r.ruta });
     else if (r.tipo === 'existe') res.status(409).json({ ruta: r.ruta, sugerido: r.sugerido });
     else res.status(400).json({ mensaje: r.mensaje });
+  });
+
+  // Agrega al final de referencias.bib. Va en la cola de Git y de los guardados: el archivo no
+  // cambia en medio de un Traer. Un texto que no es una referencia se responde, no es un error.
+  app.post('/api/referencias', async (req, res) => {
+    const bibtex = req.body?.bibtex;
+    if (typeof bibtex !== 'string' || bibtex.length > MAXIMO_DE_BIBTEX) {
+      res.status(400).json({ mensaje: 'Pedido mal formado.' });
+      return;
+    }
+    res.json(await enSerie(() => d.referencias.agregar(bibtex, alRepetirDe(req.body))));
   });
 
   app.get('/api/correccion/estado', (_req, res) => { res.json(d.corrector.estado()); });

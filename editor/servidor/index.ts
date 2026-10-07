@@ -9,6 +9,7 @@ import { crearGit } from './git';
 import { crearImagenes } from './imagenes';
 import { crearCorrector } from './languagetool';
 import { describirProyecto } from './proyecto';
+import { crearReferencias } from './referencias';
 import { crearVigia } from './vigia';
 
 const DIR_EDITOR = path.resolve(import.meta.dirname, '..');
@@ -46,6 +47,7 @@ const app = crearApp({
   corrector,
   diccionario,
   imagenes: crearImagenes(config.informe),
+  referencias: crearReferencias(config.informe, async () => (await describirProyecto(config.informe, config.principal)).bibliografia),
   abrirVsCode: () => new Promise<void>((resolver, rechazar) => {
     // `code` es un .cmd en Windows: hay que lanzarlo a través de cmd.
     const proceso = spawn('cmd', ['/c', 'code', config.informe], { stdio: 'ignore', windowsHide: true, detached: true });
