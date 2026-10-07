@@ -231,6 +231,10 @@ Funcionamiento:
 - Se pueden marcar varios resultados para una misma cita.
 - Aceptar inserta en el cursor. Sobre una cita existente cambia solo el
   comando y las claves, y conserva sus argumentos opcionales.
+- Con el cursor dentro de una fórmula o de un bloque de código, el buscador no
+  se abre y la barra lo explica: una cita ahí no compila.
+- Después de agregar una referencia se muestran sus advertencias (6.4), si las
+  hay.
 - "Agregar referencia…" abre el pegado de BibTeX (6.6).
 
 ### 6.4 Zotero
@@ -240,9 +244,8 @@ Pasa por el servidor del editor porque el navegador no puede llamar a Zotero
 directamente. Solo lee: nunca escribe en la biblioteca de Zotero, y nada sale
 de la máquina.
 
-- `GET /api/zotero/estado` → `disponible` | `cerrado` | `sin-permiso`.
-- `GET /api/zotero/items` → los ítems de todas las bibliotecas: la personal y
-  cada grupo. De cada uno: biblioteca, clave de ítem, tipo, título, autores,
+- `GET /api/zotero/items` → el estado de Zotero y los ítems de todas las
+  bibliotecas: la personal y cada grupo. De cada uno: biblioteca, clave de ítem, tipo, título, autores,
   año y DOI. Sin adjuntos ni notas. Espera máxima 3 s.
 - `POST /api/zotero/citar` `{ biblioteca, item }` → pide a Zotero la entrada
   en BibTeX, la limpia y la agrega con la misma operación que el pegado (6.6).
@@ -254,10 +257,17 @@ Son decenas de ítems: no hace falta buscar en Zotero por cada tecla.
 
 Limpieza antes de escribir en el `.bib`, que es compartido: se quitan los
 campos `file` (trae la ruta de la carpeta personal de quien exporta),
-`abstract` y `keywords`. El resto queda como lo entrega Zotero.
+`annote` (las notas personales que cada uno escribe en Zotero), `abstract` y
+`keywords`. El resto queda como lo entrega Zotero, tildes incluidas.
 
-Con Zotero `cerrado` o `sin-permiso`, el buscador lo dice en una línea (en el
-segundo caso, con la instrucción para activar la opción en Ajustes →
+Advertencias al agregar una referencia, que no impiden agregarla:
+- una entrada `@article` sin `journal` (por ejemplo, una tesis catalogada como
+  artículo): `apacite` da error al armar la bibliografía;
+- una entrada con `note`: ese texto se imprime en la bibliografía.
+
+Estados de Zotero: `disponible`, `cerrado`, `sin-permiso` y `sin-respuesta`
+(no contestó en 3 s). Salvo en el primero, el buscador lo dice en una línea
+(con `sin-permiso`, la instrucción para activar la opción en Ajustes →
 Avanzado) y trabaja solo con el `.bib`.
 
 ### 6.5 Sonda de Zotero (hecha el 2026-10-06)
@@ -278,6 +288,19 @@ Con Zotero 9.0.6 abierto en la máquina de Cristhian:
 - La entrada trae `file` con la ruta local del PDF, además de `abstract` y
   `keywords`: de ahí la limpieza de 6.4.
 - Una consulta tarda unos 12 ms.
+
+Segunda sonda, el mismo día, con las 27 entradas del grupo compiladas en un
+documento aparte (`pdflatex` + `bibtex` + `apacite`, `inputenc` utf8):
+- Zotero escribe las tildes y otras letras tal cual (`á`, `í`, `Ł`, `ı`), sin
+  convertirlas a comandos. Compila sin errores: no se convierte nada.
+- Algunas entradas traen `annote` con notas personales y `note` con texto del
+  repositorio de origen ("Accepted: 2025-11-07…").
+- Cuatro entradas `@article` sin `journal` (tesis de Colibri catalogadas como
+  artículo) hacen que `bibtex` informe "the literal stack isn't empty". El PDF
+  se genera igual. De ahí las advertencias de 6.4.
+- `items/top` incluye adjuntos sueltos: se filtran por tipo en el servidor.
+  Un ítem inexistente responde 404.
+- El año sale de `meta.parsedDate`; un ítem sin fecha no lo trae.
 
 ### 6.6 Agregar una referencia
 
