@@ -224,6 +224,16 @@ select {
 #editor .cm-imagen:hover .cm-ver-codigo, #editor .cm-ver-codigo:focus-visible { opacity: 1; }
 #editor .cm-prefijo-epigrafe { color: var(--texto-2); font-size: 0.9em; font-weight: 600; }
 #editor .cm-epigrafe { font-size: 0.9em; }
+/* Bloques: tablas. Como la figura: la tabla ocupa todo el ancho de su línea y el epígrafe queda aparte. */
+#editor .cm-linea-tabla { text-align: center; }
+#editor .cm-linea-tabla .cm-tabla { display: inline-block; width: 100%; }
+#editor .cm-tabla { position: relative; display: inline-block; vertical-align: middle; text-indent: 0; }
+#editor .cm-tabla table { margin: 4px auto; border-collapse: collapse; font-size: 0.95em; line-height: 1.4; }
+#editor .cm-tabla td { position: relative; min-width: 3em; padding: 3px 10px; border: 1px dashed var(--borde); cursor: text; }
+#editor .cm-tabla tr.cm-tabla-linea td { border-top: 1.5px solid var(--texto); }
+#editor .cm-tabla table.cm-tabla-final tr:last-child td { border-bottom: 1.5px solid var(--texto); }
+#editor .cm-tabla-solo-lectura td, #editor.solo-lectura .cm-tabla td { cursor: default; }
+#editor .cm-tabla:hover .cm-ver-codigo { opacity: 1; }
 #editor .cm-foldPlaceholder {
   margin-left: 8px; padding: 1px 8px; border: 1px solid var(--borde); border-radius: 4px;
   background: var(--superficie-2); color: var(--texto-2); font-family: var(--interfaz); font-size: 0.8em; cursor: pointer;

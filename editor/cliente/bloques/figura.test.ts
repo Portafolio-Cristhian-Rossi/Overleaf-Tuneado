@@ -161,6 +161,6 @@ describe('figuras', () => {
   it('el fixture: una figura dibujada y otra como código', () => {
     const d = decos(leerFixture('Bloques.tex'), 0, ctxDePrueba({ numeroCapitulo: '7' }));
     expect(d.filter((x) => x.clase === 'cm-imagen')).toHaveLength(1);
-    expect(d.filter((x) => x.clase === 'cm-prefijo-epigrafe').map((x) => x.widget)).toEqual(['Figura 7.1: ']);
+    expect(d.filter((x) => x.clase === 'cm-prefijo-epigrafe').map((x) => x.widget)).toEqual(['Figura 7.1: ', 'Tabla 7.1: ', 'Tabla 7.2: ']);
   });
 });
