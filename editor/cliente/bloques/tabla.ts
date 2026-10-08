@@ -6,6 +6,7 @@ import { analizarTabla, type Alineacion, type TablaLeida } from '../../compartid
 import { el } from '../pantalla/dom';
 import { abrirCelda, type Celda } from './edicionTabla';
 import { dibujarFormula } from './formula';
+import { abrirMenuDeCelda } from './menuTabla';
 import { Pastilla } from './pastilla';
 import type { Decorador } from './tipos';
 
@@ -95,6 +96,15 @@ class TablaDibujada extends WidgetType {
         const piezas = piezasDeCelda(this.texto, celda.contenido, elementos, clavesDe);
         // Una celda vacía igual tiene que tener alto, para poder hacerle clic.
         td.append(...(piezas.length > 0 ? nodosDe(piezas) : [' ']));
+        if (tabla.clase === 'simple') {
+          const boton = el('button', {
+            type: 'button', clase: 'cm-celda-menu', 'aria-label': 'Opciones de la celda', title: 'Filas y columnas',
+            // Abrir el menú no saca el foco del campo abierto: lo escrito se aplica al abrirlo.
+            alMousedown: (evento: Event) => evento.preventDefault(),
+            alClick: () => abrirMenuDeCelda(vista, vista.posAtDOM(nodo), { fila: f, columna: c }, boton),
+          }, '⋯');
+          td.append(boton);
+        }
         tr.append(td);
         columna += celda.ancho;
       });
@@ -119,6 +129,13 @@ class TablaDibujada extends WidgetType {
       cuerpo.addEventListener('click', (evento) => {
         const celda = celdaDe(evento);
         if (celda) abrirCelda(vista, vista.posAtDOM(nodo), celda, false);
+      });
+      // Clic derecho: el mismo menú. Dentro del campo abierto queda el menú del navegador, para pegar.
+      cuerpo.addEventListener('contextmenu', (evento) => {
+        const td = (evento.target as HTMLElement).closest('td');
+        if (!td || (evento.target as HTMLElement).closest('input')) return;
+        evento.preventDefault();
+        abrirMenuDeCelda(vista, vista.posAtDOM(nodo), { fila: Number(td.dataset.fila), columna: Number(td.dataset.columna) }, td);
       });
     }
     nodo.append(cuerpo, el('button', { type: 'button', clase: 'cm-ver-codigo', alClick: verCodigo }, 'Ver código'));
