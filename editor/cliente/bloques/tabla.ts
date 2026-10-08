@@ -4,6 +4,7 @@ import { analizar, type Elemento, type Rango } from '../../compartido/analizador
 import { partesDeTabla } from '../../compartido/flotante';
 import { analizarTabla, type Alineacion, type TablaLeida } from '../../compartido/tabla';
 import { el } from '../pantalla/dom';
+import { abrirCelda, type Celda } from './edicionTabla';
 import { dibujarFormula } from './formula';
 import { Pastilla } from './pastilla';
 import type { Decorador } from './tipos';
@@ -103,6 +104,22 @@ class TablaDibujada extends WidgetType {
     if (tabla.clase === 'solo-lectura') {
       cuerpo.title = AVISO_SOLO_LECTURA;
       cuerpo.addEventListener('click', verCodigo);
+    } else {
+      const celdaDe = (evento: Event): Celda | null => {
+        const destino = evento.target as HTMLElement;
+        const td = destino.closest('td');
+        // El campo abierto y el botón del menú manejan sus propios clics.
+        if (!td || destino.closest('input, button')) return null;
+        return { fila: Number(td.dataset.fila), columna: Number(td.dataset.columna) };
+      };
+      // Sin esto el navegador mueve la selección del editor junto a la tabla y aparece su código.
+      cuerpo.addEventListener('mousedown', (evento) => {
+        if (celdaDe(evento)) evento.preventDefault();
+      });
+      cuerpo.addEventListener('click', (evento) => {
+        const celda = celdaDe(evento);
+        if (celda) abrirCelda(vista, vista.posAtDOM(nodo), celda, false);
+      });
     }
     nodo.append(cuerpo, el('button', { type: 'button', clase: 'cm-ver-codigo', alClick: verCodigo }, 'Ver código'));
     return nodo;
