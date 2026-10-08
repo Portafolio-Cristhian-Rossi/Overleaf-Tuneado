@@ -92,6 +92,8 @@ describe('analizarTabla', () => {
     ['\\\\ con espacio extra', con(R`a & b \\[2pt]`)],
     ['\\\\*', con(R`a & b \\*`)],
     ['comentario', con(R`a & b \\ % nota`)],
+    // Dentro de \verb un & es texto: contarlo como separador dibujaría dos celdas donde hay una.
+    ['\\verb', con(R`\verb|a&b| \\`)],
     ['otro entorno adentro', con(R`\begin{itemize}\item a\end{itemize} & b \\`)],
     ['un tabular adentro', R`\begin{tabular}{l}\begin{tabular}{l}x\end{tabular} \\ \end{tabular}`],
     ['llave de más', con(R`a } & b \\`)],

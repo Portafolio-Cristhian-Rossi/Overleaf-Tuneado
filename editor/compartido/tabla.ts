@@ -34,8 +34,9 @@ export type Tabla = TablaLeida | { clase: 'no-reconocida' };
 const ES_LETRA = /[a-zA-Z@]/;
 const ES_BLANCO = /\s/;
 const LINEAS = new Set(['hline', 'toprule', 'midrule', 'bottomrule']);
-// Comandos que cambian la forma de la tabla y el editor no sabe dibujar ni mantener.
-const FUERA_DE_ALCANCE = new Set(['begin', 'end', 'multirow', 'cline', 'cmidrule']);
+// Comandos que cambian la forma de la tabla y el editor no sabe dibujar ni mantener. Dentro de
+// \verb un `&` es texto y no se puede contar como separador.
+const FUERA_DE_ALCANCE = new Set(['begin', 'end', 'multirow', 'cline', 'cmidrule', 'verb']);
 const MULTICOLUMNA = '\\multicolumn';
 
 // Índice de la llave que cierra la abierta en `abre`, sin pasar de `fin`; -1 si no cierra.
