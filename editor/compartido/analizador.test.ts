@@ -225,10 +225,10 @@ describe('entornos de bloque, imagen y epígrafe', () => {
 
   it('el fixture de bloques se analiza entero', () => {
     const es = analizar(leerFixture('Bloques.tex'));
-    expect(deTipo(es, 'entorno').map((e) => e.nombre)).toEqual(['figure', 'figure', 'table', 'tabular', 'lstlisting']);
+    expect(deTipo(es, 'entorno').map((e) => e.nombre)).toEqual(['figure', 'figure', 'table', 'tabular', 'table', 'tabular', 'lstlisting']);
     expect(deTipo(es, 'matematica')).toHaveLength(5);
     expect(deTipo(es, 'imagen')).toHaveLength(3);
-    expect(deTipo(es, 'etiqueta').map((e) => e.nombre)).toEqual(['eq:coherencia', 'fig:distribucion', 'tab:corpus']);
+    expect(deTipo(es, 'etiqueta').map((e) => e.nombre)).toEqual(['eq:coherencia', 'fig:distribucion', 'tab:corpus', 'tab:resultados']);
     expect(es.map((e) => e.desde)).toEqual([...es.map((e) => e.desde)].sort((a, b) => a - b));
   });
 });
