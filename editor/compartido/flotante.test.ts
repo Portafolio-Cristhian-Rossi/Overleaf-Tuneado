@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leerFixture } from '../pruebas/ayudas/temporales';
 import { analizar, type Elemento } from './analizador';
-import { partesDeFigura } from './flotante';
+import { partesDeFigura, partesDeTabla } from './flotante';
 
 const tramo = (t: string, e: { desde: number; hasta: number }) => t.slice(e.desde, e.hasta);
 const figuras = (t: string) => {
@@ -72,5 +72,67 @@ describe('partesDeFigura', () => {
 
   it('del fixture: la figura de la plantilla es dibujable y la de dos imágenes no', () => {
     expect(figuras(leerFixture('Bloques.tex')).map((p) => p !== null)).toEqual([true, false]);
+  });
+});
+
+describe('partesDeTabla', () => {
+  const R = String.raw;
+  type Entorno = Extract<Elemento, { tipo: 'entorno' }>;
+  const tablas = (t: string) => {
+    const es = analizar(t);
+    return es.filter((e): e is Entorno => e.tipo === 'entorno' && e.nombre === 'table').map((flotante) => partesDeTabla(t, flotante, es));
+  };
+  const partesT = (t: string) => tablas(t)[0];
+
+  const FLOTANTE = R`\begin{table}[htbp]
+  \centering
+  \caption{Tamaño del corpus}
+  \label{tab:corpus}
+  \begin{tabular}{ll}
+    Sitio & Documentos \\
+  \end{tabular}
+\end{table}`;
+
+  it('una tabla con la forma de la plantilla: tabular, epígrafe y armado para ocultar', () => {
+    const p = partesT(FLOTANTE)!;
+    expect(tramo(FLOTANTE, p.tabular)).toBe(FLOTANTE.slice(FLOTANTE.indexOf(R`\begin{tabular}`), FLOTANTE.indexOf(R`\end{table}`) - 1));
+    expect(p.tabla.clase).toBe('simple');
+    expect(tramo(FLOTANTE, p.epigrafe!.contenido)).toBe('Tamaño del corpus');
+    expect(p.ocultar.map((r) => tramo(FLOTANTE, r))).toEqual([
+      `${R`\begin{table}[htbp]`}\n  ${R`\centering`}\n  ${R`\caption{`}`, `}\n  ${R`\label{tab:corpus}`}\n  `, `\n${R`\end{table}`}`,
+    ]);
+  });
+
+  it('lo oculto, el tabular y el epígrafe cubren el flotante sin solaparse', () => {
+    const p = partesT(FLOTANTE)!;
+    const piezas = [...p.ocultar, p.tabular, p.epigrafe!.contenido].sort((a, b) => a.desde - b.desde);
+    expect(piezas.map((r) => tramo(FLOTANTE, r)).join('')).toBe(FLOTANTE);
+  });
+
+  it('el epígrafe puede ir debajo, o faltar', () => {
+    const debajo = R`\begin{table}\begin{tabular}{l}a \\\end{tabular}\caption{Abajo}\end{table}`;
+    expect(partesT(debajo)!.ocultar.map((r) => tramo(debajo, r))).toEqual([R`\begin{table}`, R`\caption{`, R`}\end{table}`]);
+    expect(partesT(R`\begin{table*}\begin{tabular}{l}a \\\end{tabular}\end{table*}`)).toMatchObject({ epigrafe: null });
+  });
+
+  it('lo que hay dentro del tabular no cuenta como contenido suelto', () => {
+    expect(partesT(R`\begin{table}\begin{tabular}{l}\textbf{a} $k$ \cite{x} \\\end{tabular}\end{table}`)).not.toBeNull();
+  });
+
+  it.each([
+    ['dos tabular', R`\begin{table}\begin{tabular}{l}a \\\end{tabular}\begin{tabular}{l}b \\\end{tabular}\end{table}`],
+    ['ningún tabular', R`\begin{table}\caption{x}\end{table}`],
+    ['una imagen', R`\begin{table}\includegraphics{a}\begin{tabular}{l}a \\\end{tabular}\end{table}`],
+    ['texto suelto', R`\begin{table}Nota\begin{tabular}{l}a \\\end{tabular}\end{table}`],
+    ['otro comando', R`\begin{table}\small\begin{tabular}{l}a \\\end{tabular}\end{table}`],
+    ['un comentario', `${R`\begin{table}`}% nota\n${R`\begin{tabular}{l}a \\\end{tabular}\end{table}`}`],
+    ['dos epígrafes', R`\begin{table}\caption{a}\caption{b}\begin{tabular}{l}a \\\end{tabular}\end{table}`],
+    ['un tabular que no se reconoce', R`\begin{table}\begin{tabular}{@{}l}a \\\end{tabular}\end{table}`],
+  ])('con %s no se dibuja', (_nombre, t) => {
+    expect(partesT(t)).toBeNull();
+  });
+
+  it('las tablas del fixture', () => {
+    expect(tablas(leerFixture('Bloques.tex')).map((p) => p?.tabla.clase)).toEqual(['simple', 'solo-lectura']);
   });
 });

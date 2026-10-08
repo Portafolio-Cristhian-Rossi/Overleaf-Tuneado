@@ -1,7 +1,7 @@
 import { EditorState, type Extension, type Range } from '@codemirror/state';
 import { Decoration, WidgetType, type EditorView } from '@codemirror/view';
 import { analizar, type Elemento } from '../../compartido/analizador';
-import { partesDeFigura } from '../../compartido/flotante';
+import { partesDeFigura, partesDeTabla } from '../../compartido/flotante';
 import { Pastilla } from './pastilla';
 import type { ContextoVista, Decorador } from './tipos';
 
@@ -65,9 +65,11 @@ class Imagen extends WidgetType {
 const esFigura = (e: Elemento): e is Entorno => e.tipo === 'entorno' && e.nombre === 'figure';
 const esImagen = (e: Elemento): e is ElementoImagen => e.tipo === 'imagen';
 
-// Con el cursor en el epígrafe de una figura dibujada, lo que lo rodea (`\caption{`, `}`) está
-// oculto. Un Retroceso al comienzo o un Suprimir al final borrarían esa llave a ciegas y la
-// figura se desarmaría: esos borrados no se aplican. Para tocar el armado está "Ver código".
+const esFlotante = (e: Elemento): e is Entorno => e.tipo === 'entorno' && (e.nombre === 'figure' || e.nombre === 'table');
+
+// Con el cursor en el epígrafe de una figura o una tabla dibujada, lo que lo rodea (`\caption{`,
+// `}`) está oculto. Un Retroceso al comienzo o un Suprimir al final borrarían esa llave a ciegas
+// y el flotante se desarmaría: esos borrados no se aplican. Para tocar el armado está "Ver código".
 export const protegerEpigrafe: Extension = EditorState.transactionFilter.of((tr) => {
   if (!tr.docChanged || !tr.isUserEvent('delete')) return tr;
   const seleccion = tr.startState.selection;
@@ -76,9 +78,10 @@ export const protegerEpigrafe: Extension = EditorState.transactionFilter.of((tr)
 
   const texto = tr.startState.doc.toString();
   const elementos = analizar(texto);
-  for (const figura of elementos.filter(esFigura)) {
-    if (cursor < figura.desde || cursor > figura.hasta) continue;
-    const contenido = partesDeFigura(texto, figura, elementos)?.epigrafe?.contenido;
+  for (const flotante of elementos.filter(esFlotante)) {
+    if (cursor < flotante.desde || cursor > flotante.hasta) continue;
+    const partes = flotante.nombre === 'figure' ? partesDeFigura(texto, flotante, elementos) : partesDeTabla(texto, flotante, elementos);
+    const contenido = partes?.epigrafe?.contenido;
     if (!contenido || cursor < contenido.desde || cursor > contenido.hasta) continue;
     let saleDelEpigrafe = false;
     tr.changes.iterChangedRanges((desde, hasta) => {
