@@ -8,15 +8,17 @@ import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
 import { crearSubida, evitarAbrirArchivosSoltados, extensionArrastre } from './imagenes';
 import { titulosDelIndice } from './indice';
-import { extensionMenu } from './menuBarra';
+import { extensionMenu, insertarDesdeBoton, type ContextoMenu } from './menuBarra';
 import { crearBarra } from './pantalla/barra';
 import { crearBloqueoConflicto } from './pantalla/bloqueoConflicto';
 import { el, preguntar } from './pantalla/dom';
 import { crearLateral } from './pantalla/lateral';
+import { abrirMenuFlotante } from './pantalla/menuFlotante';
 import { crearPanelGramatica, extensionPanelGramatica } from './pantalla/panelGramatica';
 import { crearPanelPdf } from './pantalla/panelPdf';
 import { elegirImagen } from './pantalla/selectorImagen';
 import { crearSincronizacion } from './pantalla/sincronizacion';
+import { PLANTILLAS } from './plantillas';
 import { contextoCambiado, extensionVista } from './vista';
 
 const CLAVE_ULTIMO = 'editor-informe:ultimo-archivo';
@@ -69,6 +71,16 @@ barra.zonaFormato.append(
   el('button', { type: 'button', title: 'Negrita (Ctrl+B)', 'aria-label': 'Negrita', alClick: () => darFormato(editor.vista, 'textbf') }, el('b', {}, 'N')),
   el('button', { type: 'button', title: 'Cursiva (Ctrl+I)', 'aria-label': 'Cursiva', alClick: () => darFormato(editor.vista, 'textit') }, el('i', {}, 'C')),
 );
+
+// Las mismas plantillas que el menú "/", a la vista: figura, tabla, ecuación, cita…
+const botonInsertar = el('button', {
+  type: 'button', title: 'Insertar una figura, tabla, ecuación, cita…', 'aria-haspopup': 'menu',
+  alClick: () => abrirMenuFlotante(botonInsertar.getBoundingClientRect(), PLANTILLAS.map((plantilla) => ({
+    texto: plantilla.nombre,
+    alElegir: () => { void insertarDesdeBoton(contextoMenu, editor.vista, plantilla); },
+  }))),
+}, 'Insertar ▾');
+barra.zonaFormato.append(botonInsertar);
 
 function habilitarFormato(si: boolean): void {
   for (const control of barra.zonaFormato.querySelectorAll<HTMLSelectElement | HTMLButtonElement>('select, button')) control.disabled = !si;
@@ -135,6 +147,12 @@ async function asegurarPaquete(paquete: string, configuracion?: string): Promise
 const subirImagen = crearSubida({ subir: api.imagenes.subir, preguntar, avisar: (mensaje) => barra.avisar(mensaje, 'error') });
 const abrirSelectorDeImagen = () => elegirImagen({ listar: api.imagenes.listar, url: urlDeImagen, subir: subirImagen });
 
+// Lo que necesitan el menú "/" y el botón Insertar para poner una plantilla.
+const contextoMenu: ContextoMenu = {
+  paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete,
+  elegirImagen: abrirSelectorDeImagen,
+};
+
 evitarAbrirArchivosSoltados(window);
 
 // Clic en una imagen dibujada: se elige otra y cambia solo la ruta de ese \includegraphics.
@@ -154,10 +172,7 @@ const editor = crearEditor(porId('editor'), {
       urlDeImagen,
       alElegirImagen: (vista, posicion) => { void cambiarImagen(vista, posicion); },
     })),
-    extensionMenu({
-      paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete,
-      elegirImagen: abrirSelectorDeImagen,
-    }),
+    extensionMenu(contextoMenu),
     extensionArrastre({ subir: subirImagen, avisar: (mensaje) => barra.avisar(mensaje, 'error') }),
     extensionAtajos((nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); }),
     extensionCorreccion({ api: api.correccion, alCambiarEstado: (estado) => panelGramatica.mostrarEstado(estado) }),

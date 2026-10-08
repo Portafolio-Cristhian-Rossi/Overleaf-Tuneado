@@ -162,17 +162,21 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
   su código LaTeX para que puedas tocarlo. Al salir, vuelve a verse formateado.
 - `Ctrl+B` negrita, `Ctrl+I` cursiva. El selector de la barra convierte la
   línea en título o la devuelve a texto.
-- Escribí `/` al principio de una línea para insertar una sección, lista,
-  figura, tabla, ecuación, cita, bloque de código o referencia cruzada. `Tab`
+- El botón **Insertar** de la barra agrega una sección, lista, figura, tabla,
+  ecuación, cita, bloque de código o referencia cruzada. Lo que necesita un
+  renglón propio (una tabla, una ecuación) queda debajo de la línea donde
+  está el cursor; una cita o una referencia, donde está el cursor. `Tab`
   salta al siguiente campo a completar. Si hace falta un paquete de LaTeX, el
   editor pregunta y lo agrega a `main.tex`.
+- Sin sacar las manos del teclado: escribí `/` al principio de una línea y
+  sale el mismo menú.
 - Lo que el editor no sabe dibujar se ve como código, en gris. Podés editarlo
   igual.
 
 **Ecuaciones.** Las fórmulas se ven dibujadas: las que van dentro del texto
 (`$k$`) y las que van en un renglón aparte, con su número a la derecha.
 
-- Para insertar una: `/` → Ecuación. Para una fórmula corta dentro de un
+- Para insertar una: **Insertar** → Ecuación. Para una fórmula corta dentro de un
   párrafo, escribila entre signos de pesos: `$a + b$`.
 - Para cambiarla, poné el cursor encima: aparece su código LaTeX y, debajo, un
   recuadro que muestra cómo va quedando mientras escribís.
@@ -184,7 +188,7 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
 **Figuras.** Una figura se ve con su imagen y, debajo, su epígrafe
 ("Figura 2.1: …").
 
-- Para insertar una: `/` → Figura. Se abre una ventana con las imágenes que
+- Para insertar una: **Insertar** → Figura. Se abre una ventana con las imágenes que
   ya están en la carpeta `figs/` del informe. Elegí una, o usá
   *Elegir archivo…* para sumar una imagen de tu computadora.
 - También podés arrastrar un archivo de imagen desde el Explorador de Windows
@@ -205,8 +209,8 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
 
 **Tablas.** Una tabla se ve como tabla, con su epígrafe ("Tabla 2.1: …").
 
-- Para insertar una: `/` → Tabla. Completá los campos y salí con las flechas:
-  al sacar el cursor, queda dibujada.
+- Para insertar una: botón **Insertar** → Tabla (o `/` → Tabla). Escribí el
+  epígrafe y sacá el cursor con las flechas: queda dibujada.
 - Para escribir en una celda, hacé clic sobre ella. `Tab` pasa a la celda
   siguiente, `Shift+Tab` a la anterior y `Enter` a la de abajo. `Escape`
   descarta lo que escribiste en esa celda.

@@ -244,11 +244,12 @@ select {
 }
 #editor .cm-tabla td:hover .cm-celda-menu, #editor .cm-tabla td:focus-within .cm-celda-menu { opacity: 1; }
 #editor.solo-lectura .cm-celda-menu { display: none; }
-.menu-celda {
+/* Menú flotante: el de una celda y el del botón Insertar. */
+.menu-flotante {
   position: fixed; z-index: 30; display: flex; flex-direction: column; padding: 4px;
   background: var(--superficie); border: 1px solid var(--borde); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
 }
-.menu-celda button { border: 0; text-align: left; padding: 4px 10px; }
+.menu-flotante button { border: 0; text-align: left; padding: 4px 10px; }
 #editor .cm-celda-error .cm-celda-campo { outline-color: var(--peligro); background: var(--peligro-fondo); }
 #editor .cm-celda-motivo {
   display: block; max-width: 28ch; margin-top: 4px; font: 12px/1.3 var(--interfaz); color: var(--peligro);

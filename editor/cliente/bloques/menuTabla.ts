@@ -2,7 +2,8 @@ import type { EditorView } from '@codemirror/view';
 import {
   agregarColumna, agregarFila, alinearColumna, borrarColumna, borrarFila, type TablaLeida,
 } from '../../compartido/tabla';
-import { el, preguntar } from '../pantalla/dom';
+import { preguntar } from '../pantalla/dom';
+import { abrirMenuFlotante, cerrarMenuFlotante } from '../pantalla/menuFlotante';
 import { abrirCelda, confirmarCeldaAbierta, tablaEn, transaccionDeTabla, type Celda, type Operacion } from './edicionTabla';
 
 export type AccionDeTabla =
@@ -84,62 +85,17 @@ async function elegir(vista: EditorView, desde: number, celda: Celda, accion: Ac
   if (abrir) abrirCelda(vista, desde, abrir, true);
 }
 
-let cerrarMenu: (() => void) | null = null;
-
 // Muestra el menú de esa celda junto a `ancla`. Lo que estuviera a medio escribir se aplica antes.
 export function abrirMenuDeCelda(vista: EditorView, desde: number, celda: Celda, ancla: HTMLElement): void {
-  cerrarMenu?.();
+  cerrarMenuFlotante();
   // Confirmar la celda abierta redibuja la tabla: el lugar del ancla se toma antes.
   const lugarDelAncla = ancla.getBoundingClientRect();
   if (!confirmarCeldaAbierta() || vista.state.readOnly) return;
   const tabla = tablaEn(vista.state.doc.toString(), desde)?.tabla;
   if (!tabla?.filas[celda.fila]?.celdas[celda.columna]) return;
 
-  const menu = el('div', { clase: 'menu-celda', role: 'menu' });
-  const alClicAfuera = (evento: Event) => {
-    if (!menu.contains(evento.target as Node)) cerrar();
-  };
-  function cerrar(): void {
-    cerrarMenu = null;
-    menu.remove();
-    document.removeEventListener('mousedown', alClicAfuera, true);
-    window.removeEventListener('blur', cerrar);
-    window.removeEventListener('scroll', cerrar, true);
-  }
-
-  for (const opcion of opcionesDeCelda(tabla, celda)) {
-    menu.append(el('button', {
-      type: 'button', role: 'menuitem', disabled: !opcion.habilitada, title: opcion.ayuda,
-      alClick: () => {
-        cerrar();
-        void elegir(vista, desde, celda, opcion.accion);
-      },
-    }, opcion.texto));
-  }
-  menu.addEventListener('keydown', (evento) => {
-    if (evento.key === 'Escape') {
-      evento.preventDefault();
-      cerrar();
-      return;
-    }
-    if (evento.key !== 'ArrowDown' && evento.key !== 'ArrowUp') return;
-    evento.preventDefault();
-    const opciones = [...menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
-    const actual = opciones.indexOf(document.activeElement as HTMLButtonElement);
-    opciones[(actual + (evento.key === 'ArrowDown' ? 1 : opciones.length - 1)) % opciones.length]?.focus();
-  });
-
-  document.body.append(menu);
-  // Debajo del ancla; si no entra en la ventana, arriba o corrido hacia la izquierda.
-  const alto = menu.offsetHeight;
-  const ancho = menu.offsetWidth;
-  const arriba = lugarDelAncla.bottom + 2 + alto > window.innerHeight ? Math.max(4, lugarDelAncla.top - alto - 2) : lugarDelAncla.bottom + 2;
-  menu.style.top = `${arriba}px`;
-  menu.style.left = `${Math.max(4, Math.min(lugarDelAncla.left, window.innerWidth - ancho - 4))}px`;
-
-  cerrarMenu = cerrar;
-  document.addEventListener('mousedown', alClicAfuera, true);
-  window.addEventListener('blur', cerrar);
-  window.addEventListener('scroll', cerrar, true);
-  menu.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  abrirMenuFlotante(lugarDelAncla, opcionesDeCelda(tabla, celda).map((opcion) => ({
+    texto: opcion.texto, habilitada: opcion.habilitada, ayuda: opcion.ayuda,
+    alElegir: () => { void elegir(vista, desde, celda, opcion.accion); },
+  })));
 }
