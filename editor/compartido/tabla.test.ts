@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { leerFixture } from '../pruebas/ayudas/temporales';
 import { analizar, type Rango } from './analizador';
-import { analizarTabla, editarCelda, MOTIVOS, type TablaLeida } from './tabla';
+import {
+  agregarColumna, agregarFila, alinearColumna, analizarTabla, borrarColumna, borrarFila, editarCelda, MOTIVOS, type TablaLeida,
+} from './tabla';
 import type { Edicion } from './tipos';
 
 const R = String.raw;
@@ -174,5 +176,163 @@ describe('editarCelda', () => {
     expect(editar(T, 0, 2, 'x')).toEqual({ tipo: 'error', motivo: MOTIVOS.noEsta });
     const combinada = con(`${R`\multicolumn{2}{c}{Total} \\`}\n${R`a & b \\`}`);
     expect(editar(combinada, 1, 0, 'x')).toEqual({ tipo: 'error', motivo: MOTIVOS.noEsta });
+  });
+});
+
+const REJILLA = R`\begin{tabular}{|l|c|}
+\hline
+a & b \\ \hline
+c & d \\ \hline
+\end{tabular}`;
+const JUNTAS = R`\begin{tabular}{ll} a & b \\ c & d \\ \end{tabular}`;
+const ABIERTA = con(`${R`a & b \\`}\nc & d`);
+const MEDIA = con(`${R`a & b \\ \midrule`}\n${R`c & d \\`}`);
+const VACIA = R`     &  \\`;   // la fila nueva bajo una fila con sangría de cuatro espacios
+type Operacion = (texto: string, interior: Rango) => Edicion | null;
+const op = (t: string, f: Operacion) => aplicar(t, f(t, interiores(t)[0])!);
+const nulo = (t: string, f: Operacion) => f(t, interiores(t)[0]);
+
+describe('agregarFila', () => {
+  it('copia la sangría y el espaciado de la vecina, en una línea nueva', () => {
+    const foro = `${R`    Foro & 1200 \\`}\n`;
+    const sitio = `${R`    Sitio & Documentos \\`}\n`;
+    expect(op(T, (t, i) => agregarFila(t, i, 1, 'abajo'))).toBe(cambiar(foro, `${foro}${VACIA}\n`));
+    expect(op(T, (t, i) => agregarFila(t, i, 0, 'arriba'))).toBe(cambiar(sitio, `${VACIA}\n${sitio}`));
+    expect(op(T, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBe(cambiar(sitio, `${sitio}${VACIA}\n`));
+  });
+
+  it('en una rejilla la fila nueva lleva su \\hline; una línea de booktabs no se repite', () => {
+    const a = `${R`a & b \\ \hline`}\n`;
+    expect(op(REJILLA, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBe(cambiar(a, `${a}${R` &  \\ \hline`}\n`, REJILLA));
+    const m = `${R`a & b \\ \midrule`}\n`;
+    expect(op(MEDIA, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBe(cambiar(m, `${m}${R` &  \\`}\n`, MEDIA));
+  });
+
+  it('con varias filas en una línea, inserta en esa línea', () => {
+    const esperado = R`\begin{tabular}{ll} a & b \\  &  \\ c & d \\ \end{tabular}`;
+    expect(op(JUNTAS, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBe(esperado);
+    expect(op(JUNTAS, (t, i) => agregarFila(t, i, 1, 'arriba'))).toBe(esperado);
+    // La primera celda vacía queda antes del primer carácter de la fila: no hay nada que vaciar ahí.
+    const conVacia = R`\begin{tabular}{ll}  & b \\ c & d \\ \end{tabular}`;
+    expect(op(conVacia, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBe(R`\begin{tabular}{ll}  & b \\ &  \\ c & d \\ \end{tabular}`);
+  });
+
+  it('junto a una última fila sin cerrar, la nueva cierra', () => {
+    expect(op(ABIERTA, (t, i) => agregarFila(t, i, 1, 'abajo'))).toBe(con(`${R`a & b \\`}\n${R`c & d \\`}\n${R` &  \\`}`));
+    expect(op(ABIERTA, (t, i) => agregarFila(t, i, 1, 'arriba'))).toBe(con(`${R`a & b \\`}\n${R` &  \\`}\nc & d`));
+  });
+
+  it('la fila nueva queda vacía y se puede llenar', () => {
+    const nueva = op(T, (t, i) => agregarFila(t, i, 1, 'abajo'));
+    expect(celdas(nueva)).toEqual([['Sitio', 'Documentos'], ['Foro', '1200'], ['', '']]);
+    expect(editado(editado(nueva, 2, 0, 'Blog'), 2, 1, '300')).toBe(cambiar(VACIA, R`    Blog & 300 \\`, nueva));
+  });
+});
+
+describe('borrarFila', () => {
+  it('quita su línea', () => {
+    expect(op(T, (t, i) => borrarFila(t, i, 1))).toBe(cambiar(`${R`    Foro & 1200 \\`}\n`, ''));
+    expect(op(REJILLA, (t, i) => borrarFila(t, i, 0))).toBe(cambiar(`${R`a & b \\ \hline`}\n`, '', REJILLA));
+    expect(op(ABIERTA, (t, i) => borrarFila(t, i, 1))).toBe(con(R`a & b \\`));
+  });
+
+  it('una línea de booktabs en la misma línea se queda', () => {
+    expect(op(MEDIA, (t, i) => borrarFila(t, i, 0))).toBe(con(`${R`\midrule`}\n${R`c & d \\`}`));
+  });
+
+  it('con varias filas en una línea, quita solo la suya', () => {
+    expect(op(JUNTAS, (t, i) => borrarFila(t, i, 0))).toBe(R`\begin{tabular}{ll} c & d \\ \end{tabular}`);
+  });
+
+  it('la única fila no se borra', () => {
+    expect(nulo(con(R`a & b \\`), (t, i) => borrarFila(t, i, 0))).toBeNull();
+  });
+});
+
+describe('agregarColumna', () => {
+  const tres = (sitio: string, foro: string) =>
+    cambiar(R`Foro & 1200 \\`, foro, cambiar(R`Sitio & Documentos \\`, sitio, cambiar('{ll}', '{lll}')));
+
+  it('suma una letra a la especificación y una celda a cada fila', () => {
+    expect(op(T, (t, i) => agregarColumna(t, i, 0, 'derecha'))).toBe(tres(R`Sitio &  & Documentos \\`, R`Foro &  & 1200 \\`));
+    expect(op(T, (t, i) => agregarColumna(t, i, 1, 'izquierda'))).toBe(tres(R`Sitio &  & Documentos \\`, R`Foro &  & 1200 \\`));
+    expect(op(T, (t, i) => agregarColumna(t, i, 0, 'izquierda'))).toBe(tres(R` & Sitio & Documentos \\`, R` & Foro & 1200 \\`));
+    expect(op(T, (t, i) => agregarColumna(t, i, 1, 'derecha'))).toBe(tres(R`Sitio & Documentos &  \\`, R`Foro & 1200 &  \\`));
+  });
+
+  it.each([
+    ['|l|c|', 0, 'derecha', '|l|l|c|'], ['|l|c|', 0, 'izquierda', '|l|l|c|'], ['|l|c|', 1, 'derecha', '|l|c|c|'],
+    ['l c', 0, 'derecha', 'l l c'], ['l c', 1, 'izquierda', 'l c c'], ['l p{3cm}', 1, 'derecha', 'l p{3cm}p{3cm}'],
+  ] as const)('{%s}, columna %i a la %s → {%s}', (spec, columna, lado, esperada) => {
+    const nueva = op(con(R`a & b \\`, spec), (t, i) => agregarColumna(t, i, columna, lado));
+    expect(nueva.slice(nueva.indexOf('{', 7) + 1, nueva.indexOf('\n') - 1)).toBe(esperada);
+    expect(leida(nueva).columnas).toHaveLength(3);
+  });
+
+  it('la celda nueva se llena sin perder el espaciado', () => {
+    const nueva = op(T, (t, i) => agregarColumna(t, i, 0, 'derecha'));
+    expect(editado(nueva, 0, 1, 'x')).toBe(cambiar(R`Sitio &  & Documentos`, R`Sitio & x & Documentos`, nueva));
+  });
+});
+
+describe('borrarColumna', () => {
+  const una = (sitio: string, foro: string) =>
+    cambiar(R`Foro & 1200 \\`, foro, cambiar(R`Sitio & Documentos \\`, sitio, cambiar('{ll}', '{l}')));
+
+  it('quita su letra y su celda de cada fila', () => {
+    expect(op(T, (t, i) => borrarColumna(t, i, 0))).toBe(una(R`Documentos \\`, R`1200 \\`));
+    expect(op(T, (t, i) => borrarColumna(t, i, 1))).toBe(una(R`Sitio \\`, R`Foro \\`));
+  });
+
+  it.each([
+    ['|l|c|', 0, '|c|', 'b'], ['|l|c|', 1, '|l|', 'a'],
+  ] as const)('{%s} sin la columna %i → {%s}', (spec, columna, esperada, queda) => {
+    expect(op(con(R`a & b \\`, spec), (t, i) => borrarColumna(t, i, columna))).toBe(con(`${queda} ${R`\\`}`, esperada));
+  });
+
+  it.each([
+    [0, 'c r', R`b & c \\`], [1, 'l r', R`a & c \\`], [2, 'l c', R`a & b \\`],
+  ] as const)('de tres columnas, sin la %i', (columna, spec, fila) => {
+    expect(op(con(R`a & b & c \\`, 'l c r'), (t, i) => borrarColumna(t, i, columna))).toBe(con(fila, spec));
+  });
+
+  it('la única columna no se borra', () => {
+    expect(nulo(con(R`a \\`, 'l'), (t, i) => borrarColumna(t, i, 0))).toBeNull();
+  });
+});
+
+describe('alinearColumna', () => {
+  it('cambia una letra', () => {
+    expect(op(T, (t, i) => alinearColumna(t, i, 1, 'r'))).toBe(cambiar('{ll}', '{lr}'));
+    expect(nulo(T, (t, i) => alinearColumna(t, i, 0, 'l'))).toMatchObject({ cambios: [] });
+    expect(nulo(con(R`a & b \\`, 'l p{3cm}'), (t, i) => alinearColumna(t, i, 1, 'c'))).toBeNull();
+  });
+});
+
+describe('las operaciones, en conjunto', () => {
+  it('ninguna toca nada fuera del tabular, y la tabla sigue siendo simple', () => {
+    const afuera = (t: string) => {
+      const i = interiores(t)[0];
+      return [t.slice(0, i.desde), t.slice(i.hasta)];
+    };
+    const operaciones: Operacion[] = [
+      (t, i) => agregarFila(t, i, 0, 'arriba'), (t, i) => agregarFila(t, i, 1, 'abajo'), (t, i) => borrarFila(t, i, 0),
+      (t, i) => agregarColumna(t, i, 0, 'izquierda'), (t, i) => agregarColumna(t, i, 1, 'derecha'),
+      (t, i) => borrarColumna(t, i, 0), (t, i) => borrarColumna(t, i, 1), (t, i) => alinearColumna(t, i, 0, 'c'),
+    ];
+    for (const base of [T, `x\n${REJILLA}\ny`, `x ${JUNTAS} y`, `x\n${ABIERTA}\ny`, `x\n${MEDIA}\ny`]) {
+      for (const operacion of operaciones) {
+        const nuevo = op(base, operacion);
+        expect(afuera(nuevo)).toEqual(afuera(base));
+        expect(leer(nuevo).clase).toBe('simple');
+      }
+    }
+  });
+
+  it('sobre una tabla que no es simple o un índice que no existe, null', () => {
+    const combinada = con(`${R`\multicolumn{2}{c}{Total} \\`}\n${R`a & b \\`}`);
+    expect(nulo(combinada, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBeNull();
+    expect(nulo(T, (t, i) => agregarFila(t, i, 9, 'abajo'))).toBeNull();
+    expect(nulo(T, (t, i) => borrarColumna(t, i, 9))).toBeNull();
   });
 });

@@ -283,3 +283,152 @@ export function editarCelda(texto: string, interior: Rango, fila: number, column
 
   return { tipo: 'ok', edicion: edicionCon(interior, [{ desde, hasta, insertar: latex }]) };
 }
+
+// Lo que puede seguir a una fila en su línea sin ser otra fila.
+const SOLO_LINEAS = /^(?:[ \t]*\\(?:hline|toprule|midrule|bottomrule)(?![a-zA-Z@]))*[ \t]*$/;
+// En una rejilla el \hline es de cada fila; las líneas de booktabs son de la tabla.
+const LINEA_DE_BOOKTABS = /[ \t]*\\(?:toprule|midrule|bottomrule)(?![a-zA-Z@])/g;
+
+const esEspacio = (c: string | undefined) => c === ' ' || c === '\t';
+const esTira = (c: string | undefined) => c === '|' || c === ' ';
+
+interface LugarDeFila {
+  // Su primer carácter que no es espacio, y el final de su `\\` o de su último contenido.
+  inicio: number; fin: number;
+  // Las líneas que ocupa, sin el salto final.
+  lineaDesde: number; lineaHasta: number;
+  // Lo que sigue a la fila en su última línea.
+  cola: string;
+  // En sus líneas no hay otra fila ni nada ajeno al tabular.
+  sola: boolean;
+}
+
+function lugarDe(texto: string, interior: Rango, fila: FilaDeTabla): LugarDeFila {
+  let inicio = fila.desde;
+  while (inicio < interior.hasta && ES_BLANCO.test(texto[inicio])) inicio++;
+  let fin = fila.cierre?.hasta ?? interior.hasta;
+  if (!fila.cierre) while (fin > inicio && ES_BLANCO.test(texto[fin - 1])) fin--;
+
+  const lineaDesde = texto.lastIndexOf('\n', inicio - 1) + 1;
+  const salto = texto.indexOf('\n', fin);
+  const lineaHasta = salto === -1 ? texto.length : salto;
+  const cola = texto.slice(fin, Math.min(lineaHasta, interior.hasta));
+  const sola = texto.slice(lineaDesde, inicio).trim() === '' && lineaHasta < interior.hasta && SOLO_LINEAS.test(cola);
+  return { inicio, fin, lineaDesde, lineaHasta, cola, sola };
+}
+
+// El tramo de una fila con el contenido de cada celda vaciado: quedan la sangría y los separadores.
+function vaciada(texto: string, fila: FilaDeTabla, desde: number, hasta: number): string {
+  let resultado = texto.slice(desde, hasta);
+  for (const { contenido } of [...fila.celdas].reverse()) {
+    // Una celda vacía no tiene qué quitar, y su punto puede caer fuera del tramo.
+    if (contenido.hasta === contenido.desde) continue;
+    resultado = resultado.slice(0, contenido.desde - desde) + resultado.slice(contenido.hasta - desde);
+  }
+  return resultado;
+}
+
+// La fila nueva copia la sangría y el espaciado de la vecina.
+export function agregarFila(texto: string, interior: Rango, fila: number, lado: 'arriba' | 'abajo'): Edicion | null {
+  const vecina = simpleEn(texto, interior)?.filas[fila];
+  if (!vecina) return null;
+  const lugar = lugarDe(texto, interior, vecina);
+  // Junto a una última fila sin cerrar, la nueva cierra igual; y si va debajo, la vecina también.
+  const cierre = vecina.cierre ? '' : ' \\\\';
+
+  if (!lugar.sola) {
+    const copia = vaciada(texto, vecina, lugar.inicio, lugar.fin) + cierre;
+    return edicionCon(interior, [lado === 'abajo'
+      ? { desde: lugar.fin, hasta: lugar.fin, insertar: `${cierre} ${copia}` }
+      : { desde: lugar.inicio, hasta: lugar.inicio, insertar: `${copia} ` }]);
+  }
+
+  const nueva = vaciada(texto, vecina, lugar.lineaDesde, lugar.fin) + cierre + lugar.cola.replace(LINEA_DE_BOOKTABS, '');
+  if (lado === 'arriba') return edicionCon(interior, [{ desde: lugar.lineaDesde, hasta: lugar.lineaDesde, insertar: `${nueva}\n` }]);
+  // Dos cambios en el mismo punto no tienen orden definido: si coinciden, van en uno.
+  if (cierre === '' || lugar.fin === lugar.lineaHasta) {
+    return edicionCon(interior, [{ desde: lugar.lineaHasta, hasta: lugar.lineaHasta, insertar: `${cierre}\n${nueva}` }]);
+  }
+  return edicionCon(interior, [
+    { desde: lugar.fin, hasta: lugar.fin, insertar: cierre },
+    { desde: lugar.lineaHasta, hasta: lugar.lineaHasta, insertar: `\n${nueva}` },
+  ]);
+}
+
+export function borrarFila(texto: string, interior: Rango, fila: number): Edicion | null {
+  const tabla = simpleEn(texto, interior);
+  const elegida = tabla?.filas[fila];
+  if (!tabla || !elegida || tabla.filas.length === 1) return null;
+  const lugar = lugarDe(texto, interior, elegida);
+
+  if (lugar.sola && lugar.cola.replace(LINEA_DE_BOOKTABS, '') === lugar.cola) {
+    return edicionCon(interior, [{ desde: lugar.lineaDesde, hasta: lugar.lineaHasta + 1, insertar: '' }]);
+  }
+  let hasta = lugar.fin;
+  while (hasta < interior.hasta && esEspacio(texto[hasta])) hasta++;
+  return edicionCon(interior, [{ desde: lugar.inicio, hasta, insertar: '' }]);
+}
+
+// La columna nueva copia el tramo de la vecina y la tira de barras que la separa de ese lado.
+export function agregarColumna(texto: string, interior: Rango, columna: number, lado: 'izquierda' | 'derecha'): Edicion | null {
+  const tabla = simpleEn(texto, interior);
+  const vecina = tabla?.columnas[columna];
+  if (!tabla || !vecina) return null;
+  const tramo = texto.slice(vecina.spec.desde, vecina.spec.hasta);
+  const cambios: Edicion['cambios'] = [];
+
+  if (lado === 'derecha') {
+    let j = vecina.spec.hasta;
+    while (esTira(texto[j])) j++;
+    cambios.push({ desde: j, hasta: j, insertar: tramo + texto.slice(vecina.spec.hasta, j) });
+  } else {
+    let j = vecina.spec.desde;
+    while (esTira(texto[j - 1])) j--;
+    cambios.push({ desde: j, hasta: j, insertar: texto.slice(j, vecina.spec.desde) + tramo });
+  }
+  for (const fila of tabla.filas) {
+    const { contenido } = fila.celdas[columna];
+    const punto = lado === 'derecha' ? contenido.hasta : contenido.desde;
+    cambios.push({ desde: punto, hasta: punto, insertar: ' & ' });
+  }
+  return edicionCon(interior, cambios);
+}
+
+export function borrarColumna(texto: string, interior: Rango, columna: number): Edicion | null {
+  const tabla = simpleEn(texto, interior);
+  const elegida = tabla?.columnas[columna];
+  if (!tabla || !elegida || tabla.columnas.length === 1) return null;
+  const cambios: Edicion['cambios'] = [];
+
+  // Con su letra se va la tira de barras que la sigue; en la última columna, la que la precede.
+  if (columna < tabla.columnas.length - 1) {
+    let j = elegida.spec.hasta;
+    while (esTira(texto[j])) j++;
+    cambios.push({ desde: elegida.spec.desde, hasta: j, insertar: '' });
+  } else {
+    let j = elegida.spec.desde;
+    while (esTira(texto[j - 1])) j--;
+    cambios.push({ desde: j, hasta: elegida.spec.hasta, insertar: '' });
+  }
+
+  for (const fila of tabla.filas) {
+    const tope = fila.cierre?.desde ?? interior.hasta;
+    const trasEspacios = (j: number) => {
+      while (j < tope && esEspacio(texto[j])) j++;
+      return j;
+    };
+    const { contenido } = fila.celdas[columna];
+    if (columna === 0) cambios.push({ desde: contenido.desde, hasta: trasEspacios(fila.separadores[0] + 1), insertar: '' });
+    else if (columna < fila.separadores.length) cambios.push({ desde: fila.separadores[columna - 1], hasta: fila.separadores[columna], insertar: '' });
+    else cambios.push({ desde: fila.separadores[columna - 1], hasta: trasEspacios(contenido.hasta), insertar: '' });
+  }
+  return edicionCon(interior, cambios);
+}
+
+// null en una columna de ancho fijo (`p{…}`): cambiarle la letra le quitaría el ancho.
+export function alinearColumna(texto: string, interior: Rango, columna: number, alineacion: 'l' | 'c' | 'r'): Edicion | null {
+  const elegida = simpleEn(texto, interior)?.columnas[columna];
+  if (!elegida || elegida.alineacion === 'p') return null;
+  if (elegida.alineacion === alineacion) return edicionCon(interior, []);
+  return edicionCon(interior, [{ desde: elegida.spec.desde, hasta: elegida.spec.hasta, insertar: alineacion }]);
+}
