@@ -34,9 +34,12 @@ export type Tabla = TablaLeida | { clase: 'no-reconocida' };
 const ES_LETRA = /[a-zA-Z@]/;
 const ES_BLANCO = /\s/;
 const LINEAS = new Set(['hline', 'toprule', 'midrule', 'bottomrule']);
-// Comandos que cambian la forma de la tabla y el editor no sabe dibujar ni mantener. Dentro de
-// \verb un `&` es texto y no se puede contar como separador.
-const FUERA_DE_ALCANCE = new Set(['begin', 'end', 'multirow', 'cline', 'cmidrule', 'verb']);
+// Comandos que cambian la forma de la tabla y el editor no sabe dibujar ni mantener: otras
+// maneras de cerrar una fila o de trazar una línea, y texto literal, donde un `&` no separa.
+const FUERA_DE_ALCANCE = new Set([
+  'begin', 'end', 'multirow', 'cline', 'cmidrule', 'tabularnewline', 'cr', 'crcr', 'noalign',
+  'addlinespace', 'specialrule', 'hhline', 'rowcolor', 'verb', 'lstinline', 'mintinline',
+]);
 const MULTICOLUMNA = '\\multicolumn';
 
 // Índice de la llave que cierra la abierta en `abre`, sin pasar de `fin`; -1 si no cierra.
@@ -154,7 +157,10 @@ export function analizarTabla(texto: string, interior: Rango): Tabla {
       const k = saltearBlancos(texto, desde, fin);
       if (texto[k] !== '\\') break;
       const hasta = finDeNombre(texto, k, fin);
-      if (!LINEAS.has(texto.slice(k + 1, hasta))) break;
+      const nombre = texto.slice(k + 1, hasta);
+      if (!LINEAS.has(nombre)) break;
+      // Las líneas de booktabs aceptan un grosor entre corchetes, que no es texto de la fila.
+      if (nombre !== 'hline' && texto[saltearBlancos(texto, hasta, fin)] === '[') return noReconocida;
       lineaArriba = true;
       desde = hasta;
     }
@@ -175,7 +181,10 @@ export function analizarTabla(texto: string, interior: Rango): Tabla {
           if (FUERA_DE_ALCANCE.has(texto.slice(p + 1, hasta))) return noReconocida;
           p = hasta - 1;
         } else if (texto[p + 1] === '\\' && p + 1 < fin && profundidad === 0) {
-          if (texto[p + 2] === '[' || texto[p + 2] === '*') return noReconocida;
+          // LaTeX busca el `*` y el `[…]` de `\\` salteando espacios y saltos: una fila que
+          // empieza así pierde ese texto.
+          const siguiente = texto[saltearBlancos(texto, p + 2, fin)];
+          if (siguiente === '[' || siguiente === '*') return noReconocida;
           cierre = { desde: p, hasta: p + 2 };
         } else {
           p++;   // escape: \&, \%, \{, o un `\\` dentro de llaves
@@ -238,6 +247,9 @@ function simpleEn(texto: string, interior: Rango): TablaLeida | null {
 const edicionCon = (interior: Rango, cambios: Edicion['cambios']): Edicion =>
   ({ cambios, seleccion: { ancla: interior.desde, cabeza: interior.desde } });
 
+// Comandos cuyo primer argumento es una dirección, que se escribe sin escapar.
+const CON_DIRECCION = new Set(['url', 'href', 'path', 'nolinkurl']);
+
 // Lo escrito en una celda como LaTeX: sin los espacios de los bordes y con `&` y `%` escapados.
 function prepararCelda(escrito: string): { latex: string } | { motivo: string } {
   const recortado = escrito.trim();
@@ -245,18 +257,31 @@ function prepararCelda(escrito: string): { latex: string } | { motivo: string } 
   let profundidad = 0;
   let pesos = 0;
   let llavesDeMas = false;
+  // Profundidad de llaves desde la que se está dentro de una dirección (\url{…}); null si no.
+  let direccion: number | null = null;
   for (let j = 0; j < recortado.length; j++) {
     const c = recortado[j];
     if (c === '\\') {
-      // La barra y lo que escapa van juntos: así se sabe si un `&` ya venía escapado.
-      latex += c + (recortado[j + 1] ?? '');
-      j++;
+      if (ES_LETRA.test(recortado[j + 1] ?? '')) {
+        const hasta = finDeNombre(recortado, j, recortado.length);
+        if (direccion === null && CON_DIRECCION.has(recortado.slice(j + 1, hasta)) && recortado[hasta] === '{') direccion = profundidad + 1;
+        latex += recortado.slice(j, hasta);
+        j = hasta - 1;
+      } else {
+        // La barra y lo que escapa van juntos: así se sabe si un `&` ya venía escapado.
+        latex += c + (recortado[j + 1] ?? '');
+        j++;
+      }
       continue;
     }
     if (c === '{') profundidad++;
-    else if (c === '}' && --profundidad < 0) llavesDeMas = true;
-    else if (c === '$') pesos++;
-    latex += c === '&' || c === '%' ? `\\${c}` : c;
+    else if (c === '}') {
+      if (--profundidad < 0) llavesDeMas = true;
+      if (direccion !== null && profundidad < direccion) direccion = null;
+    } else if (c === '$') pesos++;
+    // En una dirección el `&` es parte de ella y LaTeX lo acepta tal cual.
+    const escapar = c === '%' || (c === '&' && direccion === null);
+    latex += escapar ? `\\${c}` : c;
   }
   if (llavesDeMas || profundidad !== 0) return { motivo: MOTIVOS.llaves };
   if (pesos % 2 !== 0) return { motivo: MOTIVOS.pesos };
@@ -271,7 +296,9 @@ export function editarCelda(texto: string, interior: Rango, fila: number, column
 
   const preparada = prepararCelda(escrito);
   if ('motivo' in preparada) return { tipo: 'error', motivo: preparada.motivo };
-  const { latex } = preparada;
+  // Al comienzo de una fila, LaTeX tomaría un `[` o un `*` como argumento del `\\` o de la línea
+  // que la precede: un grupo vacío delante lo deja como texto.
+  const latex = columna === 0 && /^[[*]/.test(preparada.latex) ? `{}${preparada.latex}` : preparada.latex;
   const { desde, hasta } = celda.contenido;
   if (latex === texto.slice(desde, hasta)) return { tipo: 'ok', edicion: edicionCon(interior, []) };
 
@@ -285,37 +312,68 @@ export function editarCelda(texto: string, interior: Rango, fila: number, column
   return { tipo: 'ok', edicion: edicionCon(interior, [{ desde, hasta, insertar: latex }]) };
 }
 
-// Lo que puede seguir a una fila en su línea sin ser otra fila.
+// Lo que puede acompañar a una fila en su línea sin ser otra fila.
 const SOLO_LINEAS = /^(?:[ \t]*\\(?:hline|toprule|midrule|bottomrule)(?![a-zA-Z@]))*[ \t]*$/;
 // En una rejilla el \hline es de cada fila; las líneas de booktabs son de la tabla.
 const LINEA_DE_BOOKTABS = /[ \t]*\\(?:toprule|midrule|bottomrule)(?![a-zA-Z@])/g;
+// Lo que separa dos filas de una rejilla: nada más que \hline.
+const SOLO_HLINE = /^(?:\s*\\hline(?![a-zA-Z@]))+\s*$/;
+const LINEA_CON_SOLO_HLINE = /^[ \t]*(?:\\hline(?![a-zA-Z@])[ \t]*)+$/;
 
 const esEspacio = (c: string | undefined) => c === ' ' || c === '\t';
 const esTira = (c: string | undefined) => c === '|' || c === ' ';
+const sinBooktabs = (tramo: string) => tramo.replace(LINEA_DE_BOOKTABS, '');
+const tiene = (tramo: string, linea: 'toprule' | 'bottomrule') => new RegExp(`\\\\${linea}(?![a-zA-Z@])`).test(tramo);
 
-interface LugarDeFila {
-  // Su primer carácter que no es espacio, y el final de su `\\` o de su último contenido.
-  inicio: number; fin: number;
-  // Las líneas que ocupa, sin el salto final.
-  lineaDesde: number; lineaHasta: number;
-  // Lo que sigue a la fila en su última línea.
-  cola: string;
-  // En sus líneas no hay otra fila ni nada ajeno al tabular.
-  sola: boolean;
-}
-
-function lugarDe(texto: string, interior: Rango, fila: FilaDeTabla): LugarDeFila {
+// El primer carácter de la fila que no es espacio, y el final de su `\\` o de su último contenido.
+function extremosDe(texto: string, interior: Rango, fila: FilaDeTabla): { inicio: number; fin: number } {
   let inicio = fila.desde;
   while (inicio < interior.hasta && ES_BLANCO.test(texto[inicio])) inicio++;
   let fin = fila.cierre?.hasta ?? interior.hasta;
   if (!fila.cierre) while (fin > inicio && ES_BLANCO.test(texto[fin - 1])) fin--;
+  return { inicio, fin };
+}
 
+// Una rejilla: después de cada fila hay un \hline, y nada más.
+function esRejilla(texto: string, interior: Rango, tabla: TablaLeida): boolean {
+  return tabla.filas.every((fila, n) => {
+    const siguiente = tabla.filas[n + 1];
+    const hasta = siguiente ? extremosDe(texto, interior, siguiente).inicio : interior.hasta;
+    return SOLO_HLINE.test(texto.slice(extremosDe(texto, interior, fila).fin, hasta));
+  });
+}
+
+interface LugarDeFila {
+  inicio: number; fin: number;
+  // Las líneas que ocupa la fila, sin el salto final.
+  lineaDesde: number; lineaHasta: number;
+  // Lo que la precede y lo que la sigue en esas líneas: espacios y líneas, si está sola.
+  cabeza: string; cola: string;
+  // En una rejilla, las líneas siguientes que son solo su \hline; empieza con el salto. '' si no hay.
+  propias: string;
+  // En sus líneas no hay otra fila ni nada ajeno al tabular.
+  sola: boolean;
+}
+
+function lugarDe(texto: string, interior: Rango, tabla: TablaLeida, indice: number): LugarDeFila {
+  const { inicio, fin } = extremosDe(texto, interior, tabla.filas[indice]);
   const lineaDesde = texto.lastIndexOf('\n', inicio - 1) + 1;
   const salto = texto.indexOf('\n', fin);
   const lineaHasta = salto === -1 ? texto.length : salto;
+  const cabeza = texto.slice(lineaDesde, inicio);
   const cola = texto.slice(fin, Math.min(lineaHasta, interior.hasta));
-  const sola = texto.slice(lineaDesde, inicio).trim() === '' && lineaHasta < interior.hasta && SOLO_LINEAS.test(cola);
-  return { inicio, fin, lineaDesde, lineaHasta, cola, sola };
+  const sola = SOLO_LINEAS.test(cabeza) && lineaHasta < interior.hasta && SOLO_LINEAS.test(cola);
+
+  // El \hline de una fila de rejilla puede estar en la línea siguiente: va y viene con ella.
+  let hasta = lineaHasta;
+  if (sola && cabeza.trim() === '' && cola.trim() === '' && esRejilla(texto, interior, tabla)) {
+    for (;;) {
+      const siguiente = texto.indexOf('\n', hasta + 1);
+      if (siguiente === -1 || siguiente >= interior.hasta || !LINEA_CON_SOLO_HLINE.test(texto.slice(hasta + 1, siguiente))) break;
+      hasta = siguiente;
+    }
+  }
+  return { inicio, fin, lineaDesde, lineaHasta, cabeza, cola, propias: texto.slice(lineaHasta, hasta), sola };
 }
 
 // El tramo de una fila con el contenido de cada celda vaciado: quedan la sangría y los separadores.
@@ -329,45 +387,69 @@ function vaciada(texto: string, fila: FilaDeTabla, desde: number, hasta: number)
   return resultado;
 }
 
+// La edición, solo si deja una tabla simple con esa cantidad de filas y columnas: una operación
+// que le cambiaría la forma a la tabla no se hace.
+function comprobada(texto: string, interior: Rango, cambios: Edicion['cambios'], filas: number, columnas: number): Edicion | null {
+  let resultado = texto;
+  let diferencia = 0;
+  for (const c of [...cambios].sort((a, b) => b.desde - a.desde)) {
+    resultado = resultado.slice(0, c.desde) + c.insertar + resultado.slice(c.hasta);
+    diferencia += c.insertar.length - (c.hasta - c.desde);
+  }
+  const despues = simpleEn(resultado, { desde: interior.desde, hasta: interior.hasta + diferencia });
+  return despues && despues.filas.length === filas && despues.columnas.length === columnas ? edicionCon(interior, cambios) : null;
+}
+
 // La fila nueva copia la sangría y el espaciado de la vecina.
 export function agregarFila(texto: string, interior: Rango, fila: number, lado: 'arriba' | 'abajo'): Edicion | null {
-  const vecina = simpleEn(texto, interior)?.filas[fila];
-  if (!vecina) return null;
-  const lugar = lugarDe(texto, interior, vecina);
+  const tabla = simpleEn(texto, interior);
+  const vecina = tabla?.filas[fila];
+  if (!tabla || !vecina) return null;
+  const lugar = lugarDe(texto, interior, tabla, fila);
   // Junto a una última fila sin cerrar, la nueva cierra igual; y si va debajo, la vecina también.
   const cierre = vecina.cierre ? '' : ' \\\\';
+  const copia = vaciada(texto, vecina, lugar.inicio, lugar.fin) + cierre;
+  const sangria = /^[ \t]*/.exec(lugar.cabeza)?.[0] ?? '';
+  let cambios: Edicion['cambios'];
 
   if (!lugar.sola) {
-    const copia = vaciada(texto, vecina, lugar.inicio, lugar.fin) + cierre;
-    return edicionCon(interior, [lado === 'abajo'
+    // Varias filas en una línea: la nueva va en esa misma línea.
+    cambios = [lado === 'abajo'
       ? { desde: lugar.fin, hasta: lugar.fin, insertar: `${cierre} ${copia}` }
-      : { desde: lugar.inicio, hasta: lugar.inicio, insertar: `${copia} ` }]);
+      : { desde: lugar.inicio, hasta: lugar.inicio, insertar: `${copia} ` }];
+  } else if (lado === 'abajo' && tiene(lugar.cola, 'bottomrule')) {
+    // Las líneas de borde quedan en su lugar: la fila nueva entra antes del \bottomrule…
+    cambios = [{ desde: lugar.fin, hasta: lugar.fin, insertar: `\n${sangria}${copia}` }];
+  } else if (lado === 'arriba' && tiene(lugar.cabeza, 'toprule')) {
+    // …y después del \toprule.
+    cambios = [{ desde: lugar.inicio, hasta: lugar.inicio, insertar: `${copia}\n${sangria}` }];
+  } else {
+    const nueva = sinBooktabs(lugar.cabeza) + copia + sinBooktabs(lugar.cola) + lugar.propias;
+    const final = lugar.lineaHasta + lugar.propias.length;
+    if (lado === 'arriba') cambios = [{ desde: lugar.lineaDesde, hasta: lugar.lineaDesde, insertar: `${nueva}\n` }];
+    // Dos cambios en el mismo punto no tienen orden definido: si coinciden, van en uno.
+    else if (cierre === '' || lugar.fin === final) cambios = [{ desde: final, hasta: final, insertar: `${cierre}\n${nueva}` }];
+    else cambios = [{ desde: lugar.fin, hasta: lugar.fin, insertar: cierre }, { desde: final, hasta: final, insertar: `\n${nueva}` }];
   }
-
-  const nueva = vaciada(texto, vecina, lugar.lineaDesde, lugar.fin) + cierre + lugar.cola.replace(LINEA_DE_BOOKTABS, '');
-  if (lado === 'arriba') return edicionCon(interior, [{ desde: lugar.lineaDesde, hasta: lugar.lineaDesde, insertar: `${nueva}\n` }]);
-  // Dos cambios en el mismo punto no tienen orden definido: si coinciden, van en uno.
-  if (cierre === '' || lugar.fin === lugar.lineaHasta) {
-    return edicionCon(interior, [{ desde: lugar.lineaHasta, hasta: lugar.lineaHasta, insertar: `${cierre}\n${nueva}` }]);
-  }
-  return edicionCon(interior, [
-    { desde: lugar.fin, hasta: lugar.fin, insertar: cierre },
-    { desde: lugar.lineaHasta, hasta: lugar.lineaHasta, insertar: `\n${nueva}` },
-  ]);
+  return comprobada(texto, interior, cambios, tabla.filas.length + 1, tabla.columnas.length);
 }
 
 export function borrarFila(texto: string, interior: Rango, fila: number): Edicion | null {
   const tabla = simpleEn(texto, interior);
-  const elegida = tabla?.filas[fila];
-  if (!tabla || !elegida || tabla.filas.length === 1) return null;
-  const lugar = lugarDe(texto, interior, elegida);
+  if (!tabla?.filas[fila] || tabla.filas.length === 1) return null;
+  const lugar = lugarDe(texto, interior, tabla, fila);
+  const conBorde = sinBooktabs(lugar.cabeza) !== lugar.cabeza || sinBooktabs(lugar.cola) !== lugar.cola;
+  let cambio: Edicion['cambios'][number];
 
-  if (lugar.sola && lugar.cola.replace(LINEA_DE_BOOKTABS, '') === lugar.cola) {
-    return edicionCon(interior, [{ desde: lugar.lineaDesde, hasta: lugar.lineaHasta + 1, insertar: '' }]);
+  if (lugar.sola && !conBorde) {
+    // Con la fila se van sus líneas enteras, y su \hline si es una rejilla.
+    cambio = { desde: lugar.lineaDesde, hasta: lugar.lineaHasta + lugar.propias.length + 1, insertar: '' };
+  } else {
+    let hasta = lugar.fin;
+    while (hasta < interior.hasta && esEspacio(texto[hasta])) hasta++;
+    cambio = { desde: lugar.inicio, hasta, insertar: '' };
   }
-  let hasta = lugar.fin;
-  while (hasta < interior.hasta && esEspacio(texto[hasta])) hasta++;
-  return edicionCon(interior, [{ desde: lugar.inicio, hasta, insertar: '' }]);
+  return comprobada(texto, interior, [cambio], tabla.filas.length - 1, tabla.columnas.length);
 }
 
 // La columna nueva copia el tramo de la vecina y la tira de barras que la separa de ese lado.
@@ -392,7 +474,7 @@ export function agregarColumna(texto: string, interior: Rango, columna: number, 
     const punto = lado === 'derecha' ? contenido.hasta : contenido.desde;
     cambios.push({ desde: punto, hasta: punto, insertar: ' & ' });
   }
-  return edicionCon(interior, cambios);
+  return comprobada(texto, interior, cambios, tabla.filas.length, tabla.columnas.length + 1);
 }
 
 export function borrarColumna(texto: string, interior: Rango, columna: number): Edicion | null {
@@ -419,11 +501,19 @@ export function borrarColumna(texto: string, interior: Rango, columna: number): 
       return j;
     };
     const { contenido } = fila.celdas[columna];
-    if (columna === 0) cambios.push({ desde: contenido.desde, hasta: trasEspacios(fila.separadores[0] + 1), insertar: '' });
-    else if (columna < fila.separadores.length) cambios.push({ desde: fila.separadores[columna - 1], hasta: fila.separadores[columna], insertar: '' });
-    else cambios.push({ desde: fila.separadores[columna - 1], hasta: trasEspacios(contenido.hasta), insertar: '' });
+    if (columna === 0) {
+      // La celda que pasa a ser la primera no puede empezar con `[` ni `*`: LaTeX los tomaría
+      // como argumento del `\\` o de la línea de arriba.
+      const primera = fila.celdas[1].contenido;
+      const insertar = /^[[*]/.test(texto.slice(primera.desde, primera.hasta)) ? '{}' : '';
+      cambios.push({ desde: contenido.desde, hasta: trasEspacios(fila.separadores[0] + 1), insertar });
+    } else if (columna < fila.separadores.length) {
+      cambios.push({ desde: fila.separadores[columna - 1], hasta: fila.separadores[columna], insertar: '' });
+    } else {
+      cambios.push({ desde: fila.separadores[columna - 1], hasta: trasEspacios(contenido.hasta), insertar: '' });
+    }
   }
-  return edicionCon(interior, cambios);
+  return comprobada(texto, interior, cambios, tabla.filas.length, tabla.columnas.length - 1);
 }
 
 // null en una columna de ancho fijo (`p{…}`): cambiarle la letra le quitaría el ancho.

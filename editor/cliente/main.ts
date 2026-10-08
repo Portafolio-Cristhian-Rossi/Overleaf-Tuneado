@@ -3,6 +3,7 @@ import 'katex/dist/katex.min.css';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api, urlDeImagen } from './api';
 import { darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
+import { confirmarCeldaAbierta, formatoEnCeldaAbierta } from './bloques/edicionTabla';
 import { agregarPaquete, cambiarRutaDeImagen } from './comandos';
 import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
@@ -68,9 +69,19 @@ const selectorNivel = el('select', {
 }, ...NIVELES.map(([texto]) => el('option', {}, texto)));
 barra.zonaFormato.append(
   selectorNivel,
-  el('button', { type: 'button', title: 'Negrita (Ctrl+B)', 'aria-label': 'Negrita', alClick: () => darFormato(editor.vista, 'textbf') }, el('b', {}, 'N')),
-  el('button', { type: 'button', title: 'Cursiva (Ctrl+I)', 'aria-label': 'Cursiva', alClick: () => darFormato(editor.vista, 'textit') }, el('i', {}, 'C')),
+  botonDeFormato('textbf', 'Negrita (Ctrl+B)', 'Negrita', el('b', {}, 'N')),
+  botonDeFormato('textit', 'Cursiva (Ctrl+I)', 'Cursiva', el('i', {}, 'C')),
 );
+
+// Negrita y cursiva actúan donde se está escribiendo: en el texto o en la celda abierta de una
+// tabla. El botón no se queda con el foco, para no cerrar esa celda antes de darle formato.
+function botonDeFormato(comando: 'textbf' | 'textit', titulo: string, nombre: string, cara: HTMLElement): HTMLButtonElement {
+  return el('button', {
+    type: 'button', title: titulo, 'aria-label': nombre,
+    alMousedown: (evento: Event) => evento.preventDefault(),
+    alClick: () => { if (!formatoEnCeldaAbierta(comando)) darFormato(editor.vista, comando); },
+  }, cara);
+}
 
 // Las mismas plantillas que el menú "/", a la vista: figura, tabla, ecuación, cita…
 const botonInsertar = el('button', {
@@ -295,11 +306,16 @@ function rutaInicial(): string | null {
 }
 
 // Al volver a la pestaña se comprueba si el disco cambió; al dejarla, se guarda de inmediato.
+// Lo que esté a medio escribir en una celda de una tabla entra al documento antes de guardar.
+function guardarAlSalir(): void {
+  confirmarCeldaAbierta();
+  void editor.guardarAhora(true);
+}
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') void editor.guardarAhora(true);
+  if (document.visibilityState === 'hidden') guardarAlSalir();
   else void actualizarTodo().then(() => sincronizacion.revisar()).catch(() => undefined);
 });
-window.addEventListener('pagehide', () => { void editor.guardarAhora(true); });
+window.addEventListener('pagehide', guardarAlSalir);
 window.addEventListener('beforeunload', (e) => {
   if (editor.hayCambiosSinGuardar()) e.preventDefault();
 });

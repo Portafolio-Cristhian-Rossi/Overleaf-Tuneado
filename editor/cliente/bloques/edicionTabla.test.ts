@@ -1,8 +1,10 @@
 import { history, undo } from '@codemirror/commands';
 import { EditorState } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
-import { editarCelda } from '../../compartido/tabla';
-import { celdaVecina, salidaDeTabla, tablaEn, transaccionDeTabla, type Operacion } from './edicionTabla';
+import { editarCelda, MOTIVOS } from '../../compartido/tabla';
+import {
+  celdaVecina, formatoEnCampo, resolverCelda, salidaDeTabla, tablaEn, transaccionDeTabla, valorDeCampo, type Operacion,
+} from './edicionTabla';
 
 const R = String.raw;
 const TABULAR = R`\begin{tabular}{ll}
@@ -58,6 +60,60 @@ describe('tablaEn', () => {
     expect(tablaEn(T, 0)).toBeNull();
     const combinada = R`\begin{tabular}{ll}\multicolumn{2}{c}{Total} \\\end{tabular}`;
     expect(tablaEn(combinada, 0)).toBeNull();
+  });
+});
+
+describe('valorDeCampo', () => {
+  // El campo es de una sola línea: sin esto el navegador pegaría las palabras de dos líneas.
+  it('cada salto de línea, con su sangría, es un espacio', () => {
+    expect(valorDeCampo('Un texto largo que\nsigue en otra línea')).toBe('Un texto largo que sigue en otra línea');
+    expect(valorDeCampo(`texto ${R`\newline`}\n    más`)).toBe(R`texto \newline más`);
+    expect(valorDeCampo('sin saltos')).toBe('sin saltos');
+  });
+});
+
+describe('resolverCelda', () => {
+  const LARGA = R`\begin{tabular}{lp{6cm}}
+  Foro & Un texto largo que
+sigue en otra línea \\
+  Web & \url{http://a.com/?x=1&y=2} \\
+\end{tabular}`;
+  const resolver = (t: string, celda: { fila: number; columna: number }, inicial: string, valor: string, fuente = t) =>
+    resolverCelda(t, 0, fuente, celda, inicial, valor);
+
+  it('salir de una celda sin escribir no cambia nada, aunque tenga varias líneas o un & entre llaves', () => {
+    const inicial = valorDeCampo('Un texto largo que\nsigue en otra línea');
+    expect(resolver(LARGA, { fila: 0, columna: 1 }, inicial, inicial)).toEqual({ tipo: 'nada' });
+    const url = R`\url{http://a.com/?x=1&y=2}`;
+    expect(resolver(LARGA, { fila: 1, columna: 1 }, url, url)).toEqual({ tipo: 'nada' });
+  });
+
+  it('lo escrito se aplica sobre esa celda', () => {
+    const r = resolver(LARGA, { fila: 0, columna: 0 }, 'Foro', 'Blog');
+    expect(r).toMatchObject({ tipo: 'aplicar', edicion: { cambios: [{ insertar: 'Blog' }] } });
+  });
+
+  it('escribir lo mismo que ya decía no es un cambio', () => {
+    expect(resolver(LARGA, { fila: 0, columna: 0 }, 'Foro', ' Foro ')).toEqual({ tipo: 'nada' });
+  });
+
+  it('un texto que rompería la tabla es un error, con su motivo', () => {
+    expect(resolver(LARGA, { fila: 0, columna: 0 }, 'Foro', 'a } b')).toEqual({ tipo: 'error', motivo: MOTIVOS.llaves });
+  });
+
+  // El campo pudo quedar huérfano: la tabla se redibujó o se abrió otro archivo.
+  it('si la tabla ya no es la que se abrió, no se aplica', () => {
+    const otra = LARGA.replace('Web', 'Red');
+    expect(resolver(otra, { fila: 0, columna: 0 }, 'Foro', 'Blog', LARGA)).toEqual({ tipo: 'error', motivo: MOTIVOS.noEsta });
+    expect(resolverCelda(`x${LARGA}`, 0, LARGA, { fila: 0, columna: 0 }, 'Foro', 'Blog')).toEqual({ tipo: 'error', motivo: MOTIVOS.noEsta });
+  });
+});
+
+describe('formatoEnCampo', () => {
+  it('envuelve lo seleccionado en el campo, y lo desenvuelve si ya lo estaba', () => {
+    expect(formatoEnCampo('hola mundo', 5, 10, 'textbf')).toEqual({ valor: R`hola \textbf{mundo}`, desde: 13, hasta: 18 });
+    expect(formatoEnCampo(R`hola \textbf{mundo}`, 13, 18, 'textbf')).toEqual({ valor: 'hola mundo', desde: 5, hasta: 10 });
+    expect(formatoEnCampo('a', 1, 1, 'textit')).toEqual({ valor: R`a\textit{}`, desde: 9, hasta: 9 });
   });
 });
 

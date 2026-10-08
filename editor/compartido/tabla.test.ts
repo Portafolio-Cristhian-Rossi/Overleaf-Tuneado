@@ -94,6 +94,21 @@ describe('analizarTabla', () => {
     ['comentario', con(R`a & b \\ % nota`)],
     // Dentro de \verb un & es texto: contarlo como separador dibujaría dos celdas donde hay una.
     ['\\verb', con(R`\verb|a&b| \\`)],
+    // LaTeX busca el argumento de `\\` y de las líneas de booktabs salteando espacios y saltos.
+    ['\\\\ y, tras un espacio, su argumento', con(`${R`a & b \\ [2pt]`}\n${R`c & d \\`}`)],
+    ['una fila que empieza con [ tras un \\\\', con(`${R`a & b \\`}\n${R`[1] & d \\`}`)],
+    ['una fila que empieza con * tras un \\\\', con(`${R`a & b \\`}\n${R`*nota & d \\`}`)],
+    ['\\toprule con grosor', con(`${R`\toprule[1pt]`}\n${R`a & b \\`}`)],
+    ['una fila que empieza con [ tras \\midrule', con(`${R`a & b \\`}\n${R`\midrule`}\n${R`[CLS] & d \\`}`)],
+    ['\\tabularnewline', con(`${R`a & b \\`}\n${R`c & d \tabularnewline`}`)],
+    ['\\addlinespace', con(`${R`a & b \\`}\n${R`\addlinespace`}\n${R`c & d \\`}`)],
+    ['\\rowcolor', con(R`\rowcolor{gray} a & b \\`)],
+    ['\\noalign', con(`${R`a & b \\`}\n${R`\noalign{\smallskip}`}\n${R`c & d \\`}`)],
+    ['\\hhline', con(`${R`a & b \\ \hhline{==}`}\n${R`c & d \\`}`)],
+    ['\\specialrule', con(`${R`a & b \\ \specialrule{1pt}{0pt}{0pt}`}\n${R`c & d \\`}`)],
+    ['\\cr', con(R`a & b \cr`)],
+    ['\\lstinline con un & adentro', con(R`x & \lstinline|a&b| \\`, 'lll')],
+    ['\\mintinline', con(R`\mintinline{python}|a| & b \\`)],
     ['otro entorno adentro', con(R`\begin{itemize}\item a\end{itemize} & b \\`)],
     ['un tabular adentro', R`\begin{tabular}{l}\begin{tabular}{l}x\end{tabular} \\ \end{tabular}`],
     ['llave de más', con(R`a } & b \\`)],
@@ -157,6 +172,32 @@ describe('editarCelda', () => {
     [R`\textbf{a & b}`, R`\textbf{a \& b}`], [R`$k$ y \$5`, R`$k$ y \$5`], ['<b>x</b>', '<b>x</b>'],
   ])('escribir %j guarda %j', (escrito, guardado) => {
     expect(editado(T, 0, 0, escrito)).toBe(cambiar('Sitio', guardado));
+  });
+
+  // Dentro de una dirección el & es parte de ella: escaparlo la rompe.
+  it.each([
+    [R`\url{http://a.com/?x=1&y=2}`, R`\url{http://a.com/?x=1&y=2}`],
+    [R`\href{http://a.com/?x=1&y=2}{R&D}`, R`\href{http://a.com/?x=1&y=2}{R\&D}`],
+    [R`\path{a&b} y c&d`, R`\path{a&b} y c\&d`],
+    [R`\nolinkurl{a&b}`, R`\nolinkurl{a&b}`],
+  ])('escribir %j guarda %j', (escrito, guardado) => {
+    expect(editado(T, 0, 0, escrito)).toBe(cambiar('Sitio', guardado));
+  });
+
+  it('pasar por una celda con un & entre llaves no la cambia', () => {
+    const conUrl = cambiar('1200', R`\url{http://a.com/?x=1&y=2}`);
+    expect(editar(conUrl, 1, 1, R`\url{http://a.com/?x=1&y=2}`)).toMatchObject({ tipo: 'ok', edicion: { cambios: [] } });
+  });
+
+  // Al comienzo de una fila, LaTeX tomaría un [ o un * como argumento del \\ o de la línea de arriba.
+  it.each([['[CLS]', '{}[CLS]'], ['*nota', '{}*nota'], ['{}[1]', '{}[1]']])('en la primera celda, %j se guarda como %j', (escrito, guardado) => {
+    expect(editado(T, 0, 0, escrito)).toBe(cambiar('Sitio', guardado));
+    expect(editado(T, 1, 0, escrito)).toBe(cambiar('Foro', guardado));
+  });
+
+  it('en las demás celdas un [ o un * quedan como se escribieron', () => {
+    expect(editado(T, 0, 1, '[0, 1]')).toBe(cambiar('Documentos', '[0, 1]'));
+    expect(editado(T, 1, 1, '*')).toBe(cambiar('1200', '*'));
   });
 
   it('vaciar una celda y volver a llenarla conserva el espaciado', () => {
@@ -311,6 +352,73 @@ describe('alinearColumna', () => {
   });
 });
 
+// Rejillas con el \hline en una línea aparte, o al comienzo de la línea de cada fila.
+const PROPIA = R`\begin{tabular}{|l|c|}
+\hline
+a & b \\
+\hline
+c & d \\
+\hline
+\end{tabular}`;
+const DELANTE = R`\begin{tabular}{|l|c|}
+\hline a & b \\
+\hline c & d \\
+\hline
+\end{tabular}`;
+
+describe('filas en una rejilla', () => {
+  const a = `${R`a & b \\`}\n${R`\hline`}\n`;
+  const c = `${R`c & d \\`}\n${R`\hline`}\n`;
+  const nueva = `${R` &  \\`}\n${R`\hline`}\n`;
+
+  it('con el \\hline en su línea, la fila nueva lleva el suyo', () => {
+    expect(op(PROPIA, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBe(cambiar(a, `${a}${nueva}`, PROPIA));
+    expect(op(PROPIA, (t, i) => agregarFila(t, i, 1, 'arriba'))).toBe(cambiar(a, `${a}${nueva}`, PROPIA));
+    expect(op(PROPIA, (t, i) => agregarFila(t, i, 0, 'arriba'))).toBe(cambiar(a, `${nueva}${a}`, PROPIA));
+    expect(op(PROPIA, (t, i) => agregarFila(t, i, 1, 'abajo'))).toBe(cambiar(c, `${c}${nueva}`, PROPIA));
+  });
+
+  it('con el \\hline en su línea, la fila borrada se lleva el suyo', () => {
+    expect(op(PROPIA, (t, i) => borrarFila(t, i, 0))).toBe(cambiar(a, '', PROPIA));
+    expect(op(PROPIA, (t, i) => borrarFila(t, i, 1))).toBe(cambiar(c, '', PROPIA));
+  });
+
+  it('con el \\hline al comienzo de la línea, va y viene con su fila', () => {
+    const fila = `${R`\hline c & d \\`}\n`;
+    const esperado = cambiar(fila, `${R`\hline  &  \\`}\n${fila}`, DELANTE);
+    expect(op(DELANTE, (t, i) => agregarFila(t, i, 1, 'arriba'))).toBe(esperado);
+    expect(op(DELANTE, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBe(esperado);
+    expect(op(DELANTE, (t, i) => borrarFila(t, i, 0))).toBe(cambiar(`${R`\hline a & b \\`}\n`, '', DELANTE));
+  });
+
+  it('una sola línea bajo el encabezado no es una rejilla: no se copia', () => {
+    const encabezado = con(`${R`Sitio & Documentos \\`}\n${R`\hline`}\n${R`Foro & 1200 \\`}`);
+    const sitio = `${R`Sitio & Documentos \\`}\n`;
+    expect(op(encabezado, (t, i) => agregarFila(t, i, 0, 'abajo'))).toBe(cambiar(sitio, `${sitio}${R` &  \\`}\n`, encabezado));
+  });
+});
+
+describe('filas junto a las líneas de borde de booktabs', () => {
+  it('nunca se inserta después de \\bottomrule ni antes de \\toprule', () => {
+    const abajo = con(`${R`a & b \\ \midrule`}\n${R`c & d \\ \bottomrule`}`);
+    expect(op(abajo, (t, i) => agregarFila(t, i, 1, 'abajo'))).toBe(con(`${R`a & b \\ \midrule`}\n${R`c & d \\`}\n${R` &  \\ \bottomrule`}`));
+    const arriba = con(`${R`\toprule a & b \\`}\n${R`c & d \\`}`);
+    expect(op(arriba, (t, i) => agregarFila(t, i, 0, 'arriba'))).toBe(con(`${R`\toprule  &  \\`}\n${R`a & b \\`}\n${R`c & d \\`}`));
+  });
+});
+
+describe('columnas: lo que queda sigue siendo la misma tabla', () => {
+  it('si al borrar la primera columna una fila empezaría con [ o *, se le antepone un grupo vacío', () => {
+    const t = con(`${R`a & [0,1] \\`}\n${R`b & *x \\`}\n${R`c & d \\`}`);
+    expect(op(t, (x, i) => borrarColumna(x, i, 0))).toBe(con(`${R`{}[0,1] \\`}\n${R`{}*x \\`}\n${R`d \\`}`, 'l'));
+  });
+
+  it('una operación que dejaría la tabla con otra forma no se hace', () => {
+    // La última fila, sin cerrar, quedaría vacía: desaparecería.
+    expect(nulo(con(`${R`a & b \\`}\nz & `), (t, i) => borrarColumna(t, i, 0))).toBeNull();
+  });
+});
+
 describe('las operaciones, en conjunto', () => {
   it('ninguna toca nada fuera del tabular, y la tabla sigue siendo simple', () => {
     const afuera = (t: string) => {
@@ -322,7 +430,7 @@ describe('las operaciones, en conjunto', () => {
       (t, i) => agregarColumna(t, i, 0, 'izquierda'), (t, i) => agregarColumna(t, i, 1, 'derecha'),
       (t, i) => borrarColumna(t, i, 0), (t, i) => borrarColumna(t, i, 1), (t, i) => alinearColumna(t, i, 0, 'c'),
     ];
-    for (const base of [T, `x\n${REJILLA}\ny`, `x ${JUNTAS} y`, `x\n${ABIERTA}\ny`, `x\n${MEDIA}\ny`]) {
+    for (const base of [T, `x\n${REJILLA}\ny`, `x ${JUNTAS} y`, `x\n${ABIERTA}\ny`, `x\n${MEDIA}\ny`, `x\n${PROPIA}\ny`, `x\n${DELANTE}\ny`]) {
       for (const operacion of operaciones) {
         const nuevo = op(base, operacion);
         expect(afuera(nuevo)).toEqual(afuera(base));

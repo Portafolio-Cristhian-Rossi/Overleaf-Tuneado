@@ -4,7 +4,7 @@ import { analizar, type Elemento, type Rango } from '../../compartido/analizador
 import { partesDeTabla } from '../../compartido/flotante';
 import { analizarTabla, type Alineacion, type TablaLeida } from '../../compartido/tabla';
 import { el } from '../pantalla/dom';
-import { abrirCelda, type Celda } from './edicionTabla';
+import { abrirCelda, soltarCeldaDe, type Celda } from './edicionTabla';
 import { dibujarFormula } from './formula';
 import { abrirMenuDeCelda } from './menuTabla';
 import { Pastilla } from './pastilla';
@@ -141,6 +141,9 @@ class TablaDibujada extends WidgetType {
     nodo.append(cuerpo, el('button', { type: 'button', clase: 'cm-ver-codigo', alClick: verCodigo }, 'Ver código'));
     return nodo;
   }
+
+  // El dibujo deja la pantalla: si tenía una celda abierta, lo escrito ahí no se pierde.
+  destroy(nodo: HTMLElement): void { soltarCeldaDe(nodo); }
 
   // Los clics y las teclas son de la tabla (sus celdas, su menú): no mueven el cursor del editor.
   // El arrastre de archivos sí llega: si no, soltar uno sobre la tabla lo abriría en la pestaña.
