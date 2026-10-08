@@ -203,6 +203,28 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
 - Una figura armada de otra forma (por ejemplo, con dos imágenes) se ve como
   código y se edita así.
 
+**Tablas.** Una tabla se ve como tabla, con su epígrafe ("Tabla 2.1: …").
+
+- Para insertar una: `/` → Tabla. Completá los campos y salí con las flechas:
+  al sacar el cursor, queda dibujada.
+- Para escribir en una celda, hacé clic sobre ella. `Tab` pasa a la celda
+  siguiente, `Shift+Tab` a la anterior y `Enter` a la de abajo. `Escape`
+  descarta lo que escribiste en esa celda.
+- En cada celda, al pasar el cursor, aparece un botón `⋯` (también sirve el
+  clic derecho): inserta o borra filas y columnas y cambia la alineación de
+  la columna.
+- En una celda podés usar negrita (`\textbf{…}`), fórmulas (`$k$`) y citas.
+  Si escribís `&` o `%`, el editor los guarda como `\&` y `\%`, que es como
+  los pide LaTeX.
+- Si una celda se pone roja, lo que escribiste rompería la tabla (casi
+  siempre, una llave o un `$` sin cerrar) y dice por qué. No se guarda hasta
+  que lo corrijas o salgas con `Escape`.
+- El epígrafe se escribe ahí mismo, como el de una figura.
+- Una tabla con celdas combinadas (`\multicolumn`) se ve dibujada pero no se
+  edita por celdas: un clic muestra su código. Una tabla armada de otra forma
+  se ve como código, como siempre.
+- *Ver código*, al pasar el cursor por la tabla, muestra su LaTeX.
+
 **Código.** `/` → Bloque de código inserta un recuadro donde escribís el
 código tal cual. El corrector no lo revisa.
 
@@ -257,8 +279,7 @@ terminar.
   sigue leyendo en la web de Overleaf.
 - **No revisa el estilo ni la redacción.** Marca errores de ortografía y
   gramática, no si un párrafo está bien escrito.
-- **Todavía no dibuja las tablas ni busca citas.** Las tablas se ven y se
-  editan como código, y las citas se escriben con su clave.
+- **Todavía no busca citas.** Las citas se escriben con su clave.
 
 ## 7. Opciones de `config.json`
 
