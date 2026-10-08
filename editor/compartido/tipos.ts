@@ -2,6 +2,13 @@ import type { ClaseDeObjeto } from './numeracion';
 
 export type FinDeLinea = '\r\n' | '\n';
 
+// Una edición es siempre texto LaTeX que se inserta o se quita. Las posiciones de `cambios`
+// refieren al texto original; las de `seleccion`, al texto ya editado.
+export interface Edicion {
+  cambios: { desde: number; hasta: number; insertar: string }[];
+  seleccion: { ancla: number; cabeza: number };
+}
+
 export interface Config {
   informe: string; build: string;      // rutas absolutas
   principal: string; puerto: number; compilarAlGuardar: boolean;

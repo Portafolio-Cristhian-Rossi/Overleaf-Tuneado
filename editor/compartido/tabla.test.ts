@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { leerFixture } from '../pruebas/ayudas/temporales';
 import { analizar, type Rango } from './analizador';
-import { analizarTabla, type TablaLeida } from './tabla';
+import { analizarTabla, editarCelda, MOTIVOS, type TablaLeida } from './tabla';
+import type { Edicion } from './tipos';
 
 const R = String.raw;
 
@@ -117,4 +118,61 @@ describe('analizarTabla', () => {
     'no falla con el interior %j', (interior) => {
       expect(() => analizarTabla(interior, { desde: 0, hasta: interior.length })).not.toThrow();
     });
+});
+
+// Aplica los cambios de una edición, como el `aplicar` de comandos.test.ts.
+function aplicar(texto: string, e: Edicion): string {
+  let resultado = texto;
+  for (const c of [...e.cambios].sort((a, b) => b.desde - a.desde)) resultado = resultado.slice(0, c.desde) + c.insertar + resultado.slice(c.hasta);
+  return resultado;
+}
+
+const T = `x\n  ${PLANTILLA}\ny`;
+// `replace` con función: un `$` en el reemplazo no se interpreta.
+const cambiar = (de: string, a: string, t = T) => t.replace(de, () => a);
+const editar = (t: string, fila: number, columna: number, escrito: string) => editarCelda(t, interiores(t)[0], fila, columna, escrito);
+const editado = (t: string, fila: number, columna: number, escrito: string) => {
+  const r = editar(t, fila, columna, escrito);
+  if (r.tipo !== 'ok') throw new Error(r.motivo);
+  return aplicar(t, r.edicion);
+};
+
+describe('editarCelda', () => {
+  it('cambia solo el contenido de esa celda', () => {
+    expect(editado(T, 0, 0, 'Página')).toBe(cambiar('Sitio', 'Página'));
+    expect(editado(T, 1, 1, '1300')).toBe(cambiar('1200', '1300'));
+    expect(editar(T, 0, 0, 'Página')).toMatchObject({ edicion: { cambios: [{ insertar: 'Página' }] } });
+  });
+
+  it('con el mismo texto no hay cambios', () => {
+    expect(editar(T, 0, 1, ' Documentos ')).toMatchObject({ tipo: 'ok', edicion: { cambios: [] } });
+  });
+
+  it.each([
+    ['R&D', R`R\&D`], [R`R\&D`, R`R\&D`], ['50%', R`50\%`], [R`50\%`, R`50\%`], ['  hola  ', 'hola'],
+    [R`\textbf{a & b}`, R`\textbf{a \& b}`], [R`$k$ y \$5`, R`$k$ y \$5`], ['<b>x</b>', '<b>x</b>'],
+  ])('escribir %j guarda %j', (escrito, guardado) => {
+    expect(editado(T, 0, 0, escrito)).toBe(cambiar('Sitio', guardado));
+  });
+
+  it('vaciar una celda y volver a llenarla conserva el espaciado', () => {
+    const vacia = editado(T, 1, 1, '');
+    expect(vacia).toBe(cambiar(R`Foro & 1200 \\`, R`Foro &  \\`));
+    expect(editado(vacia, 1, 1, '7')).toBe(cambiar(R`Foro & 1200 \\`, R`Foro & 7 \\`));
+  });
+
+  it.each([
+    ['a } b', MOTIVOS.llaves], ['{a', MOTIVOS.llaves], ['}{', MOTIVOS.llaves], ['cuesta $5', MOTIVOS.pesos],
+    [R`a \\ b`, MOTIVOS.rompe], [R`a \\& b`, MOTIVOS.rompe], [R`\begin{itemize}`, MOTIVOS.rompe],
+    [R`\multicolumn{2}{c}{x}`, MOTIVOS.rompe], [R`\hline`, MOTIVOS.rompe], [R`\cline{1-2}`, MOTIVOS.rompe],
+  ])('no aplica %j', (escrito, motivo) => {
+    expect(editar(T, 0, 0, escrito)).toEqual({ tipo: 'error', motivo });
+  });
+
+  it('sobre una celda que no existe o una tabla que no es simple, no aplica', () => {
+    expect(editar(T, 5, 0, 'x')).toEqual({ tipo: 'error', motivo: MOTIVOS.noEsta });
+    expect(editar(T, 0, 2, 'x')).toEqual({ tipo: 'error', motivo: MOTIVOS.noEsta });
+    const combinada = con(`${R`\multicolumn{2}{c}{Total} \\`}\n${R`a & b \\`}`);
+    expect(editar(combinada, 1, 0, 'x')).toEqual({ tipo: 'error', motivo: MOTIVOS.noEsta });
+  });
 });

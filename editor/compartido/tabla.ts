@@ -1,4 +1,5 @@
 import type { Rango } from './analizador';
+import type { Edicion } from './tipos';
 
 export type Alineacion = 'l' | 'c' | 'r' | 'p';
 // `spec` es su tramo en la especificación de columnas: la letra, o `p{…}` entero.
@@ -215,4 +216,70 @@ export function analizarTabla(texto: string, interior: Rango): Tabla {
 
   if (filas.length === 0) return noReconocida;
   return { clase: combinadas ? 'solo-lectura' : 'simple', columnas, filas, lineaFinal };
+}
+
+export const MOTIVOS = {
+  llaves: 'Hay una llave sin cerrar o de más.',
+  pesos: 'Hay un signo $ sin cerrar. Para escribir el signo, usá \\$.',
+  rompe: 'Ese texto rompería la tabla. Para cosas así usá Ver código.',
+  noEsta: 'La tabla cambió y esta celda ya no se puede editar acá.',
+} as const;
+
+export type ResultadoDeCelda = { tipo: 'ok'; edicion: Edicion } | { tipo: 'error'; motivo: string };
+
+// Las operaciones solo valen sobre una tabla simple.
+function simpleEn(texto: string, interior: Rango): TablaLeida | null {
+  const tabla = analizarTabla(texto, interior);
+  return tabla.clase === 'simple' ? tabla : null;
+}
+
+// La vista maneja el foco por fila y columna: la selección de estas ediciones no se usa.
+const edicionCon = (interior: Rango, cambios: Edicion['cambios']): Edicion =>
+  ({ cambios, seleccion: { ancla: interior.desde, cabeza: interior.desde } });
+
+// Lo escrito en una celda como LaTeX: sin los espacios de los bordes y con `&` y `%` escapados.
+function prepararCelda(escrito: string): { latex: string } | { motivo: string } {
+  const recortado = escrito.trim();
+  let latex = '';
+  let profundidad = 0;
+  let pesos = 0;
+  let llavesDeMas = false;
+  for (let j = 0; j < recortado.length; j++) {
+    const c = recortado[j];
+    if (c === '\\') {
+      // La barra y lo que escapa van juntos: así se sabe si un `&` ya venía escapado.
+      latex += c + (recortado[j + 1] ?? '');
+      j++;
+      continue;
+    }
+    if (c === '{') profundidad++;
+    else if (c === '}' && --profundidad < 0) llavesDeMas = true;
+    else if (c === '$') pesos++;
+    latex += c === '&' || c === '%' ? `\\${c}` : c;
+  }
+  if (llavesDeMas || profundidad !== 0) return { motivo: MOTIVOS.llaves };
+  if (pesos % 2 !== 0) return { motivo: MOTIVOS.pesos };
+  return { latex };
+}
+
+// Cambia solo el contenido de esa celda. No aplica nada que deje la tabla con otra forma.
+export function editarCelda(texto: string, interior: Rango, fila: number, columna: number, escrito: string): ResultadoDeCelda {
+  const tabla = simpleEn(texto, interior);
+  const celda = tabla?.filas[fila]?.celdas[columna];
+  if (!tabla || !celda) return { tipo: 'error', motivo: MOTIVOS.noEsta };
+
+  const preparada = prepararCelda(escrito);
+  if ('motivo' in preparada) return { tipo: 'error', motivo: preparada.motivo };
+  const { latex } = preparada;
+  const { desde, hasta } = celda.contenido;
+  if (latex === texto.slice(desde, hasta)) return { tipo: 'ok', edicion: edicionCon(interior, []) };
+
+  // Se comprueba sobre el resultado: la tabla sigue igual de grande y esa celda dice eso.
+  const resultado = texto.slice(0, desde) + latex + texto.slice(hasta);
+  const despues = simpleEn(resultado, { desde: interior.desde, hasta: interior.hasta + latex.length - (hasta - desde) });
+  const quedo = despues?.filas[fila]?.celdas[columna]?.contenido;
+  const igualDeGrande = despues !== null && despues.columnas.length === tabla.columnas.length && despues.filas.length === tabla.filas.length;
+  if (!igualDeGrande || !quedo || resultado.slice(quedo.desde, quedo.hasta) !== latex) return { tipo: 'error', motivo: MOTIVOS.rompe };
+
+  return { tipo: 'ok', edicion: edicionCon(interior, [{ desde, hasta, insertar: latex }]) };
 }

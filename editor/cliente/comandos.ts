@@ -1,11 +1,7 @@
 import { analizar, type Elemento, type Rango } from '../compartido/analizador';
+import type { Edicion } from '../compartido/tipos';
 
-// Una edición es siempre texto LaTeX que se inserta o se quita. Las posiciones de `cambios`
-// refieren al texto original; las de `seleccion`, al texto ya editado.
-export interface Edicion {
-  cambios: { desde: number; hasta: number; insertar: string }[];
-  seleccion: { ancla: number; cabeza: number };
-}
+export type { Edicion } from '../compartido/tipos';
 
 const COMANDOS_DE_TITULO = ['chapter', 'section', 'subsection', 'subsubsection'] as const;
 type Titulo = Extract<Elemento, { tipo: 'titulo' }>;
