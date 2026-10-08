@@ -4,7 +4,7 @@ import { analizar } from '../compartido/analizador';
 import { partesDeFigura } from '../compartido/flotante';
 import {
   agregarPaquete, alternarFormato, cambiarCita, cambiarNivelTitulo, cambiarRutaDeImagen, citaEn, insertarCita, insertarFigura,
-  nivelEnPosicion, puedeCitarse, type Edicion,
+  lugarDeBloque, nivelEnPosicion, puedeCitarse, type Edicion,
 } from './comandos';
 
 // Aplica una edición y devuelve el texto resultante y el tramo que queda seleccionado.
@@ -325,5 +325,28 @@ describe('puedeCitarse', () => {
     ['después del preámbulo', '\\documentclass{book}\n\\begin{document}\nx', 38, true],
   ])('%s', (_nombre, t, posicion, esperado) => {
     expect(puedeCitarse(t, posicion)).toBe(esperado);
+  });
+});
+
+describe('lugarDeBloque', () => {
+  it('una línea vacía se reemplaza', () => {
+    expect(lugarDeBloque('a\n\nb', 2)).toEqual({ desde: 2, hasta: 2, antes: '', despues: '' });
+    expect(lugarDeBloque('a\n   \nb', 4)).toEqual({ desde: 2, hasta: 5, antes: '', despues: '' });
+    expect(lugarDeBloque('', 0)).toEqual({ desde: 0, hasta: 0, antes: '', despues: '' });
+  });
+
+  it('con texto en la línea, va al comienzo de la siguiente y se separa de ella', () => {
+    expect(lugarDeBloque('uno dos\ntres', 3)).toEqual({ desde: 8, hasta: 8, antes: '', despues: '\n' });
+  });
+
+  it('en la última línea, sin salto final, va después con un salto', () => {
+    expect(lugarDeBloque('uno', 3)).toEqual({ desde: 3, hasta: 3, antes: '\n', despues: '' });
+  });
+
+  it('dentro de un bloque, va después del más externo que contiene la posición', () => {
+    const t = '\\begin{table}\n\\begin{tabular}{l}\na \\\\\n\\end{tabular}\n\\end{table}\nfin';
+    expect(lugarDeBloque(t, t.indexOf('a \\\\'))).toEqual({ desde: t.indexOf('fin'), hasta: t.indexOf('fin'), antes: '', despues: '\n' });
+    const ecuacion = '\\begin{equation}\n  a = b\n\\end{equation}';
+    expect(lugarDeBloque(ecuacion, 20)).toEqual({ desde: ecuacion.length, hasta: ecuacion.length, antes: '\n', despues: '' });
   });
 });

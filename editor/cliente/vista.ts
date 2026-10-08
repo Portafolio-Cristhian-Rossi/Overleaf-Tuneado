@@ -7,12 +7,13 @@ import { decorarCodigo, esCodigo } from './bloques/codigo';
 import { decorarEcuaciones, esMatematica } from './bloques/ecuacion';
 import { decorarFiguras, protegerEpigrafe } from './bloques/figura';
 import { Pastilla } from './bloques/pastilla';
+import { decorarTablas } from './bloques/tabla';
 import type { ContextoVista, Decorador, Dibujo } from './bloques/tipos';
 
 export type { ContextoVista } from './bloques/tipos';
 
 // Cada clase de bloque se dibuja en su archivo; acá queda la prosa: títulos, formato, listas, referencias.
-const BLOQUES: Decorador[] = [decorarCodigo, decorarEcuaciones, decorarFiguras, decorarCitas];
+const BLOQUES: Decorador[] = [decorarCodigo, decorarEcuaciones, decorarFiguras, decorarTablas, decorarCitas];
 
 const CLASE_DE_ESTILO = { negrita: 'cm-negrita', cursiva: 'cm-cursiva', mono: 'cm-mono' } as const;
 const COMANDO = /\\[a-zA-Z@]+\*?/g;
@@ -101,7 +102,13 @@ export function decorar(estado: EditorState, ctx: ContextoVista, conFoco = true)
     if (!excluido && !reconocidos.has(desde)) marcar(desde, desde + m[0].length, 'cm-comando');
   }
 
-  return Decoration.set(rangos, true);
+  // Debajo de un bloque que reemplaza todo su código (una tabla dibujada) no queda nada más:
+  // ni reemplazos ni marcas de lo que tiene adentro.
+  const cubiertos = rangos.filter((r) => r.value.spec.cubre === true);
+  const cubierto = (r: Range<Decoration>) => r.value.spec.cubre !== true && cubiertos.some((c) => (r.from === r.to
+    ? c.from < r.from && r.to < c.to
+    : c.from <= r.from && r.to <= c.to));
+  return Decoration.set(cubiertos.length === 0 ? rangos : rangos.filter((r) => !cubierto(r)), true);
 }
 
 // Fuerza a recalcular cuando cambia algo que no está en el documento: las etiquetas del proyecto.

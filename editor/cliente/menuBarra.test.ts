@@ -3,7 +3,7 @@ import { EditorState, type Transaction } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
 import { analizar } from '../compartido/analizador';
 import type { Etiqueta } from '../compartido/tipos';
-import { describirEtiqueta, detectarBarra, filtrarEtiquetas, filtrarPlantillas } from './menuBarra';
+import { colocarPlantilla, describirEtiqueta, detectarBarra, filtrarEtiquetas, filtrarPlantillas } from './menuBarra';
 import { CONFIG_LISTINGS, PLANTILLAS, type Plantilla } from './plantillas';
 
 // Texto que queda en el documento al insertar una plantilla en un archivo vacío.
@@ -124,5 +124,52 @@ describe('PLANTILLAS', () => {
     expect(analizar(expandir(plantilla('lista').texto)).map((e) => e.tipo)).toEqual(['inicioLista', 'item', 'finLista']);
     expect(analizar(expandir(plantilla('ecuacion').texto)).map((e) => e.tipo)).toEqual(['matematica', 'etiqueta']);
     expect(analizar(expandir(plantilla('codigo').texto)).map((e) => e.tipo)).toEqual(['entorno']);
+  });
+});
+
+// El botón Insertar de la barra: la plantilla no reemplaza una "/" escrita, va donde corresponde.
+describe('colocarPlantilla', () => {
+  const plantilla = (id: string) => PLANTILLAS.find((p): p is Plantilla & { texto: string } => p.id === id && 'texto' in p)!;
+  const colocar = (doc: string, cursor: number, id: string) => {
+    const destino = {
+      state: EditorState.create({ doc, selection: { anchor: cursor } }),
+      dispatch(tr: Transaction) { this.state = tr.state; },
+    };
+    colocarPlantilla(destino, plantilla(id));
+    return { texto: destino.state.doc.toString(), seleccion: destino.state.sliceDoc(destino.state.selection.main.from, destino.state.selection.main.to) };
+  };
+  const tabla = expandir(plantilla('tabla').texto);
+
+  it('un bloque va en su propia línea, debajo de la del cursor', () => {
+    expect(colocar('Hola\nmundo', 2, 'tabla')).toEqual({ texto: `Hola\n${tabla}mundo`, seleccion: 'Descripción de la tabla' });
+  });
+
+  it('una línea vacía se reemplaza, y al final del archivo se agrega un salto', () => {
+    expect(colocar('a\n\nb', 2, 'tabla').texto).toBe(`a\n${tabla}\nb`);
+    expect(colocar('uno', 3, 'tabla').texto).toBe(`uno\n${tabla}`);
+    expect(colocar('', 0, 'ecuacion').texto).toBe(expandir(plantilla('ecuacion').texto));
+  });
+
+  it('con el cursor dentro de otro bloque, va después de ese bloque', () => {
+    const ecuacion = '\\begin{equation}\n  a = b\n\\end{equation}\nfin';
+    expect(colocar(ecuacion, 20, 'tabla').texto).toBe(ecuacion.replace('fin', `${tabla}fin`));
+  });
+
+  it('una plantilla que no termina en salto queda separada de lo que sigue', () => {
+    expect(colocar('uno\ndos', 1, 'seccion').texto).toBe('uno\n\\section{Título}\n\n\ndos');
+  });
+
+  it('la sangría de la línea siguiente no se le pega al bloque', () => {
+    expect(colocar('uno\n    dos', 1, 'tabla').texto).toBe(`uno\n${tabla}    dos`);
+  });
+
+  it('una referencia va donde está el cursor', () => {
+    expect(colocar('ver  acá', 4, 'referencia').texto).toBe('ver \\ref{} acá');
+    expect(PLANTILLAS.filter((p) => p.enLinea).map((p) => p.id)).toEqual(['referencia']);
+  });
+
+  // La cita no trae texto: abre el buscador, que la pone donde está el cursor.
+  it('la cita y la figura son las plantillas que no insertan un texto', () => {
+    expect(PLANTILLAS.filter((p) => !('texto' in p)).map((p) => p.id)).toEqual(['figura', 'cita']);
   });
 });

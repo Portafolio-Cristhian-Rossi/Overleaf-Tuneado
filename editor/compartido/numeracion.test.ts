@@ -128,7 +128,7 @@ describe('numerarObjetos', () => {
   it('el fixture de bloques', () => {
     expect(numeros(leerFixture('Bloques.tex'), '7')).toEqual([
       ['ecuacion', ['7.1']], ['ecuacion', ['7.2']], ['ecuacion', []],
-      ['figura', ['7.1']], ['figura', []], ['tabla', ['7.1']],
+      ['figura', ['7.1']], ['figura', []], ['tabla', ['7.1']], ['tabla', ['7.2']],
     ]);
   });
 });

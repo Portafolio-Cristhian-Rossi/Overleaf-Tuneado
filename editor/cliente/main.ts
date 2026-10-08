@@ -5,22 +5,25 @@ import { candidatos, type Bibliografia, type Candidato } from '../compartido/cit
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api, urlDeImagen } from './api';
 import { aplicarEdicion, darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
+import { confirmarCeldaAbierta, formatoEnCeldaAbierta } from './bloques/edicionTabla';
 import { agregarPegado, avisoDelBuscador, colocarCita, resolverClaves, type Citador } from './citar';
 import { agregarPaquete, cambiarRutaDeImagen, citaEn, puedeCitarse } from './comandos';
 import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
 import { crearSubida, evitarAbrirArchivosSoltados, extensionArrastre } from './imagenes';
 import { titulosDelIndice } from './indice';
-import { extensionMenu } from './menuBarra';
+import { extensionMenu, insertarDesdeBoton, type ContextoMenu } from './menuBarra';
 import { crearBarra } from './pantalla/barra';
 import { crearBloqueoConflicto } from './pantalla/bloqueoConflicto';
 import { buscarCita } from './pantalla/buscadorCitas';
 import { el, preguntar } from './pantalla/dom';
 import { crearLateral } from './pantalla/lateral';
+import { abrirMenuFlotante } from './pantalla/menuFlotante';
 import { crearPanelGramatica, extensionPanelGramatica } from './pantalla/panelGramatica';
 import { crearPanelPdf } from './pantalla/panelPdf';
 import { elegirImagen } from './pantalla/selectorImagen';
 import { crearSincronizacion } from './pantalla/sincronizacion';
+import { PLANTILLAS } from './plantillas';
 import { contextoCambiado, extensionVista } from './vista';
 
 const CLAVE_ULTIMO = 'editor-informe:ultimo-archivo';
@@ -83,9 +86,29 @@ const selectorNivel = el('select', {
 }, ...NIVELES.map(([texto]) => el('option', {}, texto)));
 barra.zonaFormato.append(
   selectorNivel,
-  el('button', { type: 'button', title: 'Negrita (Ctrl+B)', 'aria-label': 'Negrita', alClick: () => darFormato(editor.vista, 'textbf') }, el('b', {}, 'N')),
-  el('button', { type: 'button', title: 'Cursiva (Ctrl+I)', 'aria-label': 'Cursiva', alClick: () => darFormato(editor.vista, 'textit') }, el('i', {}, 'C')),
+  botonDeFormato('textbf', 'Negrita (Ctrl+B)', 'Negrita', el('b', {}, 'N')),
+  botonDeFormato('textit', 'Cursiva (Ctrl+I)', 'Cursiva', el('i', {}, 'C')),
 );
+
+// Negrita y cursiva actúan donde se está escribiendo: en el texto o en la celda abierta de una
+// tabla. El botón no se queda con el foco, para no cerrar esa celda antes de darle formato.
+function botonDeFormato(comando: 'textbf' | 'textit', titulo: string, nombre: string, cara: HTMLElement): HTMLButtonElement {
+  return el('button', {
+    type: 'button', title: titulo, 'aria-label': nombre,
+    alMousedown: (evento: Event) => evento.preventDefault(),
+    alClick: () => { if (!formatoEnCeldaAbierta(comando)) darFormato(editor.vista, comando); },
+  }, cara);
+}
+
+// Las mismas plantillas que el menú "/", a la vista: figura, tabla, ecuación, cita…
+const botonInsertar = el('button', {
+  type: 'button', title: 'Insertar una figura, tabla, ecuación, cita…', 'aria-haspopup': 'menu',
+  alClick: () => abrirMenuFlotante(botonInsertar.getBoundingClientRect(), PLANTILLAS.map((plantilla) => ({
+    texto: plantilla.nombre,
+    alElegir: () => { void insertarDesdeBoton(contextoMenu, editor.vista, plantilla); },
+  }))),
+}, 'Insertar ▾');
+barra.zonaFormato.append(botonInsertar);
 
 function habilitarFormato(si: boolean): void {
   for (const control of barra.zonaFormato.querySelectorAll<HTMLSelectElement | HTMLButtonElement>('select, button')) control.disabled = !si;
@@ -152,6 +175,13 @@ async function asegurarPaquete(paquete: string, configuracion?: string): Promise
 // Imágenes: las que ya están en figs/ o una nueva desde la computadora, que se copia ahí.
 const subirImagen = crearSubida({ subir: api.imagenes.subir, preguntar, avisar: (mensaje) => barra.avisar(mensaje, 'error') });
 const abrirSelectorDeImagen = () => elegirImagen({ listar: api.imagenes.listar, url: urlDeImagen, subir: subirImagen });
+
+// Lo que necesitan el menú "/" y el botón Insertar para poner una plantilla.
+const contextoMenu: ContextoMenu = {
+  paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete,
+  elegirImagen: abrirSelectorDeImagen,
+  citar: (vista) => { void citar(vista); },
+};
 
 evitarAbrirArchivosSoltados(window);
 
@@ -268,11 +298,7 @@ const editor = crearEditor(porId('editor'), {
       bibliografia,
       alElegirCita: (vista, posicion) => { void citar(vista, posicion); },
     })),
-    extensionMenu({
-      paquetes: () => proyecto.paquetes, etiquetas: () => proyecto.etiquetas, asegurarPaquete,
-      elegirImagen: abrirSelectorDeImagen,
-      citar: (vista) => { void citar(vista); },
-    }),
+    extensionMenu(contextoMenu),
     extensionArrastre({ subir: subirImagen, avisar: (mensaje) => barra.avisar(mensaje, 'error') }),
     extensionAtajos(
       (nivel) => { selectorNivel.selectedIndex = NIVELES.findIndex(([, n]) => n === nivel); },
@@ -398,11 +424,16 @@ function rutaInicial(): string | null {
 }
 
 // Al volver a la pestaña se comprueba si el disco cambió; al dejarla, se guarda de inmediato.
+// Lo que esté a medio escribir en una celda de una tabla entra al documento antes de guardar.
+function guardarAlSalir(): void {
+  confirmarCeldaAbierta();
+  void editor.guardarAhora(true);
+}
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') void editor.guardarAhora(true);
+  if (document.visibilityState === 'hidden') guardarAlSalir();
   else void actualizarTodo().then(() => sincronizacion.revisar()).catch(() => undefined);
 });
-window.addEventListener('pagehide', () => { void editor.guardarAhora(true); });
+window.addEventListener('pagehide', guardarAlSalir);
 window.addEventListener('beforeunload', (e) => {
   if (editor.hayCambiosSinGuardar()) e.preventDefault();
 });

@@ -1,7 +1,9 @@
 // Plantillas del menú "/". El texto usa la sintaxis de snippet de CodeMirror:
 // ${1:ejemplo} es un campo a completar y Tab pasa al siguiente.
 // Una plantilla inserta su texto, o bien abre el selector de imágenes y arma la figura con la elegida.
-export type Plantilla = { id: string; nombre: string; paquete?: string; configuracion?: string }
+// La cita abre el buscador, que la pone donde está el cursor.
+// `enLinea`: va dentro del renglón, donde está el cursor; las demás necesitan líneas propias.
+export type Plantilla = { id: string; nombre: string; paquete?: string; configuracion?: string; enLinea?: true }
   & ({ texto: string } | { accion: 'elegir-imagen' | 'buscar-cita' });
 
 // listings no acepta tildes ni eñes con pdflatex salvo que se le enseñe cada una.
@@ -32,5 +34,5 @@ export const PLANTILLAS: Plantilla[] = [
     id: 'codigo', nombre: 'Bloque de código', paquete: 'listings', configuracion: CONFIG_LISTINGS,
     texto: '\\begin{lstlisting}[language=${1:Python}, caption={${2:Descripción}}, label={lst:${3:nombre}}]\n${4}\n\\end{lstlisting}\n',
   },
-  { id: 'referencia', nombre: 'Referencia cruzada', texto: '\\ref{${}}' },
+  { id: 'referencia', nombre: 'Referencia cruzada', enLinea: true, texto: '\\ref{${}}' },
 ];

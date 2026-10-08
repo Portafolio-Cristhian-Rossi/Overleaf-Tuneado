@@ -130,6 +130,18 @@ describe('figuras', () => {
       expect(borrar(t, pos, pos - 1, pos)).toBe(t.slice(0, pos - 1) + t.slice(pos));
     });
 
+    it('el epígrafe de una tabla dibujada se protege igual', () => {
+      const tabla = '\\begin{table}\n\\caption{Corpus}\n\\begin{tabular}{l}\na \\\\\n\\end{tabular}\n\\end{table}';
+      const desde = tabla.indexOf('Corpus');
+      const hasta = desde + 'Corpus'.length;
+      expect(borrar(tabla, desde, desde - 1, desde)).toBe(tabla);
+      expect(borrar(tabla, hasta, hasta, hasta + 1, 'delete.forward')).toBe(tabla);
+      expect(borrar(tabla, desde + 3, desde + 2, desde + 3)).toBe(tabla.replace('Corpus', 'Copus'));
+      // Una tabla que el editor no dibuja se ve como código: ahí no se impide nada.
+      const rara = tabla.replace('{l}', '{@{}l}');
+      expect(borrar(rara, desde, desde - 1, desde)).toBe(rara.slice(0, desde - 1) + rara.slice(desde));
+    });
+
     it('con una selección, se borra lo seleccionado', () => {
       const estado = EditorState.create({ doc: T, selection: { anchor: EPIGRAFE - 3, head: EPIGRAFE + 3 }, extensions: [protegerEpigrafe] });
       expect(estado.update({ changes: { from: EPIGRAFE - 3, to: EPIGRAFE + 3 }, userEvent: 'delete.selection' }).state.doc.toString())
@@ -149,6 +161,6 @@ describe('figuras', () => {
   it('el fixture: una figura dibujada y otra como código', () => {
     const d = decos(leerFixture('Bloques.tex'), 0, ctxDePrueba({ numeroCapitulo: '7' }));
     expect(d.filter((x) => x.clase === 'cm-imagen')).toHaveLength(1);
-    expect(d.filter((x) => x.clase === 'cm-prefijo-epigrafe').map((x) => x.widget)).toEqual(['Figura 7.1: ']);
+    expect(d.filter((x) => x.clase === 'cm-prefijo-epigrafe').map((x) => x.widget)).toEqual(['Figura 7.1: ', 'Tabla 7.1: ', 'Tabla 7.2: ']);
   });
 });

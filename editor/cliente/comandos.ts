@@ -1,11 +1,7 @@
 import { analizar, type Elemento, type Rango } from '../compartido/analizador';
+import type { Edicion } from '../compartido/tipos';
 
-// Una edición es siempre texto LaTeX que se inserta o se quita. Las posiciones de `cambios`
-// refieren al texto original; las de `seleccion`, al texto ya editado.
-export interface Edicion {
-  cambios: { desde: number; hasta: number; insertar: string }[];
-  seleccion: { ancla: number; cabeza: number };
-}
+export type { Edicion } from '../compartido/tipos';
 
 const COMANDOS_DE_TITULO = ['chapter', 'section', 'subsection', 'subsubsection'] as const;
 type Titulo = Extract<Elemento, { tipo: 'titulo' }>;
@@ -113,24 +109,31 @@ function etiquetaDe(ruta: string): string {
   return nombre || 'figura';
 }
 
-// Inserta la plantilla de Figura en una línea propia; la selección queda sobre el texto del epígrafe.
-export function insertarFigura(texto: string, posicion: number, ruta: string): Edicion {
-  const figura = `\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{${ruta}}\n`
-    + `  \\caption{${EPIGRAFE_INICIAL}}\n  \\label{fig:${etiquetaDe(ruta)}}\n\\end{figure}\n`;
-
-  // Una figura dentro de otro bloque (ecuación, tabla, código, otra figura, el preámbulo) es
-  // LaTeX roto: en ese caso va después del bloque más externo que contiene la posición.
+// Dónde va un bloque que necesita líneas propias (una figura, una tabla, una ecuación) cuando se
+// lo inserta con el cursor en `posicion`. `antes` y `despues` son los saltos que lo separan de lo
+// que queda a su lado; `despues` sobra si el bloque ya termina en un salto.
+export function lugarDeBloque(texto: string, posicion: number): { desde: number; hasta: number; antes: string; despues: string } {
+  // Un bloque dentro de otro (ecuación, tabla, código, figura, el preámbulo) es LaTeX roto: en
+  // ese caso va después del bloque más externo que contiene la posición.
   const bloque = analizar(texto)
     .filter((e) => e.tipo === 'entorno' || e.tipo === 'preambulo' || (e.tipo === 'matematica' && !e.enLinea))
     .filter((e) => e.desde <= posicion && posicion <= e.hasta)
     .reduce<Rango | null>((afuera, e) => (afuera === null || e.hasta > afuera.hasta ? e : afuera), null);
   const linea = lineaDe(texto, bloque ? bloque.hasta : posicion);
 
-  // Una línea vacía se reemplaza; si tiene texto, la figura va en la línea siguiente.
-  let cambio: Edicion['cambios'][number];
-  if (!bloque && texto.slice(linea.desde, linea.hasta).trim() === '') cambio = { desde: linea.desde, hasta: linea.hasta, insertar: figura };
-  else if (linea.hasta < texto.length) cambio = { desde: linea.hasta + 1, hasta: linea.hasta + 1, insertar: figura };
-  else cambio = { desde: linea.hasta, hasta: linea.hasta, insertar: `\n${figura}` };
+  // Una línea vacía se reemplaza; si tiene texto, el bloque va en la línea siguiente.
+  if (!bloque && texto.slice(linea.desde, linea.hasta).trim() === '') return { desde: linea.desde, hasta: linea.hasta, antes: '', despues: '' };
+  if (linea.hasta === texto.length) return { desde: linea.hasta, hasta: linea.hasta, antes: '\n', despues: '' };
+  const siguiente = linea.hasta + 1;
+  return { desde: siguiente, hasta: siguiente, antes: '', despues: siguiente < texto.length ? '\n' : '' };
+}
+
+// Inserta la plantilla de Figura en una línea propia; la selección queda sobre el texto del epígrafe.
+export function insertarFigura(texto: string, posicion: number, ruta: string): Edicion {
+  const figura = `\\begin{figure}[htbp]\n  \\centering\n  \\includegraphics[width=0.8\\textwidth]{${ruta}}\n`
+    + `  \\caption{${EPIGRAFE_INICIAL}}\n  \\label{fig:${etiquetaDe(ruta)}}\n\\end{figure}\n`;
+  const lugar = lugarDeBloque(texto, posicion);
+  const cambio = { desde: lugar.desde, hasta: lugar.hasta, insertar: lugar.antes + figura };
 
   const ancla = cambio.desde + cambio.insertar.indexOf(EPIGRAFE_INICIAL);
   return { cambios: [cambio], seleccion: { ancla, cabeza: ancla + EPIGRAFE_INICIAL.length } };

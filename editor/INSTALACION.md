@@ -169,17 +169,21 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
   su código LaTeX para que puedas tocarlo. Al salir, vuelve a verse formateado.
 - `Ctrl+B` negrita, `Ctrl+I` cursiva. El selector de la barra convierte la
   línea en título o la devuelve a texto.
-- Escribí `/` al principio de una línea para insertar una sección, lista,
-  figura, tabla, ecuación, cita, bloque de código o referencia cruzada. `Tab`
+- El botón **Insertar** de la barra agrega una sección, lista, figura, tabla,
+  ecuación, cita, bloque de código o referencia cruzada. Lo que necesita un
+  renglón propio (una tabla, una ecuación) queda debajo de la línea donde
+  está el cursor; una cita o una referencia, donde está el cursor. `Tab`
   salta al siguiente campo a completar. Si hace falta un paquete de LaTeX, el
   editor pregunta y lo agrega a `main.tex`.
+- Sin sacar las manos del teclado: escribí `/` al principio de una línea y
+  sale el mismo menú.
 - Lo que el editor no sabe dibujar se ve como código, en gris. Podés editarlo
   igual.
 
 **Ecuaciones.** Las fórmulas se ven dibujadas: las que van dentro del texto
 (`$k$`) y las que van en un renglón aparte, con su número a la derecha.
 
-- Para insertar una: `/` → Ecuación. Para una fórmula corta dentro de un
+- Para insertar una: **Insertar** → Ecuación. Para una fórmula corta dentro de un
   párrafo, escribila entre signos de pesos: `$a + b$`.
 - Para cambiarla, poné el cursor encima: aparece su código LaTeX y, debajo, un
   recuadro que muestra cómo va quedando mientras escribís.
@@ -191,7 +195,7 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
 **Figuras.** Una figura se ve con su imagen y, debajo, su epígrafe
 ("Figura 2.1: …").
 
-- Para insertar una: `/` → Figura. Se abre una ventana con las imágenes que
+- Para insertar una: **Insertar** → Figura. Se abre una ventana con las imágenes que
   ya están en la carpeta `figs/` del informe. Elegí una, o usá
   *Elegir archivo…* para sumar una imagen de tu computadora.
 - También podés arrastrar un archivo de imagen desde el Explorador de Windows
@@ -210,6 +214,28 @@ abierto. Lo que escribís se guarda solo; arriba a la derecha dice `Guardado`.
 - Una figura armada de otra forma (por ejemplo, con dos imágenes) se ve como
   código y se edita así.
 
+**Tablas.** Una tabla se ve como tabla, con su epígrafe ("Tabla 2.1: …").
+
+- Para insertar una: botón **Insertar** → Tabla (o `/` → Tabla). Escribí el
+  epígrafe y sacá el cursor con las flechas: queda dibujada.
+- Para escribir en una celda, hacé clic sobre ella. `Tab` pasa a la celda
+  siguiente, `Shift+Tab` a la anterior y `Enter` a la de abajo. `Escape`
+  descarta lo que escribiste en esa celda.
+- En cada celda, al pasar el cursor, aparece un botón `⋯` (también sirve el
+  clic derecho): inserta o borra filas y columnas y cambia la alineación de
+  la columna.
+- En una celda podés usar negrita (`\textbf{…}`), fórmulas (`$k$`) y citas.
+  Si escribís `&` o `%`, el editor los guarda como `\&` y `\%`, que es como
+  los pide LaTeX.
+- Si una celda se pone roja, lo que escribiste rompería la tabla (casi
+  siempre, una llave o un `$` sin cerrar) y dice por qué. No se guarda hasta
+  que lo corrijas o salgas con `Escape`.
+- El epígrafe se escribe ahí mismo, como el de una figura.
+- Una tabla con celdas combinadas (`\multicolumn`) se ve dibujada pero no se
+  edita por celdas: un clic muestra su código. Una tabla armada de otra forma
+  se ve como código, como siempre.
+- *Ver código*, al pasar el cursor por la tabla, muestra su LaTeX.
+
 **Código.** `/` → Bloque de código inserta un recuadro donde escribís el
 código tal cual. El corrector no lo revisa.
 
@@ -222,7 +248,8 @@ es orientativo: el definitivo es el del PDF.
 rojo, su clave no está en el archivo de referencias del informe
 (`referencias.bib`).
 
-- Para citar, abrí el buscador: `/` → Cita, o `Ctrl+K` donde quieras la cita.
+- Para citar, abrí el buscador: **Insertar** → Cita, o `Ctrl+K` donde quieras
+  la cita.
   Escribí el autor, parte del título o el año, y apretá Enter.
 - Hay dos formas, que elegís abajo en el buscador: "(Autor, año)" para una
   cita entre paréntesis, y "Autor (año)" cuando el autor es parte de la
@@ -305,7 +332,6 @@ terminar.
   sigue leyendo en la web de Overleaf.
 - **No revisa el estilo ni la redacción.** Marca errores de ortografía y
   gramática, no si un párrafo está bien escrito.
-- **Todavía no dibuja las tablas.** Se ven y se editan como código.
 - **No modifica Zotero ni mantiene las fichas al día.** Si corregís un paper
   en Zotero después de haberlo citado, la ficha que ya está en
   `referencias.bib` no cambia sola.

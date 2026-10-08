@@ -1,9 +1,9 @@
 import { autocompletion, snippet, startCompletion, type Completion, type CompletionSource } from '@codemirror/autocomplete';
-import type { Extension } from '@codemirror/state';
+import type { EditorState, Extension, Transaction } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import type { Etiqueta } from '../compartido/tipos';
 import { aplicarEdicion } from './atajos';
-import { insertarFigura } from './comandos';
+import { insertarFigura, lugarDeBloque } from './comandos';
 import { PLANTILLAS, type Plantilla } from './plantillas';
 
 export interface ContextoMenu {
@@ -43,29 +43,63 @@ export function filtrarEtiquetas(etiquetas: Etiqueta[], consulta: string): Etiqu
   return etiquetas.filter((e) => normalizar(`${e.nombre} ${describirEtiqueta(e)}`).includes(buscado));
 }
 
+type PlantillaDeTexto = Plantilla & { texto: string };
+// Lo que `snippet` necesita de un editor: alcanza para probarlo sin pantalla.
+interface Destino { state: EditorState; dispatch(tr: Transaction): void }
+
+// Pone el texto de una plantilla cuando no se la llamó con "/": una cita o una referencia, donde
+// está el cursor; un bloque, en líneas propias y fuera del bloque que tenga el cursor adentro.
+export function colocarPlantilla(destino: Destino, plantilla: PlantillaDeTexto): void {
+  const { from, to, head } = destino.state.selection.main;
+  if (plantilla.enLinea) {
+    snippet(plantilla.texto)(destino, null, from, to);
+    return;
+  }
+  const lugar = lugarDeBloque(destino.state.doc.toString(), head);
+  // Delante de otra línea se inserta desde el final de la anterior: `snippet` le copia a cada
+  // línea la sangría de aquella donde empieza, y la de la línea siguiente no es del bloque.
+  if (lugar.despues) snippet(`\n${plantilla.texto.replace(/\n$/, '')}`)(destino, null, lugar.desde - 1, lugar.desde - 1);
+  else snippet(lugar.antes + plantilla.texto)(destino, null, lugar.desde, lugar.hasta);
+}
+
+// Inserta una plantilla: pide su paquete si el informe no lo carga; una cita abre el buscador y
+// una figura, el selector de imágenes. `colocar` pone el texto de las demás.
+async function insertarPlantilla(ctx: ContextoMenu, vista: EditorView, plantilla: Plantilla, colocar: (p: PlantillaDeTexto) => void): Promise<void> {
+  if (plantilla.paquete && !ctx.paquetes().includes(plantilla.paquete)) {
+    if (!(await ctx.asegurarPaquete(plantilla.paquete, plantilla.configuracion))) return;
+  }
+  if ('accion' in plantilla && plantilla.accion === 'buscar-cita') {
+    ctx.citar(vista);
+    return;
+  }
+  if ('accion' in plantilla) {
+    const ruta = await ctx.elegirImagen();
+    if (ruta !== null && !vista.state.readOnly) {
+      aplicarEdicion(vista, insertarFigura(vista.state.doc.toString(), vista.state.selection.main.head, ruta));
+    }
+    vista.focus();
+    return;
+  }
+  if (vista.state.readOnly) return;
+  colocar(plantilla);
+  vista.focus();
+  if (plantilla.id === 'referencia') startCompletion(vista);
+}
+
+// El botón Insertar de la barra: las mismas plantillas que el menú "/".
+export async function insertarDesdeBoton(ctx: ContextoMenu, vista: EditorView, plantilla: Plantilla): Promise<void> {
+  if (vista.state.readOnly) return;
+  await insertarPlantilla(ctx, vista, plantilla, (p) => colocarPlantilla(vista, p));
+}
+
 export function extensionMenu(ctx: ContextoMenu): Extension {
   async function insertar(vista: EditorView, plantilla: Plantilla, desde: number, hasta: number): Promise<void> {
     vista.dispatch({ changes: { from: desde, to: hasta, insert: '' } });
-    if (plantilla.paquete && !ctx.paquetes().includes(plantilla.paquete)) {
-      if (!(await ctx.asegurarPaquete(plantilla.paquete, plantilla.configuracion))) return;
-    }
-    if ('accion' in plantilla && plantilla.accion === 'buscar-cita') {
-      ctx.citar(vista);
-      return;
-    }
-    if ('accion' in plantilla) {
-      const ruta = await ctx.elegirImagen();
-      if (ruta !== null && !vista.state.readOnly) {
-        aplicarEdicion(vista, insertarFigura(vista.state.doc.toString(), vista.state.selection.main.head, ruta));
-      }
-      vista.focus();
-      return;
-    }
-    // Agregar el paquete pudo mover el texto: se inserta donde quedó el cursor.
-    const cursor = vista.state.selection.main.head;
-    snippet(plantilla.texto)(vista, null, cursor, cursor);
-    vista.focus();
-    if (plantilla.id === 'referencia') startCompletion(vista);
+    await insertarPlantilla(ctx, vista, plantilla, (p) => {
+      // Agregar el paquete pudo mover el texto: se inserta donde quedó el cursor.
+      const cursor = vista.state.selection.main.head;
+      snippet(p.texto)(vista, null, cursor, cursor);
+    });
   }
 
   const plantillas: CompletionSource = (c) => {
