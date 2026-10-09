@@ -47,7 +47,8 @@ En este orden:
    (capítulo, sección, subsección), con su número. En "Revisar consistencia",
    el capítulo.
 3. **Guía de estilo**, completa. Incluye de qué trata el informe: por eso la
-   prompt no necesita leer `main.tex`.
+   prompt no necesita leer `main.tex`. Sus títulos se bajan dos niveles, para
+   que no se confundan con los apartados de la prompt.
 4. **Reglas**, fijas por acción.
 5. **El texto**, entre dos líneas delimitadoras, tal cual está en el archivo.
 

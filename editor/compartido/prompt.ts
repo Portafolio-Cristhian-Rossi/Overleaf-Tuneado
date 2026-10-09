@@ -68,13 +68,16 @@ const ACCIONES: Record<AccionDeIa, { tarea: string; reglas: string[] }> = {
 
 const sinBlancosEnLosBordes = (texto: string) => texto.replace(/^\s*\n/, '').trimEnd();
 
+// La guía trae sus propios títulos: se bajan dos niveles para que queden dentro de su apartado.
+const conTitulosPorDebajo = (guia: string) => guia.replace(/^(#{1,4}) /gm, '##$1 ');
+
 export function armarPrompt(d: DatosDePrompt): string {
   const { tarea, reglas } = ACCIONES[d.accion];
   const apartados = [
     PRESENTACION,
     `## Tarea\n\n${tarea}`,
     d.ubicacion.length > 0 && `## Dónde va este texto\n\n${d.ubicacion.map((titulo) => `- ${titulo}`).join('\n')}`,
-    `## Guía de estilo\n\n${d.guia.trim()}`,
+    `## Guía de estilo\n\n${conTitulosPorDebajo(d.guia.trim())}`,
     `## Reglas\n\n${reglas.map((regla) => `- ${regla}`).join('\n')}`,
     `## Texto\n\n${INICIO_DEL_TEXTO}\n${sinBlancosEnLosBordes(d.texto)}\n${FIN_DEL_TEXTO}`,
   ];
@@ -82,9 +85,7 @@ export function armarPrompt(d: DatosDePrompt): string {
 }
 
 // La guía con la que arranca el editor. Quien escribe la corrige desde "Guía de estilo…".
-export const GUIA_INICIAL = R`# Guía de estilo del informe
-
-## De qué trata
+export const GUIA_INICIAL = R`## De qué trata
 
 Informe de proyecto de grado de Ingeniería en Computación (Facultad de Ingeniería, UdelaR): "Análisis de tópicos en sitios con participación uruguaya".
 

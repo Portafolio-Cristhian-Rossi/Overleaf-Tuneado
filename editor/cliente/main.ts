@@ -2,6 +2,7 @@ import type { EditorView } from '@codemirror/view';
 import 'katex/dist/katex.min.css';
 import { analizarBib, type ProblemaBib } from '../compartido/bib';
 import { candidatos, type Bibliografia, type Candidato } from '../compartido/citas';
+import type { AccionDeIa } from '../compartido/prompt';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
 import { api, urlDeImagen } from './api';
 import { aplicarEdicion, darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
@@ -10,6 +11,7 @@ import { agregarPegado, avisoDelBuscador, colocarCita, resolverClaves, type Cita
 import { agregarPaquete, cambiarRutaDeImagen, citaEn, puedeCitarse } from './comandos';
 import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
+import { avisoDeCopia, opcionesDeIa, prepararPrompt } from './ia';
 import { crearSubida, evitarAbrirArchivosSoltados, extensionArrastre } from './imagenes';
 import { titulosDelIndice } from './indice';
 import { extensionMenu, insertarDesdeBoton, type ContextoMenu } from './menuBarra';
@@ -17,6 +19,7 @@ import { crearBarra } from './pantalla/barra';
 import { crearBloqueoConflicto } from './pantalla/bloqueoConflicto';
 import { buscarCita } from './pantalla/buscadorCitas';
 import { el, preguntar } from './pantalla/dom';
+import { editarGuia } from './pantalla/editorDeGuia';
 import { crearLateral } from './pantalla/lateral';
 import { abrirMenuFlotante } from './pantalla/menuFlotante';
 import { crearPanelGramatica, extensionPanelGramatica } from './pantalla/panelGramatica';
@@ -109,6 +112,60 @@ const botonInsertar = el('button', {
   }))),
 }, 'Insertar ▾');
 barra.zonaFormato.append(botonInsertar);
+
+// El editor no llama a ninguna IA: arma el pedido y lo copia, para pegarlo en el modelo que se use.
+async function copiarPrompt(accion: AccionDeIa): Promise<void> {
+  const vista = editor.vista;
+  // Vale lo que estaba seleccionado al elegir la acción, no lo que haya cuando llegue la guía.
+  const texto = vista.state.doc.toString();
+  const { anchor, head } = vista.state.selection.main;
+  const titulos = titulosDelIndice(texto, numeroDelCapitulo(editor.rutaAbierta()));
+
+  let guia: string;
+  try {
+    guia = await api.ia.guia();
+  } catch (e) {
+    barra.avisar(`No se copió nada: no se pudo leer la guía de estilo. ${(e as Error).message}`, 'error');
+    return;
+  }
+  const preparada = prepararPrompt({ accion, texto, seleccion: { desde: anchor, hasta: head }, titulos, guia });
+  if (preparada.tipo === 'no') {
+    barra.avisar(preparada.mensaje, 'info');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(preparada.prompt);
+  } catch {
+    barra.avisar('El navegador no dejó copiar la prompt. Hacé clic en la página y probá de nuevo.', 'error');
+    return;
+  }
+  barra.avisar(avisoDeCopia(accion, preparada.palabras), 'info');
+  vista.focus();
+}
+
+async function abrirGuia(): Promise<void> {
+  const guardada = await editarGuia({
+    leer: api.ia.guia,
+    guardar: api.ia.guardarGuia,
+    confirmarDescarte: () => preguntar('¿Descartar los cambios de la guía?', [
+      { texto: 'Descartar', valor: true },
+      { texto: 'Seguir editando', valor: false, principal: true, neutra: true },
+    ]),
+  });
+  if (guardada) barra.avisar('Guía de estilo guardada. Las próximas prompts ya la llevan.', 'info');
+  editor.vista.focus();
+}
+
+const botonIa = el('button', {
+  type: 'button', title: 'Armar una prompt para pegar en un modelo de IA', 'aria-haspopup': 'menu',
+  alClick: () => abrirMenuFlotante(botonIa.getBoundingClientRect(), [
+    ...opcionesDeIa(!editor.vista.state.selection.main.empty).map(({ accion, texto, habilitada, ayuda }) => ({
+      texto, habilitada, ayuda, alElegir: () => { void copiarPrompt(accion); },
+    })),
+    { texto: 'Guía de estilo…', alElegir: () => { void abrirGuia(); } },
+  ]),
+}, 'IA ▾');
+barra.zonaFormato.append(botonIa);
 
 function habilitarFormato(si: boolean): void {
   for (const control of barra.zonaFormato.querySelectorAll<HTMLSelectElement | HTMLButtonElement>('select, button')) control.disabled = !si;

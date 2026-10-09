@@ -311,6 +311,39 @@ Tu diccionario queda en `editor/correccion.json`. No viaja a Overleaf.
 El corrector ocupa unos 400 MB en disco y, mientras el editor está abierto,
 hasta 1 GB de memoria.
 
+**IA.** El editor no usa ninguna IA por su cuenta: te arma el pedido (la
+*prompt*) y lo copia, para que lo pegues en el chat del modelo que uses. El
+botón **IA** de la barra tiene tres pedidos:
+
+- *Desarrollar notas*: seleccioná tus apuntes sueltos y pide convertirlos en
+  párrafos del informe.
+- *Revisar estilo*: seleccioná un texto ya escrito y pide mejorar la redacción
+  sin cambiar lo que dice.
+- *Revisar consistencia*: no hace falta seleccionar nada. Manda el capítulo
+  abierto y pide una lista de problemas: un término usado de dos formas,
+  siglas sin definir, texto de la plantilla que quedó.
+
+Cómo se usa:
+
+1. Elegí el pedido. La barra avisa `Prompt copiada`.
+2. Pegala en el chat del modelo (`Ctrl+V`) y enviala.
+3. La respuesta viene en un recuadro de código: copialo con su botón y pegalo
+   en el editor. Tu selección sigue marcada, así que el pegado la reemplaza.
+   Si no te gusta, `Ctrl+Z`.
+
+Tres cosas a tener en cuenta:
+
+- Donde al modelo le falte un dato, una cifra o una cita, va a escribir
+  `[FALTA: …]` en vez de inventarlo. Buscá esas marcas y completalas vos.
+- Igual, leé lo que devuelve antes de dejarlo: puede afirmar algo que tus
+  notas no decían.
+- Lo que pegás en un chat sale de tu máquina. El editor no envía nada solo.
+
+Cada pedido lleva la **guía de estilo**: de qué trata el informe, en qué
+persona se escribe y qué términos usar. Viene con una inicial; corregila en
+**IA** → *Guía de estilo…*. Queda en `editor/guia-estilo.md` y no viaja a
+Overleaf.
+
 **Traer.** Baja lo que cambiaron los demás en Overleaf y lo combina con lo
 tuyo. Cuando hay algo nuevo, la barra avisa `Hay cambios nuevos en Overleaf`.
 
@@ -330,8 +363,9 @@ terminar.
   Enviar, y vos los de ellos cuando apretás Traer.
 - **No muestra los comentarios ni el control de cambios de Overleaf.** Eso se
   sigue leyendo en la web de Overleaf.
-- **No revisa el estilo ni la redacción.** Marca errores de ortografía y
-  gramática, no si un párrafo está bien escrito.
+- **No revisa el estilo ni la redacción por su cuenta.** Marca errores de
+  ortografía y gramática. Para la redacción, el botón **IA** te arma el pedido
+  y lo pegás vos en un modelo; el editor no recibe la respuesta.
 - **No modifica Zotero ni mantiene las fichas al día.** Si corregís un paper
   en Zotero después de haberlo citado, la ficha que ya está en
   `referencias.bib` no cambia sola.

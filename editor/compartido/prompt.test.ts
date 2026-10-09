@@ -44,6 +44,16 @@ describe('armarPrompt', () => {
     expect(prompt('estilo', { guia: '\n  Presente para hechos generales.\n\n' })).toContain('## Guía de estilo\n\nPresente para hechos generales.\n\n## ');
   });
 
+  it('los títulos de la guía quedan por debajo de los apartados de la prompt', () => {
+    const p = prompt('estilo', { guia: '# Guía\n\n## Voz\n\nPlural.\n\n### Detalle\n\nEl símbolo # suelto y C# no son títulos.' });
+    expect(p).toContain('## Guía de estilo\n\n### Guía\n\n#### Voz\n\nPlural.\n\n##### Detalle\n\nEl símbolo # suelto y C# no son títulos.\n\n## Reglas');
+  });
+
+  it('con la guía inicial, los únicos apartados de segundo nivel son los de la prompt', () => {
+    const apartados = prompt('desarrollar', { guia: GUIA_INICIAL }).split('\n').filter((linea) => /^#{1,2} /.test(linea));
+    expect(apartados).toEqual(['## Tarea', '## Dónde va este texto', '## Guía de estilo', '## Reglas', '## Texto']);
+  });
+
   it('el orden es tarea, ubicación, guía, reglas y texto', () => {
     const p = prompt('desarrollar');
     const lugares = ['## Tarea', '## Dónde va', '## Guía de estilo', '## Reglas', INICIO_DEL_TEXTO].map((marca) => p.indexOf(marca));

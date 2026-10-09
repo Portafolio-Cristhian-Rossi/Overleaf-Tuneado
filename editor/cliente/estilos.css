@@ -177,6 +177,16 @@ select {
 .buscador-forma { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .buscador-citas .dialogo-botones { margin-top: 4px; }
 
+/* Guía de estilo para las prompts */
+.editor-de-guia { width: min(46rem, 92vw); max-width: none; max-height: 90vh; }
+.editor-de-guia[open] { display: flex; flex-direction: column; gap: 10px; }
+.guia-campo {
+  height: 60vh; min-height: 8rem; padding: 10px 12px; border: 1px solid var(--borde); border-radius: 6px;
+  background: var(--superficie); color: var(--texto); font: 14px/1.5 var(--mono); resize: none;
+}
+.guia-aviso { margin: 0; color: var(--peligro); font-size: 13px; }
+.editor-de-guia .dialogo-botones { margin-top: 4px; }
+
 /* Cartel sobre el editor (archivo inexistente, conflicto) */
 .cartel {
   position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
