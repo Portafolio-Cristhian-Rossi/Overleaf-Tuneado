@@ -76,6 +76,10 @@ export const api = {
       return { ...cuerpo, estado: respuesta.status };
     },
   },
+  ia: {
+    guia: async () => (await pedir<{ texto: string }>('GET', '/api/ia/guia')).texto,
+    guardarGuia: (texto: string) => pedir<void>('PUT', '/api/ia/guia', { texto }),
+  },
   correccion: {
     estado: () => pedir<EstadoCorrector>('GET', '/api/correccion/estado'),
     revisar: (parrafos: Segmento[][]) => pedir<(Aviso[] | null)[]>('POST', '/api/correccion/revisar', { parrafos }),

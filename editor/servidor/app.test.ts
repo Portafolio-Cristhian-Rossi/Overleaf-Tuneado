@@ -3,10 +3,12 @@ import http, { type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { GUIA_INICIAL } from '../compartido/prompt';
 import type { Config, EstadoGit, ItemZotero } from '../compartido/tipos';
 import { copiarFixture, dirTemporal } from '../pruebas/ayudas/temporales';
 import { crearApp, type Dependencias } from './app';
 import { crearArchivos, RutaInvalida } from './archivos';
+import { crearGuia } from './guia';
 import { crearImagenes } from './imagenes';
 import { describirProyecto } from './proyecto';
 import { crearReferencias } from './referencias';
@@ -82,6 +84,7 @@ beforeEach(async () => {
       agregarPalabra: vi.fn(async (p: string) => { if (/\s/.test(p)) throw new Error('La palabra no es válida: tiene que ser una sola palabra.'); }),
       agregarExcepcion: vi.fn(async () => {}),
     },
+    guia: crearGuia(path.join(dir, 'guia-estilo.md')),
     imagenes: crearImagenes(informe),
     referencias: crearReferencias(informe, async () => 'referencias.bib'),
     zotero: {
@@ -304,6 +307,37 @@ describe('corrección', () => {
     expect(r.status).toBe(400);
     expect(r.cuerpo.mensaje).toMatch(/una sola palabra/);
     expect(d.corrector.olvidarCache).not.toHaveBeenCalled();
+  });
+});
+
+describe('guía de estilo', () => {
+  const archivoDeGuia = () => path.join(dir, 'guia-estilo.md');
+
+  it('sin guardar ninguna devuelve la inicial', async () => {
+    expect(await get('/api/ia/guia')).toEqual({ texto: GUIA_INICIAL });
+  });
+
+  it('guarda la guía y la devuelve después', async () => {
+    expect((await put('/api/ia/guia', { texto: 'Tercera persona.' })).status).toBe(200);
+    expect(await get('/api/ia/guia')).toEqual({ texto: 'Tercera persona.' });
+    expect(fs.readFileSync(archivoDeGuia(), 'utf8')).toBe('Tercera persona.');
+  });
+
+  it.each([
+    [{}],
+    [{ texto: 42 }],
+    [{ texto: 'x'.repeat(20001) }],
+  ])('una guía inválida da 400 con su motivo y no se guarda', async (cuerpo) => {
+    const r = await put('/api/ia/guia', cuerpo);
+    expect(r.status).toBe(400);
+    expect(r.cuerpo.mensaje).toMatch(/guía/);
+    expect(fs.existsSync(archivoDeGuia())).toBe(false);
+  });
+
+  it('no escribe nada en el informe', async () => {
+    const antes = fs.readdirSync(path.join(dir, 'informe')).sort();
+    await put('/api/ia/guia', { texto: 'Algo.' });
+    expect(fs.readdirSync(path.join(dir, 'informe')).sort()).toEqual(antes);
   });
 });
 

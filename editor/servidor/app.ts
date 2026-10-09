@@ -6,6 +6,7 @@ import type { Segmento } from '../compartido/prosa';
 import type { Compilador } from './compilar';
 import type { Diccionario } from './diccionario';
 import type { Git } from './git';
+import { GuiaInvalida, type Guia } from './guia';
 import type { Imagenes } from './imagenes';
 import type { Corrector } from './languagetool';
 import type { Referencias } from './referencias';
@@ -15,7 +16,7 @@ import type { Zotero } from './zotero';
 export interface Dependencias {
   config: Config; archivos: Archivos; proyecto: () => Promise<Proyecto>;
   git: Git; compilador: Compilador; vigia: Vigia;
-  corrector: Corrector; diccionario: Diccionario; imagenes: Imagenes; referencias: Referencias; zotero: Zotero;
+  corrector: Corrector; diccionario: Diccionario; guia: Guia; imagenes: Imagenes; referencias: Referencias; zotero: Zotero;
   abrirVsCode: () => Promise<void>; dirEstaticos: string;
 }
 
@@ -184,13 +185,17 @@ export function crearApp(d: Dependencias): express.Express {
   app.post('/api/correccion/palabra', guardarPalabra((p) => d.diccionario.agregarPalabra(p)));
   app.post('/api/correccion/excepcion', guardarPalabra((p) => d.diccionario.agregarExcepcion(p)));
 
+  // La guía de estilo que acompaña a cada prompt. El editor no llama a ninguna IA.
+  app.get('/api/ia/guia', async (_req, res) => { res.json({ texto: await d.guia.leer() }); });
+  app.put('/api/ia/guia', async (req, res) => { await d.guia.guardar(req.body?.texto); res.json({}); });
+
   app.post('/api/latido', (_req, res) => { d.vigia.latido(); res.json({}); });
 
   app.use('/api', (_req, res) => { res.status(404).json({ mensaje: 'Ruta desconocida.' }); });
   app.use(express.static(d.dirEstaticos));
 
   const alFallar: ErrorRequestHandler = (error, req, res, _next) => {
-    if (error instanceof RutaInvalida) res.status(400).json({ mensaje: error.message });
+    if (error instanceof RutaInvalida || error instanceof GuiaInvalida) res.status(400).json({ mensaje: error.message });
     else if (error?.type === 'entity.too.large') {
       res.status(413).json({ mensaje: req.path === '/api/imagenes' ? 'La imagen supera los 20 MB.' : 'El pedido es demasiado grande.' });
     }

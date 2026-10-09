@@ -6,6 +6,7 @@ import { crearCompilador } from './compilar';
 import { cargarConfig } from './config';
 import { crearDiccionario } from './diccionario';
 import { crearGit } from './git';
+import { crearGuia } from './guia';
 import { crearImagenes } from './imagenes';
 import { crearCorrector } from './languagetool';
 import { describirProyecto } from './proyecto';
@@ -47,6 +48,7 @@ const app = crearApp({
   vigia,
   corrector,
   diccionario,
+  guia: crearGuia(path.join(DIR_EDITOR, 'guia-estilo.md')),
   imagenes: crearImagenes(config.informe),
   referencias: crearReferencias(config.informe, async () => (await describirProyecto(config.informe, config.principal)).bibliografia),
   // EDITOR_ZOTERO permite probar contra un Zotero de mentira; normalmente no está definida.
