@@ -6,5 +6,6 @@ editor/config.prueba.json
 editor/.entorno-prueba/
 editor/languagetool/
 editor/correccion.json
+editor/guia-estilo.md
 .superpowers/
 .claude/worktrees/
