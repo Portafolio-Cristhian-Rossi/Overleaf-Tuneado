@@ -527,7 +527,7 @@ Son dos cosas separadas, y cada una viaja por su lado:
    GitHub:
 
 ```bash
-git clone https://github.com/<tu-usuario>/<tu-repositorio>.git Tesis
+git clone https://github.com/Portafolio-Cristhian-Rossi/Overleaf-Tuneado.git Tesis
 ```
 
 3. Seguí la sección 3 para clonar el informe dentro de `Tesis`. Creá un token
