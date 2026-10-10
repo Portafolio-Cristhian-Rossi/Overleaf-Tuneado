@@ -1,10 +1,15 @@
 import type { ProblemaLatex } from '../../compartido/tipos';
-import { api } from '../api';
+import type { PantallaDeCompilacion } from '../compilacion';
 import { avisoDeCompilacion, estadoDeCompilacion, ubicacionDe } from '../mensajes';
 import { el } from './dom';
 
-export function crearPanelPdf(padre: HTMLElement, o: { alElegirProblema(ruta: string, linea: number): void }): { compilar(): Promise<void> } {
-  const boton = el('button', { type: 'button', alClick: () => { void compilar(); } }, 'Compilar');
+// El botón Compilar, el visor y la lista de problemas. Se usa en el panel del editor y en la
+// ventana aparte del PDF; quién compila lo decide `compilacion`.
+export function crearPanelPdf(padre: HTMLElement, o: {
+  alCompilar(): void;
+  alElegirProblema(ruta: string, linea: number): void;
+}): PantallaDeCompilacion {
+  const boton = el('button', { type: 'button', alClick: () => o.alCompilar() }, 'Compilar');
   const estado = el('span', { clase: 'pdf-estado', role: 'status' });
   const visor = el('iframe', { clase: 'pdf-visor', title: 'PDF del informe', hidden: true });
   const mensaje = el('p', { clase: 'pdf-mensaje' }, 'Compilá para ver el PDF del informe.');
@@ -38,13 +43,16 @@ export function crearPanelPdf(padre: HTMLElement, o: { alElegirProblema(ruta: st
     }));
   }
 
-  async function compilar(): Promise<void> {
-    if (boton.disabled) return;
-    boton.disabled = true;
-    boton.textContent = 'Compilando…';
-    estado.textContent = '';
-    try {
-      const r = await api.compilar();
+  // Si ya hay un PDF de una sesión anterior, se muestra de entrada.
+  fetch('/api/pdf', { method: 'HEAD' }).then((r) => { if (r.ok && visor.hidden) mostrarPdf(); }, () => undefined);
+
+  return {
+    ocupada(si) {
+      boton.disabled = si;
+      boton.textContent = si ? 'Compilando…' : 'Compilar';
+      if (si) estado.textContent = '';
+    },
+    mostrar(r) {
       const aviso = avisoDeCompilacion(r);
       if (aviso) {
         if (visor.hidden) mostrarMensaje(aviso);
@@ -56,16 +64,7 @@ export function crearPanelPdf(padre: HTMLElement, o: { alElegirProblema(ruta: st
       mostrarProblemas(r.problemas);
       estado.textContent = estadoDeCompilacion(r);
       if (r.tipo === 'con-errores' && visor.hidden) mostrarMensaje('El informe tiene errores y todavía no se pudo generar un PDF. Están listados abajo.');
-    } catch (e) {
-      estado.textContent = (e as Error).message;
-    } finally {
-      boton.disabled = false;
-      boton.textContent = 'Compilar';
-    }
-  }
-
-  // Si ya hay un PDF de una sesión anterior, se muestra de entrada.
-  fetch('/api/pdf', { method: 'HEAD' }).then((r) => { if (r.ok) mostrarPdf(); }, () => undefined);
-
-  return { compilar };
+    },
+    fallar(texto) { estado.textContent = texto; },
+  };
 }

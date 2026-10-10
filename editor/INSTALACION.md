@@ -350,9 +350,23 @@ tuyo. Cuando hay algo nuevo, la barra avisa `Hay cambios nuevos en Overleaf`.
 **Enviar.** Trae primero y después sube tus cambios. Un punto junto al botón
 indica que tenés cambios sin enviar.
 
-**Compilar.** Genera el PDF y lo muestra a la derecha. Si hay errores, aparecen
-listados debajo; al hacer clic en uno, el editor va a la línea. La primera
-compilación tarda varios minutos porque MiKTeX descarga paquetes.
+**Compilar.** Guarda lo que estés escribiendo, genera el PDF y lo muestra a la
+derecha. Si hay errores, aparecen listados debajo; al hacer clic en uno, el
+editor va a la línea. La primera compilación tarda varios minutos porque
+MiKTeX descarga paquetes.
+
+**Más lugar para escribir.** Arriba del PDF, a la derecha, hay dos botones:
+
+- *Ocultar* saca el panel derecho (el PDF y Gramática) y el texto ocupa todo
+  el ancho. Vuelve con **Mostrar panel**, arriba a la derecha. El editor
+  recuerda cómo lo dejaste.
+- *Otra ventana* abre el PDF en una ventana propia, para llevarla a un segundo
+  monitor, y oculta el panel. Esa ventana tiene su botón **Compilar** y la
+  lista de errores; un clic en un error lleva el editor a esa línea. Compiles
+  desde donde compiles, las dos muestran lo mismo.
+
+Si al apretar *Otra ventana* el navegador avisa que bloqueó una ventana
+emergente, permitilas para esta página.
 
 **La costumbre que evita problemas:** Traer al sentarte a escribir y Enviar al
 terminar.
@@ -493,3 +507,64 @@ npm run build
 
 Los cambios se ven la próxima vez que el editor arranque: cerrá sus pestañas y
 esperá diez minutos a que se cierre solo, o reiniciá la máquina.
+
+## 11. Trabajar desde otra computadora
+
+Son dos cosas separadas, y cada una viaja por su lado:
+
+| Qué | Dónde vive | Cómo llega a la otra máquina |
+|---|---|---|
+| El informe | Overleaf | Botones **Traer** y **Enviar** del editor |
+| El editor, tu diccionario y tu guía de estilo | Tu repositorio privado de GitHub | `git pull` y `git push` en la carpeta `Tesis` |
+| Los programas que usa el editor, el corrector y el ícono | Cada máquina | Se instalan una vez (secciones 2 y 4) |
+| El PDF | Cada máquina | Se genera de nuevo con **Compilar** |
+
+**La primera vez en la máquina nueva**
+
+1. Instalá los requisitos de la sección 2.
+2. Parado en la carpeta donde quieras tener todo (por ejemplo `Documentos`),
+   cloná tu repositorio. Git abre el navegador para que inicies sesión en
+   GitHub:
+
+```bash
+git clone https://github.com/<tu-usuario>/<tu-repositorio>.git Tesis
+```
+
+3. Seguí la sección 3 para clonar el informe dentro de `Tesis`. Creá un token
+   de Overleaf nuevo para esa máquina.
+4. Seguí la sección 4 para instalar el editor.
+
+**Al irte de una máquina**
+
+1. En el editor, **Enviar**: deja el informe en Overleaf.
+2. Si cambiaste algo del editor, agregaste palabras al diccionario o tocaste la
+   guía de estilo, parado en la carpeta `Tesis`:
+
+```bash
+git add -A
+```
+
+```bash
+git commit -m "Cambios del editor"
+```
+
+```bash
+git push
+```
+
+Si `git commit` responde que no hay nada para confirmar, no había cambios: no
+hace falta el `git push`.
+
+**Al sentarte en la otra**
+
+1. Parado en la carpeta `Tesis`:
+
+```bash
+git pull
+```
+
+2. Si trajo cambios de la carpeta `editor`, seguí la sección 10.
+3. En el editor, **Traer**.
+
+La carpeta `informe` no entra en tu repositorio de GitHub: el informe sigue
+viajando solo por Overleaf, y tus compañeros no ven nada del editor.

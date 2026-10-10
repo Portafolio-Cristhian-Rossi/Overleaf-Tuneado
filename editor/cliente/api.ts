@@ -32,6 +32,15 @@ async function pedir<T>(metodo: string, ruta: string, cuerpo?: unknown, opciones
   return respuesta.json();
 }
 
+const INTERVALO_DE_LATIDO_MS = 30 * 1000;
+
+// Mientras haya una ventana abierta, del editor o del PDF, el servidor sigue vivo.
+export function mantenerVivoAlServidor(): void {
+  const latir = () => { api.latido().catch(() => undefined); };
+  latir();
+  setInterval(latir, INTERVALO_DE_LATIDO_MS);
+}
+
 // Dirección desde la que el navegador carga una imagen del informe.
 export const urlDeImagen = (ruta: string) => `/api/imagen?ruta=${encodeURIComponent(ruta)}`;
 

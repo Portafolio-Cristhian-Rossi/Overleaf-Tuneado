@@ -4,11 +4,12 @@ import { analizarBib, type ProblemaBib } from '../compartido/bib';
 import { candidatos, type Bibliografia, type Candidato } from '../compartido/citas';
 import type { AccionDeIa } from '../compartido/prompt';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
-import { api, urlDeImagen } from './api';
+import { api, mantenerVivoAlServidor, urlDeImagen } from './api';
 import { aplicarEdicion, darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
 import { confirmarCeldaAbierta, formatoEnCeldaAbierta } from './bloques/edicionTabla';
 import { agregarPegado, avisoDelBuscador, colocarCita, resolverClaves, type Citador } from './citar';
 import { agregarPaquete, cambiarRutaDeImagen, citaEn, puedeCitarse } from './comandos';
+import { abrirCanal, crearCompilacion } from './compilacion';
 import { extensionCorreccion } from './correccion';
 import { crearEditor } from './editor';
 import { avisoDeCopia, opcionesDeIa, prepararPrompt } from './ia';
@@ -30,7 +31,7 @@ import { PLANTILLAS } from './plantillas';
 import { contextoCambiado, extensionVista } from './vista';
 
 const CLAVE_ULTIMO = 'editor-informe:ultimo-archivo';
-const INTERVALO_DE_LATIDO_MS = 30 * 1000;
+const CLAVE_PANEL_OCULTO = 'editor-informe:panel-oculto';
 
 const porId = (id: string) => document.getElementById(id) as HTMLElement;
 const esTex = (ruta: string | null) => ruta !== null && /\.tex$/i.test(ruta);
@@ -389,7 +390,7 @@ const editor = crearEditor(porId('editor'), {
     relojProyecto = setTimeout(() => {
       void recargarProyecto().catch(() => undefined);
       void sincronizacion.revisar();
-      if (compilarAlGuardar) void panelPdf.compilar();
+      if (compilarAlGuardar) void compilacion.compilar({ guardar: false });
     }, 500);
   },
   alCambiarDocumento: (texto) => actualizarIndice(texto),
@@ -448,8 +449,44 @@ function elegirPestana(indice: number): void {
     boton.setAttribute('aria-selected', String(i === indice));
   });
 }
-porId('panel').append(el('div', { clase: 'pestanas', role: 'tablist' }, ...pestanas.map(([boton]) => boton)), zonaPdf, zonaGramatica);
+
+// El panel se puede ocultar para escribir a todo el ancho. Ocultarlo a mano vale también para la
+// próxima vez; al pasar el PDF a otra ventana se oculta solo por esta vez (`recordar`).
+function verPanel(visible: boolean, recordar: boolean): void {
+  porId('cuerpo').classList.toggle('sin-panel', !visible);
+  botonMostrarPanel.hidden = visible;
+  if (!recordar) return;
+  try { localStorage.setItem(CLAVE_PANEL_OCULTO, visible ? '' : 'si'); } catch { /* almacenamiento no disponible */ }
+}
+function panelOcultoRecordado(): boolean {
+  try { return localStorage.getItem(CLAVE_PANEL_OCULTO) === 'si'; } catch { return false; }
+}
+
+// El PDF en una ventana propia, para llevarla a otra pantalla. Un segundo clic usa la misma.
+function abrirPdfAparte(): void {
+  const ventana = window.open('pdf.html', 'editor-informe-pdf', 'popup,width=900,height=1000');
+  if (!ventana) {
+    barra.avisar('El navegador no dejó abrir la ventana del PDF. Permití las ventanas emergentes de esta página y probá de nuevo.', 'error');
+    return;
+  }
+  ventana.focus();
+  verPanel(false, false);
+}
+
+const botonMostrarPanel = el('button', {
+  type: 'button', hidden: true, title: 'Volver a mostrar el PDF y la gramática', alClick: () => verPanel(true, true),
+}, 'Mostrar panel');
+barra.zonaAcciones.append(botonMostrarPanel);
+porId('panel').append(
+  el('div', { clase: 'pestanas' },
+    el('div', { clase: 'pestanas-lista', role: 'tablist' }, ...pestanas.map(([boton]) => boton)),
+    el('button', { type: 'button', title: 'Abrir el PDF en otra ventana, para llevarlo a otra pantalla', alClick: abrirPdfAparte }, 'Otra ventana'),
+    el('button', { type: 'button', title: 'Ocultar este panel y escribir a todo el ancho', alClick: () => verPanel(false, true) }, 'Ocultar'),
+  ),
+  zonaPdf, zonaGramatica,
+);
 elegirPestana(0);
+if (panelOcultoRecordado()) verPanel(false, false);
 
 const panelGramatica = crearPanelGramatica(zonaGramatica, {
   vista: () => editor.vista,
@@ -458,12 +495,32 @@ const panelGramatica = crearPanelGramatica(zonaGramatica, {
   alContar: (cantidad) => { pestanas[1][0].textContent = cantidad > 0 ? `Gramática (${cantidad})` : 'Gramática'; },
 });
 
+async function irAProblema(ruta: string, linea: number): Promise<void> {
+  if (editor.rutaAbierta() !== ruta) await abrir(ruta);
+  if (editor.rutaAbierta() === ruta) editor.irALinea(linea);
+}
+
+// El PDF puede estar además en otra ventana: las dos muestran lo mismo, y la del PDF le pide a
+// esta que compile y que vaya a la línea de un problema.
+const canalDePdf = abrirCanal();
 const panelPdf = crearPanelPdf(zonaPdf, {
-  alElegirProblema: async (ruta, linea) => {
-    if (editor.rutaAbierta() !== ruta) await abrir(ruta);
-    if (editor.rutaAbierta() === ruta) editor.irALinea(linea);
+  alCompilar: () => { void compilacion.compilar(); },
+  alElegirProblema: (ruta, linea) => { void irAProblema(ruta, linea); },
+});
+const compilacion = crearCompilacion({
+  canal: canalDePdf,
+  pantalla: panelPdf,
+  compilar: api.compilar,
+  // LaTeX lee del disco: antes entra lo que esté a medio escribir.
+  guardar: async () => {
+    confirmarCeldaAbierta();
+    await editor.guardarAhora();
   },
 });
+canalDePdf.alRecibir((m) => {
+  if (m.tipo === 'ir-a') void irAProblema(m.ruta, m.linea);
+});
+window.addEventListener('pagehide', () => compilacion.soltar());
 
 async function abrir(ruta: string): Promise<void> {
   try {
@@ -495,10 +552,7 @@ window.addEventListener('beforeunload', (e) => {
   if (editor.hayCambiosSinGuardar()) e.preventDefault();
 });
 
-// Mientras haya una pestaña abierta, el servidor sigue vivo.
-const latir = () => { api.latido().catch(() => undefined); };
-latir();
-setInterval(latir, INTERVALO_DE_LATIDO_MS);
+mantenerVivoAlServidor();
 
 async function iniciar(): Promise<void> {
   try {
