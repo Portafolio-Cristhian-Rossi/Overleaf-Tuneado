@@ -90,34 +90,51 @@ export async function describirProyecto(dirInforme: string, principal: string): 
     let numeroSiguiente = 1;
     let letraSiguiente = 0;
     const vistos = new Set<string>();
-    const patron = /\\(frontmatter|mainmatter|backmatter|appendix)(?![a-zA-Z@])|\\begin\{appendix\}|\\(?:include|input)\{([^}]*)\}|[{}]/g;
+    // Las llaves de un incluido no tocan los grupos abiertos por quien lo incluye.
+    let piso = 0;
+    // `\\`, `\{` y `\}` se consumen para que una llave escapada no cuente como grupo.
+    const patron = /\\[\\{}]|\\(frontmatter|mainmatter|backmatter|appendix)(?![a-zA-Z@])|\\begin\{appendix\}|\\(?:include|input)\{([^}]*)\}|[{}]/g;
 
-    for (const m of fuentePrincipal.sinComentarios.matchAll(patron)) {
-      if (m[0] === '{') pila.push({ ...modo });
-      else if (m[0] === '}') modo = pila.pop() ?? modo;
-      else if (m[1] === 'frontmatter' || m[1] === 'backmatter') modo = { ...modo, numerado: false };
-      else if (m[1] === 'mainmatter') modo = { ...modo, numerado: true };
-      else if (m[1] === 'appendix' || m[0] === '\\begin{appendix}') modo = { ...modo, apendice: true };
-      else if (m[2] !== undefined) {
-        const ruta = resolverIncluido(raiz, m[2]);
-        if (ruta === null || vistos.has(ruta) || ruta === principal) continue;
-        vistos.add(ruta);
-        const f = leerFuente(path.join(raiz, ruta))!;
-        const capitulo = primerCapitulo(f);
-        let numero: string | null = null;
-        if (capitulo && !capitulo.conAsterisco && modo.numerado) {
-          const antes = f.sinComentarios.slice(0, capitulo.desde);
-          const esApendice = modo.apendice || /\\begin\{appendix\}|\\appendix(?![a-zA-Z@])/.test(antes);
-          numero = esApendice ? String.fromCharCode(65 + letraSiguiente++) : String(numeroSiguiente++);
-        }
-        capitulos.push({
-          ruta,
-          titulo: capitulo ? f.texto.slice(capitulo.contenido.desde, capitulo.contenido.hasta) : path.basename(ruta),
-          numero,
-        });
-        etiquetas.push(...etiquetasDe(ruta, f, numero));
+    const recorrer = (texto: string): void => {
+      for (const m of texto.matchAll(patron)) {
+        if (m[0] === '{') pila.push({ ...modo });
+        else if (m[0] === '}') { if (pila.length > piso) modo = pila.pop()!; }
+        else if (m[1] === 'frontmatter' || m[1] === 'backmatter') modo = { ...modo, numerado: false };
+        else if (m[1] === 'mainmatter') modo = { ...modo, numerado: true };
+        else if (m[1] === 'appendix' || m[0] === '\\begin{appendix}') modo = { ...modo, apendice: true };
+        else if (m[2] !== undefined) incluir(m[2]);
       }
-    }
+    };
+
+    const incluir = (nombre: string): void => {
+      const ruta = resolverIncluido(raiz, nombre);
+      if (ruta === null || vistos.has(ruta) || ruta === principal) return;
+      vistos.add(ruta);
+      const f = leerFuente(path.join(raiz, ruta))!;
+      const capitulo = primerCapitulo(f);
+      const entrada: Capitulo = {
+        ruta,
+        titulo: capitulo ? f.texto.slice(capitulo.contenido.desde, capitulo.contenido.hasta) : path.basename(ruta),
+        numero: null,
+      };
+      capitulos.push(entrada);
+
+      // Un incluido puede incluir a otros (los anexos en su carpeta): se recorre igual que el
+      // principal, y lo que está antes de su \chapter cuenta para numerarlo.
+      const pisoAnterior = piso;
+      piso = pila.length;
+      const corte = capitulo ? capitulo.desde : f.sinComentarios.length;
+      recorrer(f.sinComentarios.slice(0, corte));
+      if (capitulo && !capitulo.conAsterisco && modo.numerado) {
+        entrada.numero = modo.apendice ? String.fromCharCode(65 + letraSiguiente++) : String(numeroSiguiente++);
+      }
+      etiquetas.push(...etiquetasDe(ruta, f, entrada.numero));
+      recorrer(f.sinComentarios.slice(corte));
+      pila.length = piso;
+      piso = pisoAnterior;
+    };
+
+    recorrer(fuentePrincipal.sinComentarios);
   }
 
   if (!fuentePrincipal || capitulos.length === 0) {

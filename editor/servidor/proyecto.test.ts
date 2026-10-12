@@ -101,6 +101,42 @@ describe('describirProyecto en otros proyectos', () => {
     expect(p.capitulos.slice(1).map((c) => c.numero)).toEqual(['1', 'A', 'B']);
   });
 
+  it('sigue los \\input de un incluido, como los anexos guardados en su carpeta', async () => {
+    const p = await proyectoCon({
+      'main.tex': '\\begin{document}\n\\input{a}\n\\input{anexos}\n\\end{document}\n',
+      'a.tex': '\\chapter{A}\n$\\{x\\}$\n',
+      'anexos.tex': '\\begin{appendix}\n\\input{anexos/x}\n\\input{anexos/y}\n\\end{appendix}\n',
+      'anexos/x.tex': '\\chapter{X}\\label{anexo:x}\n',
+      'anexos/y.tex': '\\chapter{Y}\n',
+    });
+    expect(p.capitulos.slice(1)).toEqual([
+      { ruta: 'a.tex', titulo: 'A', numero: '1' },
+      { ruta: 'anexos.tex', titulo: 'anexos.tex', numero: null },
+      { ruta: 'anexos/x.tex', titulo: 'X', numero: 'A' },
+      { ruta: 'anexos/y.tex', titulo: 'Y', numero: 'B' },
+    ]);
+    expect(p.etiquetas).toEqual([
+      { nombre: 'anexo:x', ruta: 'anexos/x.tex', linea: 1, clase: 'seccion', titulo: 'X', numero: 'A' },
+    ]);
+  });
+
+  it('dos archivos que se incluyen entre sí aparecen una sola vez', async () => {
+    const p = await proyectoCon({
+      'main.tex': '\\begin{document}\n\\input{a}\n\\end{document}\n',
+      'a.tex': '\\chapter{A}\n\\input{b}\n',
+      'b.tex': '\\chapter{B}\n\\input{a}\n\\input{main}\n',
+    });
+    expect(p.capitulos.map((c) => [c.ruta, c.numero])).toEqual([['main.tex', null], ['a.tex', '1'], ['b.tex', '2']]);
+  });
+
+  it('una llave suelta en un incluido no cierra el grupo del principal', async () => {
+    const p = await proyectoCon({
+      'main.tex': '\\begin{document}\n{\\backmatter\n\\input{a}\n\\input{b}\n}\n\\input{c}\n\\end{document}\n',
+      'a.tex': '\\chapter{A}\nsobra }\n', 'b.tex': '\\chapter{B}\n', 'c.tex': '\\chapter{C}\n',
+    });
+    expect(p.capitulos.slice(1).map((c) => c.numero)).toEqual([null, null, '1']);
+  });
+
   it('un archivo sin \\chapter usa su nombre como título y no lleva número', async () => {
     const p = await proyectoCon({
       'main.tex': '\\begin{document}\n\\input{notas}\n\\end{document}\n',
