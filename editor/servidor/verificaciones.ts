@@ -27,7 +27,8 @@ function nombreBase(c: Pick<Corrida, 'fecha' | 'commit'>): string {
   return `${marca}-${c.commit.slice(0, 7)}`;
 }
 
-// Orden por marca de tiempo y después por el sufijo numérico (-2 va después de nada, -10 después de -9).
+// Orden por marca de tiempo y después por el sufijo numérico (-2 va después de nada, -10 después de -9):
+// dentro de un minuto el orden es el de guardado, sin importar el commit.
 function compararNombres(a: string, b: string): number {
   const ma = NOMBRE.exec(a);
   const mb = NOMBRE.exec(b);
@@ -36,11 +37,14 @@ function compararNombres(a: string, b: string): number {
   const sa = Number(ma[3] ?? 1);
   const sb = Number(mb[3] ?? 1);
   if (sa !== sb) return sa - sb;
-  return ma[2]! < mb[2]! ? -1 : ma[2]! > mb[2]! ? 1 : 0;
+  return 0;
 }
 
-const mismosArchivos = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && [...a].sort().every((x, i) => x === [...b].sort()[i]);
+function mismosArchivos(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const ordenados = [...b].sort();
+  return [...a].sort().every((x, i) => x === ordenados[i]);
+}
 
 async function leerJson<T>(archivo: string): Promise<T | null> {
   try {
@@ -101,8 +105,14 @@ export function crearVerificaciones(dir: string): Verificaciones {
       };
       const base = nombreBase(c);
       const existentes = new Set(await fs.readdir(dir).catch(() => [] as string[]));
-      let nombre = `${base}.json`;
-      for (let n = 2; existentes.has(nombre); n++) nombre = `${base}-${n}.json`;
+      // El sufijo sigue al mayor ya usado en ese minuto, sea cual sea el commit de esos archivos.
+      const marca = base.slice(0, 15);
+      let n = 1;
+      for (const e of existentes) {
+        const m = NOMBRE.exec(e);
+        if (m && m[1] === marca) n = Math.max(n, Number(m[3] ?? 1) + 1);
+      }
+      const nombre = n === 1 ? `${base}.json` : `${base}-${n}.json`;
       await escribir(path.join(dir, nombre), completa);
       return completa;
     }),
@@ -114,8 +124,9 @@ export function crearVerificaciones(dir: string): Verificaciones {
     marcarResuelto: (id) => enSerie(async () => {
       const ultima = (await corridas())[0];
       if (!ultima || !ultima.corrida.hallazgos.some((h) => h.id === id)) throw new HallazgoDesconocido(id);
-      if (ultima.corrida.resueltos.includes(id)) return;
-      ultima.corrida.resueltos.push(id);
+      const resueltos = ultima.corrida.resueltos ?? [];
+      if (resueltos.includes(id)) return;
+      ultima.corrida.resueltos = [...resueltos, id];
       await escribir(path.join(dir, ultima.nombre), ultima.corrida);
     }),
 

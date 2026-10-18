@@ -68,6 +68,26 @@ describe('verificaciones', () => {
     expect((await v.ultima())!.hallazgos[0]!.id).toBe('h9');
   });
 
+  it('en el mismo minuto con otro commit, la última es la guardada después', async () => {
+    await v.guardar(corrida({ ids: ['x'], commit: 'bbbbbbb1' }));
+    const b = await v.guardar(corrida({ ids: ['y'], commit: 'aaaaaaa1' }));
+    expect(b.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 1 });
+    expect((await v.ultima())!.hallazgos[0]!.id).toBe('y');
+    const c = await v.guardar(corrida({ ids: ['y', 'z'], commit: 'ccccccc1' }));
+    expect(c.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 0 });
+    expect((await v.ultima())!.hallazgos.map((h) => h.id)).toEqual(['y', 'z']);
+  });
+
+  it('marcar resuelto tolera una corrida sin lista de resueltos', async () => {
+    await v.guardar(corrida({ ids: ['x'] }));
+    const archivo = path.join(dir, fs.readdirSync(dir)[0]!);
+    const datos = JSON.parse(fs.readFileSync(archivo, 'utf8'));
+    delete datos.resueltos;
+    fs.writeFileSync(archivo, JSON.stringify(datos));
+    await v.marcarResuelto('x');
+    expect((await v.ultima())!.resueltos).toEqual(['x']);
+  });
+
   it('la última es la de fecha mayor', async () => {
     await v.guardar(corrida({ ids: ['viejo'], fecha: new Date(2026, 9, 18, 9, 5).toISOString() }));
     await v.guardar(corrida({ ids: ['nuevo'], fecha: new Date(2026, 9, 18, 14, 32).toISOString(), commit: 'aaaaaaa1' }));
