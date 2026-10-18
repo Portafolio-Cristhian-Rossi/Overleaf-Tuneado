@@ -334,7 +334,8 @@ button.pdf-problema:hover { background: var(--superficie-2); }
 
 /* Pestañas del panel derecho */
 .pestanas { display: flex; align-items: center; gap: 6px; padding: 6px 8px 0; border-bottom: 1px solid var(--borde); background: var(--superficie); }
-.pestanas-lista { display: flex; gap: 2px; flex: 1; min-width: 0; align-self: flex-end; }
+/* Con tres pestañas y el panel angosto, la lista se desplaza en vez de quedar debajo de los botones */
+.pestanas-lista { display: flex; gap: 2px; flex: 1; min-width: 0; align-self: flex-end; overflow-x: auto; scrollbar-width: none; }
 .pestanas [role='tab'] { border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: none; color: var(--texto-2); padding: 6px 12px; white-space: nowrap; }
 .pestanas [role='tab'][aria-selected='true'] { border-bottom-color: var(--acento); color: var(--texto); font-weight: 600; }
 .pestanas > button { margin-bottom: 6px; padding: 2px 8px; font-size: 13px; color: var(--texto-2); white-space: nowrap; }
@@ -354,6 +355,36 @@ button.pdf-problema:hover { background: var(--superficie-2); }
 .gramatica-tipo.info, .gramatica-tipo.hint { background: var(--acento-fondo); color: var(--acento); }
 .gramatica-palabra { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gramatica-detalle { color: var(--texto-2); }
+
+/* Panel de verificación */
+.verificacion-cuerpo { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 4px 16px; }
+.verificacion-encabezado { padding: 10px 12px; border-bottom: 1px solid var(--borde); color: var(--texto-2); font-size: 13px; }
+.verificacion-encabezado p { margin: 0; }
+.verificacion-encabezado p:first-child { color: var(--texto); font-weight: 600; }
+.verificacion-mensaje { margin: 0; padding: 12px; color: var(--texto-2); }
+.verificacion-grupo { padding-top: 8px; }
+.verificacion-tipo { margin: 4px 8px; font-size: 13px; }
+.verificacion-tipo.contradiccion { color: var(--peligro); }
+.verificacion-tipo.sin-respaldo { color: var(--aviso); }
+.verificacion-tipo.no-lo-cuenta { color: var(--verificacion); }
+.verificacion-archivo { margin: 6px 8px 2px; color: var(--texto-3); font-family: var(--mono); font-size: 12px; font-weight: normal; }
+.verificacion-lista { margin: 0; padding: 0; list-style: none; }
+.verificacion-hallazgo { margin: 2px 0; border-radius: 6px; }
+.verificacion-hallazgo.verificacion-resaltado { background: color-mix(in srgb, var(--verificacion) 14%, transparent); }
+.verificacion-aviso {
+  display: flex; flex-direction: column; gap: 2px; width: 100%;
+  padding: 6px 8px 2px; border: 0; border-radius: 6px; background: none; text-align: left; font-size: 13px;
+}
+button.verificacion-aviso:hover { background: var(--superficie-2); }
+.verificacion-cita { font-family: var(--prosa); }
+.verificacion-seccion { font-weight: 600; }
+.verificacion-cambio { align-self: flex-start; padding: 0 6px; border-radius: 4px; background: var(--aviso-fondo); color: var(--aviso); font-size: 12px; }
+.verificacion-explicacion { color: var(--texto-2); }
+.verificacion-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 2px 8px 6px; }
+.verificacion-repo { color: var(--texto-3); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+.verificacion-espacio { flex: 1; }
+.verificacion-chico { padding: 1px 8px; font-size: 12px; color: var(--texto-2); }
+.verificacion-ver-ignorados { margin: 12px 8px 4px; padding: 2px 8px; font-size: 13px; color: var(--texto-2); }
 
 /* Corrección dentro del editor */
 #editor .cm-autocorregida { background: color-mix(in srgb, var(--exito) 22%, transparent); border-radius: 3px; }

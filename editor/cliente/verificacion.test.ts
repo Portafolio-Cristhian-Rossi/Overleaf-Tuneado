@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Corrida, Hallazgo, Ignorado, TipoDeHallazgo } from '../compartido/verificacion';
-import { agrupar, encabezado, hallazgosVisibles, NOMBRE_DE_TIPO, opcionesDeVerificacion, ubicarCita } from './verificacion';
+import {
+  agrupar, avisoAlTerminar, encabezado, hallazgosVisibles, mensajesDelPanel, NOMBRE_DE_TIPO, opcionesDeVerificacion, rutaParaCopiar,
+  tiempoTranscurrido, ubicarCita, ubicarEnArchivo,
+} from './verificacion';
 
 function hallazgo(id: string, tipo: TipoDeHallazgo, archivo = 'a.tex'): Hallazgo {
   return { id, tipo, informe: { archivo, linea: 1, cita: 'x' }, repo: tipo === 'sin-respaldo' ? null : { archivo: 'r.py', linea: 1 }, explicacion: 'e' };
@@ -107,5 +110,106 @@ describe('opcionesDeVerificacion', () => {
   it('deshabilitada deshabilita las dos con el motivo', () => {
     const opciones = opcionesDeVerificacion({ estado: 'deshabilitada', motivo: 'No hay repositorio.' }, 'a.tex', true);
     expect(opciones.map((o) => [o.habilitada, o.ayuda])).toEqual([[false, 'No hay repositorio.'], [false, 'No hay repositorio.']]);
+  });
+});
+
+describe('ubicarEnArchivo', () => {
+  const conCita = (id: string, archivo: string, cita: string | null): Hallazgo =>
+    ({ ...hallazgo(id, cita === null ? 'no-lo-cuenta' : 'contradiccion', archivo), informe: { archivo, linea: 1, cita } });
+  const hallazgos = [conCita('1', 'a.tex', 'la API escribe'), conCita('2', 'a.tex', 'ya no está'), conCita('3', 'b.tex', 'otra'), conCita('4', 'a.tex', null)];
+
+  it('subraya solo las citas del archivo abierto que se encuentran', () => {
+    expect(ubicarEnArchivo('Acá la API\nescribe.', 'a.tex', hallazgos).citas).toEqual([{ desde: 4, hasta: 18, id: '1' }]);
+  });
+
+  it('la frase cambió solo para las citas del archivo abierto que no están', () => {
+    const { ubicado } = ubicarEnArchivo('Acá la API escribe.', 'a.tex', hallazgos);
+    expect(hallazgos.map(ubicado)).toEqual([true, false, true, true]);
+  });
+
+  it('sin archivo abierto no subraya nada ni marca cambios', () => {
+    const { citas, ubicado } = ubicarEnArchivo('', null, hallazgos);
+    expect(citas).toEqual([]);
+    expect(hallazgos.every(ubicado)).toBe(true);
+  });
+});
+
+describe('rutaParaCopiar', () => {
+  it('con y sin línea', () => {
+    expect(rutaParaCopiar({ archivo: 'backend/jobs.py', linea: 88 })).toBe('repositorio/backend/jobs.py:88');
+    expect(rutaParaCopiar({ archivo: 'README.md', linea: null })).toBe('repositorio/README.md');
+  });
+});
+
+describe('tiempoTranscurrido', () => {
+  it('minutos y segundos con dos cifras', () => {
+    expect(tiempoTranscurrido(0)).toBe('0:00');
+    expect(tiempoTranscurrido(65_400)).toBe('1:05');
+    expect(tiempoTranscurrido(16 * 60_000)).toBe('16:00');
+  });
+
+  it('un reloj que se adelanta no da negativo', () => {
+    expect(tiempoTranscurrido(-3000)).toBe('0:00');
+  });
+});
+
+describe('avisoAlTerminar', () => {
+  const desde = new Date(2026, 9, 18, 15, 0).getTime();
+  const enCurso = { estado: 'en-curso', alcance: 'capitulo', desde } as const;
+  const libre = { estado: 'libre', error: null } as const;
+  const tres = [hallazgo('1', 'contradiccion'), hallazgo('2', 'contradiccion'), hallazgo('3', 'contradiccion')];
+  const nueva = corrida({ fecha: new Date(desde).toISOString(), hallazgos: tres, resueltos: ['3'] });
+
+  it('al terminar con una corrida nueva cuenta los hallazgos visibles', () => {
+    expect(avisoAlTerminar(enCurso, { estado: libre, corrida: nueva, ignorados: [{ id: '2' } as Ignorado] }))
+      .toEqual({ texto: 'Verificación terminada: 1 hallazgo.', tipo: 'info' });
+    expect(avisoAlTerminar(enCurso, { estado: libre, corrida: nueva, ignorados: [] }))
+      .toEqual({ texto: 'Verificación terminada: 2 hallazgos.', tipo: 'info' });
+    expect(avisoAlTerminar(enCurso, { estado: libre, corrida: corrida({ fecha: new Date(desde).toISOString() }), ignorados: [] })?.texto)
+      .toBe('Verificación terminada: 0 hallazgos.');
+  });
+
+  it('si terminó con error, avisa el error', () => {
+    const error = { motivo: 'sin-cli', mensaje: 'No se encontró Claude Code.' } as const;
+    expect(avisoAlTerminar(enCurso, { estado: { estado: 'libre', error }, corrida: null, ignorados: [] }))
+      .toEqual({ texto: 'No se encontró Claude Code.', tipo: 'error' });
+  });
+
+  it('cancelada: sin corrida nueva ni error, no avisa', () => {
+    expect(avisoAlTerminar(enCurso, { estado: libre, corrida: corrida(), ignorados: [] })).toBeNull();
+    expect(avisoAlTerminar(enCurso, { estado: libre, corrida: null, ignorados: [] })).toBeNull();
+  });
+
+  it('solo avisa al pasar de en curso a otro estado', () => {
+    expect(avisoAlTerminar(libre, { estado: libre, corrida: nueva, ignorados: [] })).toBeNull();
+    expect(avisoAlTerminar(null, { estado: libre, corrida: nueva, ignorados: [] })).toBeNull();
+    expect(avisoAlTerminar(enCurso, { estado: enCurso, corrida: nueva, ignorados: [] })).toBeNull();
+  });
+});
+
+describe('mensajesDelPanel', () => {
+  const libre = { estado: 'libre', error: null } as const;
+  const primera = 'Todavía no hay verificaciones. Elegí Verificación ▾ para hacer la primera.';
+
+  it('sin corrida invita a hacer la primera', () => {
+    expect(mensajesDelPanel(libre, null)).toEqual([primera]);
+    expect(mensajesDelPanel(libre, corrida())).toEqual([]);
+  });
+
+  it('el error del estado va arriba', () => {
+    const estado = { estado: 'libre', error: { motivo: 'limite', mensaje: 'Se cortó.' } } as const;
+    expect(mensajesDelPanel(estado, corrida())).toEqual(['Se cortó.']);
+    expect(mensajesDelPanel(estado, null)).toEqual(['Se cortó.', primera]);
+  });
+
+  it('deshabilitada muestra el motivo', () => {
+    expect(mensajesDelPanel({ estado: 'deshabilitada', motivo: 'Falta repositorio.' }, null)).toEqual(['Falta repositorio.', primera]);
+  });
+
+  it('corrida fallida, sin repetir el aviso de respuesta ilegible', () => {
+    const fallida = corrida({ estado: 'fallida', crudo: 'basura' });
+    expect(mensajesDelPanel(libre, fallida)).toEqual(['La última verificación falló: la respuesta del agente no se pudo leer.']);
+    const estado = { estado: 'libre', error: { motivo: 'ilegible', mensaje: 'No se pudo leer.' } } as const;
+    expect(mensajesDelPanel(estado, fallida)).toEqual(['No se pudo leer.']);
   });
 });

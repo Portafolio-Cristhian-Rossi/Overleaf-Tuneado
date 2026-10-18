@@ -29,6 +29,53 @@ export function ubicarCita(texto: string, cita: string, lineaPista: number | nul
   return mejor && { desde: mejor.desde, hasta: mejor.hasta };
 }
 
+// Solo se conoce el texto del archivo abierto: los hallazgos de otros archivos se dan por ubicados.
+export function ubicarEnArchivo(texto: string, ruta: string | null, hallazgos: readonly Hallazgo[]):
+  { citas: { desde: number; hasta: number; id: string }[]; ubicado(h: Hallazgo): boolean } {
+  const citas = [];
+  for (const h of hallazgos) {
+    if (h.informe.archivo !== ruta || h.informe.cita === null) continue;
+    const lugar = ubicarCita(texto, h.informe.cita, h.informe.linea);
+    if (lugar) citas.push({ ...lugar, id: h.id });
+  }
+  const ubicados = new Set(citas.map((c) => c.id));
+  return { citas, ubicado: (h) => h.informe.archivo !== ruta || h.informe.cita === null || ubicados.has(h.id) };
+}
+
+// La foto del repositorio que lee el agente está en la carpeta repositorio/: así cita las rutas.
+export const rutaParaCopiar = (repo: { archivo: string; linea: number | null }) =>
+  `repositorio/${repo.archivo}${repo.linea === null ? '' : `:${repo.linea}`}`;
+
+export function tiempoTranscurrido(ms: number): string {
+  const segundos = Math.max(0, Math.floor(ms / 1000));
+  return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, '0')}`;
+}
+
+interface DatosDeVerificacion { estado: EstadoVerificacion; corrida: Corrida | null; ignorados: readonly Ignorado[] }
+
+// Una cancelación no deja corrida nueva ni error: no hay nada que avisar.
+export function avisoAlTerminar(anterior: EstadoVerificacion | null, actual: DatosDeVerificacion):
+  { texto: string; tipo: 'info' | 'error' } | null {
+  if (anterior?.estado !== 'en-curso' || actual.estado.estado === 'en-curso') return null;
+  if (actual.estado.estado === 'libre' && actual.estado.error) return { texto: actual.estado.error.mensaje, tipo: 'error' };
+  const c = actual.corrida;
+  if (c === null || c.estado !== 'ok' || c.fecha !== new Date(anterior.desde).toISOString()) return null;
+  const n = hallazgosVisibles(c, actual.ignorados).length;
+  return { texto: `Verificación terminada: ${n} ${n === 1 ? 'hallazgo' : 'hallazgos'}.`, tipo: 'info' };
+}
+
+export function mensajesDelPanel(e: EstadoVerificacion, c: Corrida | null): string[] {
+  const mensajes = [];
+  if (e.estado === 'deshabilitada') mensajes.push(e.motivo);
+  if (e.estado === 'libre' && e.error) mensajes.push(e.error.mensaje);
+  if (c === null) mensajes.push('Todavía no hay verificaciones. Elegí Verificación ▾ para hacer la primera.');
+  // El error de respuesta ilegible ya dice que la corrida quedó guardada como fallida.
+  else if (c.estado === 'fallida' && !(e.estado === 'libre' && e.error?.motivo === 'ilegible')) {
+    mensajes.push('La última verificación falló: la respuesta del agente no se pudo leer.');
+  }
+  return mensajes;
+}
+
 export function hallazgosVisibles(c: Corrida, ignorados: readonly Ignorado[]): Hallazgo[] {
   const ocultos = new Set([...c.resueltos, ...ignorados.map((i) => i.id)]);
   return c.hallazgos.filter((h) => !ocultos.has(h.id));

@@ -36,7 +36,8 @@ const verificaciones = crearVerificaciones(config.verificaciones);
 const verificador = crearVerificador({
   config,
   verificaciones,
-  lanzar: crearLanzadorAgente(),
+  // EDITOR_AGENTE permite probar con un agente de mentira (comando separado por espacios); normalmente no está definida.
+  lanzar: crearLanzadorAgente(process.env.EDITOR_AGENTE ? process.env.EDITOR_AGENTE.split(' ').filter((p) => p !== '') : undefined),
   rutasDelInforme: async () => (await describirProyecto(config.informe, config.principal)).capitulos.map((c) => c.ruta),
 });
 

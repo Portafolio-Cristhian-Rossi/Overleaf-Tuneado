@@ -4,6 +4,7 @@ import { analizarBib, type ProblemaBib } from '../compartido/bib';
 import { candidatos, type Bibliografia, type Candidato } from '../compartido/citas';
 import type { AccionDeIa } from '../compartido/prompt';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
+import type { Alcance, EstadoVerificacion, Hallazgo } from '../compartido/verificacion';
 import { api, mantenerVivoAlServidor, urlDeImagen } from './api';
 import { aplicarEdicion, darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
 import { confirmarCeldaAbierta, formatoEnCeldaAbierta } from './bloques/edicionTabla';
@@ -25,9 +26,12 @@ import { crearLateral } from './pantalla/lateral';
 import { abrirMenuFlotante } from './pantalla/menuFlotante';
 import { crearPanelGramatica, extensionPanelGramatica } from './pantalla/panelGramatica';
 import { crearPanelPdf } from './pantalla/panelPdf';
+import { crearPanelVerificacion } from './pantalla/panelVerificacion';
 import { elegirImagen } from './pantalla/selectorImagen';
 import { crearSincronizacion } from './pantalla/sincronizacion';
 import { PLANTILLAS } from './plantillas';
+import { citasSubrayadas, extensionSubrayadoVerificacion, fijarCitas } from './subrayadoVerificacion';
+import { avisoAlTerminar, hallazgosVisibles, opcionesDeVerificacion, tiempoTranscurrido, ubicarEnArchivo } from './verificacion';
 import { contextoCambiado, extensionVista } from './vista';
 
 const CLAVE_ULTIMO = 'editor-informe:ultimo-archivo';
@@ -364,12 +368,19 @@ const editor = crearEditor(porId('editor'), {
     ),
     extensionCorreccion({ api: api.correccion, alCambiarEstado: (estado) => panelGramatica.mostrarEstado(estado) }),
     extensionPanelGramatica(() => panelGramatica.actualizar()),
+    extensionSubrayadoVerificacion({
+      alElegir: (id) => {
+        mostrarPestanaVerificacion();
+        panelVerificacion.resaltar(id);
+      },
+    }),
   ],
   alAbrir(ruta, archivo) {
     quitarCartel();
     recordarUltimo(ruta);
     habilitarFormato(esTex(ruta));
     panelGramatica.actualizar();
+    mostrarVerificacion();
     selectorNivel.selectedIndex = 0;
     lateral.mostrarProyecto(proyecto, ruta);
     actualizarIndice(archivo.contenido, 0);
@@ -419,6 +430,9 @@ const editor = crearEditor(porId('editor'), {
 // Después de traer, cancelar o resolver, el disco puede haber cambiado por completo.
 async function actualizarTodo(): Promise<void> {
   await editor.recargar();
+  // Recargar del disco reemplaza el estado del editor, y con él los subrayados.
+  mostrarVerificacion();
+  void leerVerificacion();
   await recargarProyecto();
 }
 
@@ -436,12 +450,14 @@ const sincronizacion = crearSincronizacion(barra, {
   alConflicto: (archivos) => bloqueo.mostrar(archivos),
 });
 
-// Panel derecho con dos pestañas: el PDF y los avisos de gramática.
+// Panel derecho con tres pestañas: el PDF, los avisos de gramática y la verificación.
 const zonaPdf = el('div', { clase: 'pestana' });
 const zonaGramatica = el('div', { clase: 'pestana', hidden: true });
+const zonaVerificacion = el('div', { clase: 'pestana', hidden: true });
 const pestanas: [HTMLButtonElement, HTMLElement][] = [
   [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(0) }, 'PDF'), zonaPdf],
   [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(1) }, 'Gramática'), zonaGramatica],
+  [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(2) }, 'Verificación'), zonaVerificacion],
 ];
 function elegirPestana(indice: number): void {
   pestanas.forEach(([boton, zona], i) => {
@@ -483,7 +499,7 @@ porId('panel').append(
     el('button', { type: 'button', title: 'Abrir el PDF en otra ventana, para llevarlo a otra pantalla', alClick: abrirPdfAparte }, 'Otra ventana'),
     el('button', { type: 'button', title: 'Ocultar este panel y escribir a todo el ancho', alClick: () => verPanel(false, true) }, 'Ocultar'),
   ),
-  zonaPdf, zonaGramatica,
+  zonaPdf, zonaGramatica, zonaVerificacion,
 );
 elegirPestana(0);
 if (panelOcultoRecordado()) verPanel(false, false);
@@ -494,6 +510,135 @@ const panelGramatica = crearPanelGramatica(zonaGramatica, {
   alElegir: (posicion) => editor.irA(posicion),
   alContar: (cantidad) => { pestanas[1][0].textContent = cantidad > 0 ? `Gramática (${cantidad})` : 'Gramática'; },
 });
+
+// Verificación: un agente de solo lectura compara el informe con el repositorio de la aplicación.
+// La corrida la hace el servidor; acá se la consulta, se la muestra y se subrayan sus citas.
+type DatosDeVerificacion = Awaited<ReturnType<typeof api.verificacion.leer>>;
+const INTERVALO_DE_CONSULTA_MS = 2000;
+let verificacion: DatosDeVerificacion | null = null;
+let firmaDeVerificacion = '';
+let ultimaConsulta = 0;
+let relojDeConsulta: ReturnType<typeof setTimeout> | undefined;
+let relojDeTiempo: ReturnType<typeof setInterval> | undefined;
+
+const botonVerificacion = el('button', {
+  type: 'button', title: 'Comparar el informe con el código de la aplicación', 'aria-haspopup': 'menu',
+  alClick: () => {
+    const ruta = editor.rutaAbierta();
+    // Mientras no se haya consultado al servidor, él decide al iniciar.
+    const estado: EstadoVerificacion = verificacion?.estado ?? { estado: 'libre', error: null };
+    abrirMenuFlotante(botonVerificacion.getBoundingClientRect(), opcionesDeVerificacion(estado, ruta, esTex(ruta))
+      .map(({ alcance, texto, habilitada, ayuda }) => ({ texto, habilitada, ayuda, alElegir: () => { void verificar(alcance); } })));
+  },
+}, 'Verificación ▾');
+const botonCancelarVerificacion = el('button', {
+  type: 'button', hidden: true, title: 'Detener la verificación en curso',
+  alClick: () => { void sobreVerificacion(api.verificacion.cancelar); },
+}, 'Cancelar');
+barra.zonaAcciones.prepend(botonVerificacion, botonCancelarVerificacion);
+
+const panelVerificacion = crearPanelVerificacion(zonaVerificacion, {
+  alElegir: (h) => { void irAHallazgo(h); },
+  alResolver: (id) => { void sobreVerificacion(() => api.verificacion.resuelto(id)); },
+  alIgnorar: (id) => { void sobreVerificacion(() => api.verificacion.ignorar(id)); },
+  alRecuperar: (id) => { void sobreVerificacion(() => api.verificacion.recuperar(id)); },
+  alContar: (cantidad) => { pestanas[2][0].textContent = cantidad > 0 ? `Verificación (${cantidad})` : 'Verificación'; },
+});
+
+function mostrarPestanaVerificacion(): void {
+  verPanel(true, false);
+  elegirPestana(2);
+}
+
+// Las citas se buscan en el texto actual del archivo abierto; las de los demás, al abrirlos.
+function mostrarVerificacion(): void {
+  if (!verificacion) return;
+  const visibles = verificacion.corrida ? hallazgosVisibles(verificacion.corrida, verificacion.ignorados) : [];
+  const { citas, ubicado } = ubicarEnArchivo(editor.vista.state.doc.toString(), editor.rutaAbierta(), visibles);
+  editor.vista.dispatch({ effects: fijarCitas.of(citas) });
+  panelVerificacion.mostrar(verificacion, ubicado);
+}
+
+function mostrarProgreso(): void {
+  const e = verificacion?.estado;
+  clearInterval(relojDeTiempo);
+  botonCancelarVerificacion.hidden = e?.estado !== 'en-curso';
+  if (e?.estado !== 'en-curso') {
+    botonVerificacion.textContent = 'Verificación ▾';
+    return;
+  }
+  const poner = () => { botonVerificacion.textContent = `Verificando… ${tiempoTranscurrido(Date.now() - e.desde)}`; };
+  poner();
+  relojDeTiempo = setInterval(poner, 1000);
+}
+
+// Mientras haya una corrida en curso se consulta cada pocos segundos. Si dos consultas se
+// cruzan, vale la última: una respuesta vieja no puede volver a poner "en curso".
+async function leerVerificacion(): Promise<void> {
+  const consulta = ++ultimaConsulta;
+  clearTimeout(relojDeConsulta);
+  const seguir = () => { relojDeConsulta = setTimeout(() => { void leerVerificacion(); }, INTERVALO_DE_CONSULTA_MS); };
+  let nuevos: DatosDeVerificacion;
+  try {
+    nuevos = await api.verificacion.leer();
+  } catch {
+    if (consulta === ultimaConsulta && verificacion?.estado.estado === 'en-curso') seguir();
+    return;
+  }
+  if (consulta !== ultimaConsulta) return;
+
+  const aviso = avisoAlTerminar(verificacion?.estado ?? null, nuevos);
+  verificacion = nuevos;
+  if (aviso) barra.avisar(aviso.texto, aviso.tipo);
+  mostrarProgreso();
+  // Sin cambios no se vuelve a dibujar: el panel no salta mientras se lo lee.
+  const firma = JSON.stringify(nuevos);
+  if (firma !== firmaDeVerificacion) {
+    firmaDeVerificacion = firma;
+    mostrarVerificacion();
+  }
+  if (nuevos.estado.estado === 'en-curso') seguir();
+}
+
+async function sobreVerificacion(accion: () => Promise<unknown>): Promise<void> {
+  try {
+    await accion();
+  } catch (e) {
+    barra.avisar((e as Error).message, 'error');
+  }
+  await leerVerificacion();
+}
+
+// El agente lee los archivos del disco: antes entra lo que esté a medio escribir.
+async function verificar(alcance: Alcance): Promise<void> {
+  if (alcance === 'todo') {
+    const acepta = await preguntar('Verificar todo el informe tarda bastante más que un capítulo.', [
+      { texto: 'Verificar todo', valor: true, principal: true },
+      { texto: 'Cancelar', valor: false },
+    ]);
+    if (!acepta) return;
+  }
+  confirmarCeldaAbierta();
+  await editor.guardarAhora();
+  try {
+    await api.verificacion.iniciar(alcance, alcance === 'capitulo' ? editor.rutaAbierta() : null);
+  } catch (e) {
+    barra.avisar((e as Error).message, 'error');
+    return;
+  }
+  mostrarPestanaVerificacion();
+  await leerVerificacion();
+}
+
+async function irAHallazgo(h: Hallazgo): Promise<void> {
+  const ruta = h.informe.archivo;
+  if (editor.rutaAbierta() !== ruta) await abrir(ruta);
+  if (editor.rutaAbierta() !== ruta) return;
+  const cita = citasSubrayadas(editor.vista.state).find((c) => c.id === h.id);
+  if (cita) editor.irA(cita.desde);
+  else if (h.informe.linea !== null) editor.irALinea(h.informe.linea);
+  else editor.vista.focus();
+}
 
 async function irAProblema(ruta: string, linea: number): Promise<void> {
   if (editor.rutaAbierta() !== ruta) await abrir(ruta);
@@ -565,6 +710,7 @@ async function iniciar(): Promise<void> {
     const ruta = rutaInicial();
     if (ruta) await abrir(ruta);
     else barra.avisar('No se encontraron archivos .tex en la carpeta del informe.', 'error');
+    await leerVerificacion();
     await sincronizacion.revisar();
   } catch (e) {
     barra.avisar((e as Error).message, 'error');

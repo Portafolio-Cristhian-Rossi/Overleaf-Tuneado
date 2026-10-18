@@ -311,9 +311,9 @@ Tu diccionario queda en `editor/correccion.json`. No viaja a Overleaf.
 El corrector ocupa unos 400 MB en disco y, mientras el editor está abierto,
 hasta 1 GB de memoria.
 
-**IA.** El editor no usa ninguna IA por su cuenta: te arma el pedido (la
-*prompt*) y lo copia, para que lo pegues en el chat del modelo que uses. El
-botón **IA** de la barra tiene tres pedidos:
+**IA.** El botón **IA** de la barra no usa ninguna IA por su cuenta: te arma
+el pedido (la *prompt*) y lo copia, para que lo pegues en el chat del modelo
+que uses. Tiene tres pedidos:
 
 - *Desarrollar notas*: seleccioná tus apuntes sueltos y pide convertirlos en
   párrafos del informe.
@@ -337,7 +337,8 @@ Tres cosas a tener en cuenta:
   `[FALTA: …]` en vez de inventarlo. Buscá esas marcas y completalas vos.
 - Igual, leé lo que devuelve antes de dejarlo: puede afirmar algo que tus
   notas no decían.
-- Lo que pegás en un chat sale de tu máquina. El editor no envía nada solo.
+- Lo que pegás en un chat sale de tu máquina. El botón **IA** no envía nada
+  solo.
 
 Cada pedido lleva la **guía de estilo**: de qué trata el informe, en qué
 persona se escribe y qué términos usar. Viene con una inicial; corregila en
@@ -357,9 +358,9 @@ MiKTeX descarga paquetes.
 
 **Más lugar para escribir.** Arriba del PDF, a la derecha, hay dos botones:
 
-- *Ocultar* saca el panel derecho (el PDF y Gramática) y el texto ocupa todo
-  el ancho. Vuelve con **Mostrar panel**, arriba a la derecha. El editor
-  recuerda cómo lo dejaste.
+- *Ocultar* saca el panel derecho (el PDF, Gramática y Verificación) y el
+  texto ocupa todo el ancho. Vuelve con **Mostrar panel**, arriba a la
+  derecha. El editor recuerda cómo lo dejaste.
 - *Otra ventana* abre el PDF en una ventana propia, para llevarla a un segundo
   monitor, y oculta el panel. Esa ventana tiene su botón **Compilar** y la
   lista de errores; un clic en un error lleva el editor a esa línea. Compiles
@@ -371,7 +372,87 @@ emergente, permitilas para esta página.
 **La costumbre que evita problemas:** Traer al sentarte a escribir y Enviar al
 terminar.
 
-## 6. Qué no hace
+## 6. Verificar el informe contra la aplicación
+
+El botón **Verificación** de la barra compara el informe con el código de la
+aplicación (`uy-social-topic-modeling`) y te dice dónde no coinciden: lo que
+el informe cuenta de una forma y el código hace de otra, lo que el informe
+afirma y no aparece en el código, y lo que está en el código y la sección
+debería contar. Para eso lanza a Claude Code, un agente de IA, con tu cuenta
+de Claude.
+
+**Preparar, una sola vez.**
+
+1. Instalá el CLI de Claude Code:
+
+```bash
+npm install -g @anthropic-ai/claude-code
+```
+
+2. Entrá con tu cuenta. Corré este comando, seguí los pasos que muestra y,
+   cuando termine, cerralo con `/exit`:
+
+```bash
+claude
+```
+
+3. Agregá a `editor/config.json`, junto a lo que ya tiene, dónde está el
+   repositorio de la aplicación. Escribí la ruta con barras `/`:
+
+```json
+{
+  "repositorio": "C:/Users/Cristhian Rossi/Documents/GitHub/uy-social-topic-modeling",
+  "ramaRepositorio": "main",
+  "limiteVerificacion": { "capitulo": 15, "todo": 45 }
+}
+```
+
+`ramaRepositorio` es la rama contra la que se compara, y `limiteVerificacion`
+cuántos minutos puede durar una verificación antes de cortarse. Si te sirven
+esos valores, alcanza con poner `repositorio`. Después cerrá el editor y
+volvé a abrirlo, como dice la sección 8.
+
+Si falta algo, la pestaña **Verificación** dice qué: la carpeta no existe, no
+es un repositorio de Git o no tiene esa rama.
+
+**Usar.**
+
+- **Verificación** → *Verificar capítulo* revisa el archivo abierto y los que
+  incluye con `\input` o `\include`. *Verificar todo* revisa el informe
+  entero y tarda bastante más.
+- Mientras corre, el botón dice `Verificando…` con el tiempo que lleva, y al
+  lado aparece *Cancelar*. Podés seguir escribiendo: el agente trabaja sobre
+  una copia de los archivos tal como estaban al empezar. Si cerrás la pestaña,
+  la verificación termina igual y queda guardada.
+- Al terminar, la pestaña **Verificación** del panel derecho lista lo que
+  encontró, por tipo y por archivo, y las frases citadas quedan subrayadas en
+  violeta en el texto. Un clic en un hallazgo te lleva a su frase; un clic en
+  un subrayado, a su hallazgo.
+- Cada hallazgo dice en qué archivo y línea del código se apoya. *Copiar ruta*
+  la copia; `repositorio/` es la carpeta de la aplicación.
+- *Marcar resuelto* lo oculta en esta verificación. Si una posterior lo vuelve
+  a encontrar, aparece de nuevo.
+- *Ignorar* lo oculta para siempre, y el agente no lo vuelve a reportar. *Ver
+  ignorados*, al final de la lista, permite recuperarlo.
+- `la frase cambió` quiere decir que la cita ya no está en el texto: la
+  editaste después de verificar.
+- Leé cada hallazgo antes de tocar el informe: el agente se puede equivocar.
+  El editor comprueba que las citas existan (las que no, se descartan y el
+  encabezado lo cuenta), pero no que la explicación sea cierta.
+
+**Qué lee el agente.** Solo la rama `ramaRepositorio` tal como está en Git:
+los archivos versionados, sin el `.env` ni nada de lo que Git ignora, y sin
+los cambios que no hayas commiteado. Trabaja sobre copias en una carpeta
+temporal que se borra al terminar, y solo puede leer: no escribe en el
+informe ni en el repositorio. Lo que lee viaja a Claude con tu cuenta, como
+cualquier uso de Claude Code.
+
+**Dónde quedan.** Cada verificación se guarda en `Tesis/verificaciones/`, un
+archivo por corrida con su fecha y su commit, junto con `ignorados.json`. No
+viajan a Overleaf ni a GitHub. Al abrir el editor, la pestaña muestra la
+última.
+
+## 7. Qué no hace
 
 - **No es en tiempo real.** Los demás ven tus cambios recién cuando apretás
   Enviar, y vos los de ellos cuando apretás Traer.
@@ -384,7 +465,7 @@ terminar.
   en Zotero después de haberlo citado, la ficha que ya está en
   `referencias.bib` no cambia sola.
 
-## 7. Opciones de `config.json`
+## 8. Opciones de `config.json`
 
 | Opción | Valor inicial | Qué hace |
 |---|---|---|
@@ -395,11 +476,14 @@ terminar.
 | `compilarAlGuardar` | `false` | Con `true`, compila el PDF cada vez que se guarda. |
 | `corrector` | `true` | Con `false`, no se usa el corrector propio. |
 | `puertoCorrector` | `4319` | Puerto local del corrector. Cambialo solo si está ocupado. |
+| `repositorio` | sin valor | Carpeta del repositorio de la aplicación, para verificar el informe (sección 6). |
+| `ramaRepositorio` | `main` | Rama de la aplicación contra la que se verifica. |
+| `limiteVerificacion` | `{ "capitulo": 15, "todo": 45 }` | Minutos que puede durar una verificación antes de cortarse. |
 
 Después de cambiar una opción, cerrá las pestañas del editor, esperá a que se
 cierre (o reiniciá la máquina) y volvé a abrirlo.
 
-## 8. Problemas frecuentes
+## 9. Problemas frecuentes
 
 **"Git no pudo autenticarse con Overleaf".** El token venció o fue borrado.
 Creá uno nuevo en Overleaf, abrí una terminal en la carpeta `informe`, ejecutá
@@ -471,7 +555,7 @@ renombró. Copiá tu texto con el botón y abrí el capítulo que corresponda.
 **El ícono no hace nada o aparece "El editor no está instalado".** Repetí los
 tres comandos de la sección 4.
 
-## 9. Si el editor no arranca
+## 10. Si el editor no arranca
 
 No quedás trabado: los archivos del informe son `.tex` comunes. Abrí la carpeta
 `informe` en VS Code, editá ahí, y sincronizá desde una terminal en esa
@@ -493,7 +577,7 @@ git commit -m "Cambios en el informe"
 git push
 ```
 
-## 10. Después de actualizar el editor
+## 11. Después de actualizar el editor
 
 Si recibiste una versión nueva de la carpeta `editor`, parado en ella:
 
@@ -508,7 +592,7 @@ npm run build
 Los cambios se ven la próxima vez que el editor arranque: cerrá sus pestañas y
 esperá diez minutos a que se cierre solo, o reiniciá la máquina.
 
-## 11. Trabajar desde otra computadora
+## 12. Trabajar desde otra computadora
 
 Son dos cosas separadas, y cada una viaja por su lado:
 
@@ -518,6 +602,7 @@ Son dos cosas separadas, y cada una viaja por su lado:
 | El editor, tu diccionario y tu guía de estilo | Tu repositorio privado de GitHub | `git pull` y `git push` en la carpeta `Tesis` |
 | Los programas que usa el editor, el corrector y el ícono | Cada máquina | Se instalan una vez (secciones 2 y 4) |
 | El PDF | Cada máquina | Se genera de nuevo con **Compilar** |
+| Las verificaciones y los hallazgos ignorados | Cada máquina, en `Tesis/verificaciones/` | No viajan: se verifica de nuevo |
 
 **La primera vez en la máquina nueva**
 
@@ -563,7 +648,7 @@ hace falta el `git push`.
 git pull
 ```
 
-2. Si trajo cambios de la carpeta `editor`, seguí la sección 10.
+2. Si trajo cambios de la carpeta `editor`, seguí la sección 11.
 3. En el editor, **Traer**.
 
 La carpeta `informe` no entra en tu repositorio de GitHub: el informe sigue
