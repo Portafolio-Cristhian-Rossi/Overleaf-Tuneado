@@ -18,6 +18,7 @@ export interface Corrida {
   rama: string;
   commit: string;
   duracionMs: number;
+  costoUsd: number | null;            // lo que informó el agente; las corridas viejas no lo traen
   estado: 'ok' | 'fallida';
   crudo: string | null;                // la salida del agente, solo si falló
   descartados: number;

@@ -28,7 +28,7 @@ const ITEM_DE_ZOTERO: ItemZotero = {
 
 const CORRIDA: Corrida = {
   fecha: '2026-10-18T12:00:00.000Z', alcance: 'todo', archivos: ['Cap4.tex'], rama: 'main', commit: 'abc1234',
-  duracionMs: 1000, estado: 'ok', crudo: null, descartados: 0, hallazgos: [], resueltos: [], comparacion: null,
+  duracionMs: 1000, costoUsd: null, estado: 'ok', crudo: null, descartados: 0, hallazgos: [], resueltos: [], comparacion: null,
 };
 const IGNORADO: Ignorado = { id: 'h1', tipo: 'sin-respaldo', archivoInforme: 'Cap4.tex', cita: null, archivoRepo: null, explicacion: 'x', fecha: '2026-10-18T12:00:00.000Z' };
 

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { dirTemporal } from '../pruebas/ayudas/temporales';
-import { ARGUMENTOS_DEL_AGENTE, crearLanzadorAgente, interpretarSalida } from './agente';
+import { ARGUMENTOS_DEL_AGENTE, costoDe, crearLanzadorAgente, interpretarSalida } from './agente';
 
 const envoltura = (result: string, is_error = false) =>
   JSON.stringify({ type: 'result', subtype: 'success', is_error, result });
@@ -70,6 +70,18 @@ describe('interpretarSalida', () => {
     expect(interpretarSalida(salida(stdout))).toEqual({
       tipo: 'otro', mensaje: 'Claude Code no dejó leer al agente los archivos de la verificación (2 permisos denegados).',
     });
+  });
+});
+
+describe('costoDe', () => {
+  it('lee total_cost_usd de la salida', () => {
+    expect(costoDe(JSON.stringify({ type: 'result', total_cost_usd: 0.5187728 }))).toBe(0.5187728);
+  });
+  it('null si no está, no es un número o la salida no es JSON', () => {
+    expect(costoDe(JSON.stringify({ type: 'result' }))).toBeNull();
+    expect(costoDe(JSON.stringify({ total_cost_usd: '1' }))).toBeNull();
+    expect(costoDe(JSON.stringify({ total_cost_usd: -1 }))).toBeNull();
+    expect(costoDe('basura')).toBeNull();
   });
 });
 

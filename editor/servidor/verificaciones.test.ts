@@ -32,6 +32,7 @@ function corrida(parcial: Partial<Omit<Corrida, 'comparacion' | 'resueltos'>> & 
     rama: 'main',
     commit: '583d2cc1aaaaaaaa',
     duracionMs: 1000,
+    costoUsd: null,
     estado: 'ok' as const,
     crudo: null,
     descartados: 0,

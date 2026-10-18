@@ -101,6 +101,11 @@ export function encabezado(c: Corrida): string[] {
   const f = new Date(c.fecha);
   const alcance = c.alcance === 'capitulo' ? 'capítulo' : 'todo el informe';
   const lineas = [`${dos(f.getDate())}/${dos(f.getMonth() + 1)} ${dos(f.getHours())}:${dos(f.getMinutes())} · ${alcance} · ${c.rama} ${c.commit.slice(0, 7)}`];
+  // Cada corrida gasta de la cuenta de Claude de quien la lanza: se muestra cuánto.
+  const costo = typeof c.costoUsd === 'number'
+    ? ` · costó US$ ${c.costoUsd.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : '';
+  lineas.push(`Tardó ${tiempoTranscurrido(c.duracionMs)}${costo}`);
   if (c.comparacion) lineas.push(`${c.comparacion.nuevos} nuevos · ${c.comparacion.yaNoAparecen} ya no aparecen`);
   if (c.descartados > 0) {
     lineas.push(c.descartados === 1

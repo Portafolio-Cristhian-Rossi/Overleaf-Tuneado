@@ -91,6 +91,22 @@ describe('verificador', () => {
     expect(await v.estado()).toEqual({ estado: 'libre', error: null });
   });
 
+  it('guarda lo que costó la corrida en la cuenta, o null si el agente no lo informa', async () => {
+    const conCosto: SalidaDelAgente = {
+      codigo: 0, stderr: '', noEncontrado: false,
+      stdout: JSON.stringify({ type: 'result', is_error: false, result: '[]', total_cost_usd: 0.25 }),
+    };
+    const v = verificador(lanzadorFalso(() => conCosto).lanzar);
+    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.terminada();
+    expect((await verificaciones.ultima())!.costoUsd).toBe(0.25);
+
+    const sinCosto = verificador(lanzadorFalso(() => envoltura([])).lanzar);
+    await sinCosto.iniciar('capitulo', 'Cap3.tex');
+    await sinCosto.terminada();
+    expect((await verificaciones.ultima())!.costoUsd).toBeNull();
+  });
+
   it('se descartan las líneas fuera de rango y los archivos del repo que no existen', async () => {
     const enRepo = (archivo: string, linea: number) => ({ ...contradiccion('Cap3.tex', CITA_CAP3), repo: { archivo, linea } });
     const v = verificador(lanzadorFalso(() => envoltura([

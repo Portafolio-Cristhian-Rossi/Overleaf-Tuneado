@@ -4,7 +4,7 @@ import path from 'node:path';
 import { armarPromptDeVerificacion } from '../compartido/promptVerificacion';
 import type { Config } from '../compartido/tipos';
 import { validarHallazgos, type Alcance, type EstadoVerificacion, type MotivoDeFalla } from '../compartido/verificacion';
-import { interpretarSalida, type LanzarAgente, type ProcesoAgente } from './agente';
+import { costoDe, interpretarSalida, type LanzarAgente, type ProcesoAgente } from './agente';
 import { RutaInvalida, resolverEnInforme } from './archivos';
 import { fotografiarInforme, fotografiarRepositorio, problemaDelRepositorio } from './fotos';
 import { archivosDe } from './proyecto';
@@ -157,6 +157,7 @@ export function crearVerificador(o: {
         rama: config.ramaRepositorio,
         commit: foto.commit,
         duracionMs: ahora() - c.desde,
+        costoUsd: costoDe(salida.stdout),
         estado: r.tipo === 'ok' ? 'ok' : 'fallida',
         crudo: r.tipo === 'ilegible' ? r.crudo : null,
         ...validados,

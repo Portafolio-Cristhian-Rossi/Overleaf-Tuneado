@@ -12,7 +12,7 @@ function hallazgo(id: string, tipo: TipoDeHallazgo, archivo = 'a.tex'): Hallazgo
 function corrida(extra: Partial<Corrida> = {}): Corrida {
   return {
     fecha: new Date(2026, 9, 18, 14, 32).toISOString(), alcance: 'capitulo', archivos: ['a.tex'], rama: 'main', commit: 'abcdef1234',
-    duracionMs: 1000, estado: 'ok', crudo: null, descartados: 0, hallazgos: [], resueltos: [], comparacion: null, ...extra,
+    duracionMs: 1000, costoUsd: null, estado: 'ok', crudo: null, descartados: 0, hallazgos: [], resueltos: [], comparacion: null, ...extra,
   };
 }
 
@@ -73,16 +73,23 @@ describe('NOMBRE_DE_TIPO', () => {
 });
 
 describe('encabezado', () => {
-  it('primera línea con fecha local, alcance y rama', () => {
-    expect(encabezado(corrida())).toEqual(['18/10 14:32 · capítulo · main abcdef1']);
+  it('primera línea con fecha local, alcance y rama; la segunda, cuánto tardó', () => {
+    expect(encabezado(corrida())).toEqual(['18/10 14:32 · capítulo · main abcdef1', 'Tardó 0:01']);
     expect(encabezado(corrida({ alcance: 'todo' }))[0]).toContain('todo el informe');
   });
 
+  it('con el costo en la cuenta, también cuánto costó', () => {
+    expect(encabezado(corrida({ duracionMs: 118_928, costoUsd: 0.5187728 }))[1]).toBe('Tardó 1:58 · costó US$ 0,52');
+    // Las corridas guardadas antes de esta versión no tienen costo.
+    const vieja: Partial<Corrida> = { duracionMs: 60_000 };
+    expect(encabezado({ ...corrida(vieja), costoUsd: undefined as unknown as null })[1]).toBe('Tardó 1:00');
+  });
+
   it('agrega la comparación y los descartados', () => {
-    expect(encabezado(corrida({ comparacion: { nuevos: 3, yaNoAparecen: 2 } }))[1]).toBe('3 nuevos · 2 ya no aparecen');
-    expect(encabezado(corrida({ descartados: 2 }))).toEqual(['18/10 14:32 · capítulo · main abcdef1', '2 hallazgos descartados por citas que no existen']);
-    expect(encabezado(corrida({ descartados: 1 }))[1]).toBe('1 hallazgo descartado por una cita que no existe');
-    expect(encabezado(corrida({ comparacion: { nuevos: 0, yaNoAparecen: 0 }, descartados: 1 }))).toHaveLength(3);
+    expect(encabezado(corrida({ comparacion: { nuevos: 3, yaNoAparecen: 2 } }))[2]).toBe('3 nuevos · 2 ya no aparecen');
+    expect(encabezado(corrida({ descartados: 2 }))).toEqual(['18/10 14:32 · capítulo · main abcdef1', 'Tardó 0:01', '2 hallazgos descartados por citas que no existen']);
+    expect(encabezado(corrida({ descartados: 1 }))[2]).toBe('1 hallazgo descartado por una cita que no existe');
+    expect(encabezado(corrida({ comparacion: { nuevos: 0, yaNoAparecen: 0 }, descartados: 1 }))).toHaveLength(4);
   });
 });
 

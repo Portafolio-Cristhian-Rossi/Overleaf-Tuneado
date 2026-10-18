@@ -89,7 +89,9 @@ export type SalidaInterpretada =
 const SIN_SESION = /login|log in|api key|not authenticated/i;
 const CMD_NO_ENCUENTRA = /no se reconoce|is not recognized/i;
 
-function envolturaDe(stdout: string): { is_error?: unknown; result?: unknown; subtype?: unknown; permission_denials?: unknown } | null {
+function envolturaDe(stdout: string): {
+  is_error?: unknown; result?: unknown; subtype?: unknown; permission_denials?: unknown; total_cost_usd?: unknown;
+} | null {
   try {
     const v: unknown = JSON.parse(stdout);
     return v !== null && typeof v === 'object' && !Array.isArray(v) ? v : null;
@@ -136,6 +138,12 @@ export function interpretarSalida(s: SalidaDelAgente): SalidaInterpretada {
     if (arreglo && arreglo.length > 0 && arreglo.every((x) => x !== null && typeof x === 'object')) return { tipo: 'ok', crudos: arreglo };
   }
   return { tipo: 'ilegible', crudo: s.stdout };
+}
+
+// Lo que la corrida costó en la cuenta de Claude, según el propio agente.
+export function costoDe(stdout: string): number | null {
+  const costo = envolturaDe(stdout)?.total_cost_usd;
+  return typeof costo === 'number' && Number.isFinite(costo) && costo >= 0 ? costo : null;
 }
 
 function arregloDe(texto: string): unknown[] | null {
