@@ -56,7 +56,7 @@ beforeEach(async () => {
   copiarFixture(informe);
   fs.mkdirSync(path.join(dir, 'estaticos'));
   fs.writeFileSync(path.join(dir, 'estaticos', 'index.html'), '<title>Editor</title>');
-  const config: Config = { informe, build: path.join(dir, 'build'), principal: 'main.tex', puerto: 0, compilarAlGuardar: true, corrector: true, puertoCorrector: 4319, verificaciones: path.join(dir, 'verificaciones'), repositorio: null, ramaRepositorio: 'main', limiteVerificacion: { capitulo: 15, todo: 45 } };
+  const config: Config = { informe, build: path.join(dir, 'build'), principal: 'main.tex', puerto: 0, compilarAlGuardar: true, corrector: true, puertoCorrector: 4319, verificaciones: path.join(dir, 'verificaciones'), repositorio: null, ramaRepositorio: 'main', limiteVerificacion: { capitulo: 15, todo: 45 }, agente: null };
 
   d = {
     config,

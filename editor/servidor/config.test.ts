@@ -62,6 +62,16 @@ describe('cargarConfig', () => {
     expect(c.ramaRepositorio).toBe('desarrollo');
   });
 
+  it('agente: null por defecto, y la ruta tal como se escribió', () => {
+    expect(cargarConfig(dirCon({}), 'config.json').agente).toBeNull();
+    const ruta = 'C:\\Users\\Alguien Con Espacios\\claude.exe';
+    expect(cargarConfig(dirCon({ agente: ruta }), 'config.json').agente).toBe(ruta);
+  });
+
+  it.each(['', 5])('rechaza el agente %j', (agente) => {
+    expect(() => cargarConfig(dirCon({ agente }), 'config.json')).toThrow(/config: agente tiene que ser la ruta de claude\.exe/);
+  });
+
   it('rechaza un repositorio que no es una ruta', () => {
     expect(() => cargarConfig(dirCon({ repositorio: 5 }), 'config.json')).toThrow(/repositorio tiene que ser la ruta de una carpeta/);
   });

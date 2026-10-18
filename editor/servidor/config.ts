@@ -13,6 +13,7 @@ const POR_DEFECTO = {
   verificaciones: '../verificaciones',
   repositorio: null as string | null,
   ramaRepositorio: 'main',
+  agente: null as string | null,
 };
 const LIMITE_POR_DEFECTO = { capitulo: 15, todo: 45 };
 
@@ -38,6 +39,9 @@ export function cargarConfig(
   if (typeof c.ramaRepositorio !== 'string' || c.ramaRepositorio === '') {
     throw new Error(`config: ramaRepositorio tiene que ser el nombre de una rama (se recibió ${JSON.stringify(c.ramaRepositorio)})`);
   }
+  if (c.agente !== null && (typeof c.agente !== 'string' || c.agente === '')) {
+    throw new Error('config: agente tiene que ser la ruta de claude.exe');
+  }
   // El límite puede venir incompleto en config.json: lo que falte sale de los valores por defecto.
   const parcial = typeof leido.limiteVerificacion === 'object' && leido.limiteVerificacion !== null ? leido.limiteVerificacion : {};
   const limite = { ...LIMITE_POR_DEFECTO, ...parcial };
@@ -58,5 +62,7 @@ export function cargarConfig(
     repositorio: c.repositorio === null ? null : path.resolve(dirEditor, c.repositorio),
     ramaRepositorio: c.ramaRepositorio,
     limiteVerificacion: { capitulo: limite.capitulo, todo: limite.todo },
+    // Tal como se escribió: puede ser solo "claude" (el del PATH) o una ruta con espacios.
+    agente: c.agente,
   };
 }

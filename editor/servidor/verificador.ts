@@ -28,7 +28,7 @@ export type ConfigVerificador = Pick<Config, 'informe'> & {
 };
 
 export const MENSAJES: Record<Exclude<MotivoDeFalla, 'rama' | 'otro'>, string> = {
-  'sin-cli': 'No se encontró Claude Code. Instalalo con `npm install -g @anthropic-ai/claude-code` y volvé a probar.',
+  'sin-cli': 'No se encontró Claude Code. Instalalo con `npm install -g @anthropic-ai/claude-code`, o poné en config.json, en "agente", la ruta de claude.exe. Después volvé a probar.',
   'sin-sesion': 'Claude Code no tiene una sesión iniciada. Abrí una terminal, corré `claude` una vez para entrar y volvé a probar.',
   limite: 'La verificación se cortó a los {n} minutos. Si necesita más tiempo, subí limiteVerificacion en config.json.',
   ilegible: 'La respuesta del agente no se pudo leer. La corrida quedó guardada como fallida en verificaciones/.',

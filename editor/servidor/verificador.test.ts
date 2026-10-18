@@ -277,7 +277,7 @@ describe('verificador', () => {
     await sinCli.iniciar('capitulo', 'Cap3.tex');
     await sinCli.terminada();
     expect(await sinCli.estado()).toEqual({ estado: 'libre', error: { motivo: 'sin-cli', mensaje: MENSAJES['sin-cli'] } });
-    expect(MENSAJES['sin-cli']).toBe('No se encontró Claude Code. Instalalo con `npm install -g @anthropic-ai/claude-code` y volvé a probar.');
+    expect(MENSAJES['sin-cli']).toBe('No se encontró Claude Code. Instalalo con `npm install -g @anthropic-ai/claude-code`, o poné en config.json, en "agente", la ruta de claude.exe. Después volvé a probar.');
 
     const sinSesion = verificador(lanzadorFalso(() => ({
       codigo: 1, stdout: JSON.stringify({ is_error: true, result: 'Invalid API key · Please run /login' }), stderr: '', noEncontrado: false,

@@ -37,7 +37,10 @@ const verificador = crearVerificador({
   config,
   verificaciones,
   // EDITOR_AGENTE permite probar con un agente de mentira (comando separado por espacios); normalmente no está definida.
-  lanzar: crearLanzadorAgente(process.env.EDITOR_AGENTE ? process.env.EDITOR_AGENTE.split(' ').filter((p) => p !== '') : undefined),
+  // Si no, vale "agente" de config.json (una sola ruta, puede tener espacios) y si tampoco, `claude` del PATH.
+  lanzar: crearLanzadorAgente(process.env.EDITOR_AGENTE
+    ? process.env.EDITOR_AGENTE.split(' ').filter((p) => p !== '')
+    : config.agente ? [config.agente] : undefined),
   rutasDelInforme: async () => (await describirProyecto(config.informe, config.principal)).capitulos.map((c) => c.ruta),
   rutaDelGlosario: async () => rutaDelGlosario((await describirProyecto(config.informe, config.principal)).capitulos),
 });

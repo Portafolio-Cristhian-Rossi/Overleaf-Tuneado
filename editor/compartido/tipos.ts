@@ -16,6 +16,7 @@ export interface Config {
   verificaciones: string;              // ruta absoluta: dónde se guardan las corridas del verificador
   repositorio: string | null;          // ruta absoluta del repositorio de la aplicación, si se configuró
   ramaRepositorio: string;
+  agente: string | null;               // comando de Claude Code; null: `claude` del PATH
   limiteVerificacion: { capitulo: number; todo: number };   // minutos
 }
 

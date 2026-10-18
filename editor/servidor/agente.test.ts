@@ -87,6 +87,17 @@ describe('crearLanzadorAgente', () => {
     expect(r.noEncontrado).toBe(false);
     expect(JSON.parse(r.stdout).result).toBe('eco:hola');
   });
+  // El claude.exe de la extensión de VS Code está bajo "C:\Users\Cristhian Rossi\...": un .exe con
+  // ruta absoluta se lanza directo, sin cmd, para que los espacios no partan la ruta.
+  it('un .exe con ruta absoluta y espacios se lanza directo', async () => {
+    // En esta máquina Node está en "C:\Program Files\nodejs\node.exe".
+    const r = await crearLanzadorAgente([process.execPath, FALSO])({ cwd: dirTemporal(), prompt: 'hola' }).terminado;
+    expect(JSON.parse(r.stdout).result).toBe('eco:hola');
+  });
+  it('un .exe con ruta absoluta que no existe es CLI ausente', async () => {
+    const lanzar = crearLanzadorAgente([path.join(dirTemporal(), 'no está', 'claude.exe')]);
+    expect(interpretarSalida(await lanzar({ cwd: dirTemporal(), prompt: 'hola' }).terminado)).toEqual({ tipo: 'sin-cli' });
+  });
   it('un comando inexistente se informa como CLI ausente', async () => {
     const lanzar = crearLanzadorAgente(['comando-que-no-existe-xyz']);
     const r = await lanzar({ cwd: dirTemporal(), prompt: 'hola' }).terminado;

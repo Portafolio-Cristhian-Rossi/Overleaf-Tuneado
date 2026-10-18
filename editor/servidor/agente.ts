@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
+import path from 'node:path';
 
 // Único lugar que lanza al agente de Claude Code (`claude -p`) en modo de solo lectura.
 
@@ -30,8 +31,10 @@ export const ARGUMENTOS_DEL_AGENTE = [
 export function crearLanzadorAgente(comando: string[] = ['claude']): LanzarAgente {
   return ({ cwd, prompt }) => {
     const completo = [...comando, ...ARGUMENTOS_DEL_AGENTE];
-    // `claude` instalado con npm es un .cmd: en Windows solo cmd sabe lanzarlo.
-    const [exe, ...args] = process.platform === 'win32' ? ['cmd', '/c', ...completo] : completo;
+    // `claude` instalado con npm es un .cmd: en Windows solo cmd sabe lanzarlo. Un .exe con ruta
+    // absoluta (el de la extensión de VS Code) se lanza directo: por cmd, los espacios parten la ruta.
+    const directo = path.isAbsolute(comando[0] ?? '') && /\.exe$/i.test(comando[0] ?? '');
+    const [exe, ...args] = process.platform === 'win32' && !directo ? ['cmd', '/c', ...completo] : completo;
     const proceso = spawn(exe, args, { cwd, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
 
     let stdout = '';
