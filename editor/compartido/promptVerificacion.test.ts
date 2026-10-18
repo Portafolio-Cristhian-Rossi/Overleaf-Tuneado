@@ -45,6 +45,23 @@ describe('armarPromptDeVerificacion', () => {
     expect(armarPromptDeVerificacion({ ...base, ignorados: [] })).not.toContain('## Ya ignorados');
   });
 
+  it('sin glosario no lleva esa sección', () => {
+    expect(armarPromptDeVerificacion({ ...base, ignorados: [] })).not.toContain('## Glosario del informe');
+  });
+
+  it('lleva el glosario con sus reglas, entre delimitadores', () => {
+    const glosario = { ruta: 'Cap0 - Glosario.tex', texto: '\\item[Orquestador] Coordina las tareas.\n' };
+    const p = armarPromptDeVerificacion({ ...base, ignorados: [], glosario });
+    expect(p).toContain('## Glosario del informe\nEstá en informe/Cap0 - Glosario.tex. Es una referencia: no hace falta revisarlo entero.');
+    expect(p).toContain('- Explicá con los términos del glosario');
+    expect(p).toContain('- Las definiciones de la sección Programación describen la aplicación');
+    expect(p).toContain('- Las definiciones de IA y de Texto son conceptos generales');
+    expect(p).toContain('- Si un término es central en el código y no está en el glosario, es "no-lo-cuenta" sobre informe/Cap0 - Glosario.tex');
+    expect(p).toContain('----- glosario -----\n\\item[Orquestador] Coordina las tareas.\n----- fin del glosario -----');
+    // El glosario va antes de los ignorados y de las reglas.
+    expect(p.indexOf('## Glosario del informe')).toBeLessThan(p.indexOf('## Reglas'));
+  });
+
   it('no abre sección para un archivo sin notas', () => {
     const p = armarPromptDeVerificacion({ ...base, archivos: [{ ruta: 'Vacio.tex', texto: '\\section{A}\n' }], ignorados: [] });
     expect(p).toContain('- informe/Vacio.tex');

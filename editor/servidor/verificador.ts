@@ -82,6 +82,7 @@ const ESPERA_MAXIMA = 2_147_483_647;
 export function crearVerificador(o: {
   config: ConfigVerificador; verificaciones: Verificaciones; lanzar: LanzarAgente;
   rutasDelInforme: () => Promise<string[]>;     // para 'todo': capítulos del proyecto, sin el .bib
+  rutaDelGlosario?: () => Promise<string | null>;
   dirTemporales?: string;                       // por defecto os.tmpdir()
   ahora?: () => number;
 }): Verificador {
@@ -121,11 +122,15 @@ export function crearVerificador(o: {
       if (foto.tipo === 'error') return fallar(foto.motivo === 'rama' ? { motivo: 'rama', mensaje: foto.mensaje } : falla(foto.mensaje));
       if (c.cancelada) return;
 
-      const textos = await fotografiarInforme(config.informe, rutas, path.join(cwd, 'informe'));
-      const ignorados = (await verificaciones.ignorados()).filter((i) => rutas.includes(i.archivoInforme));
+      // El glosario entra a la foto aunque no se lo revise: el agente lo puede citar.
+      const glosario = (await o.rutaDelGlosario?.()) ?? null;
+      const enFoto = glosario && !rutas.includes(glosario) ? [...rutas, glosario] : rutas;
+      const textos = await fotografiarInforme(config.informe, enFoto, path.join(cwd, 'informe'));
+      const ignorados = (await verificaciones.ignorados()).filter((i) => enFoto.includes(i.archivoInforme));
       const prompt = armarPromptDeVerificacion({
         archivos: rutas.map((r) => ({ ruta: r, texto: textos.get(r) ?? '' })),
         rama: config.ramaRepositorio, commit: foto.commit, ignorados,
+        glosario: glosario ? { ruta: glosario, texto: textos.get(glosario) ?? '' } : null,
       });
       if (c.cancelada) return;
 

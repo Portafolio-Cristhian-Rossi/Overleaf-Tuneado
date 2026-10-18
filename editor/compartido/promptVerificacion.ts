@@ -23,8 +23,26 @@ function lineaDeIgnorado(i: Ignorado): string {
   return `- [${i.tipo}] ${i.archivoInforme} (repositorio/${i.archivoRepo}): ${i.explicacion}`;
 }
 
+// El glosario va siempre, aunque no se lo revise: le da al agente los términos del equipo y
+// las definiciones de la aplicación contra las que puede comparar el código.
+function seccionDeGlosario(g: { ruta: string; texto: string }): string {
+  return `## Glosario del informe
+Está en informe/${g.ruta}. Es una referencia: no hace falta revisarlo entero.
+- Explicá con los términos del glosario y usalos para relacionar los nombres del código con los del informe (por ejemplo, un servicio llamado processing_orchestrator es un "orquestador").
+- Las definiciones de la sección Programación describen la aplicación: si el código las contradice, es "contradiccion" y se cita la definición tal como está en el glosario.
+- Las definiciones de IA y de Texto son conceptos generales: no las compares con el código. La excepción son los modelos de tópicos: si el informe dice que la aplicación usa uno que el código no tiene, es "sin-respaldo".
+- Si un término es central en el código y no está en el glosario, es "no-lo-cuenta" sobre informe/${g.ruta}: nombrá el término en la explicación. Solo los que un lector del informe necesitaría.
+
+----- glosario -----
+${g.texto.replace(/\n$/, '')}
+----- fin del glosario -----
+
+`;
+}
+
 export function armarPromptDeVerificacion(o: {
   archivos: { ruta: string; texto: string }[]; rama: string; commit: string; ignorados: Ignorado[];
+  glosario?: { ruta: string; texto: string } | null;
 }): string {
   const lista = o.archivos.map(a => `- informe/${a.ruta}`).join('\n');
   const notas = o.archivos
@@ -53,7 +71,7 @@ ${lista}
 Son las notas % que el equipo dejó bajo cada título.
 ${notas}
 
-${ignorados}## Reglas
+${o.glosario ? seccionDeGlosario(o.glosario) : ''}${ignorados}## Reglas
 - Citá el informe textualmente: copiá la frase tal como está en el archivo, con sus comandos LaTeX.
 - Citá el repositorio con la ruta relativa a repositorio/ y el número de línea.
 - No propongas texto nuevo para el informe: solo decí qué pasa.

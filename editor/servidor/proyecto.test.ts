@@ -3,7 +3,7 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Proyecto } from '../compartido/tipos';
 import { DIR_FIXTURE, dirTemporal } from '../pruebas/ayudas/temporales';
-import { archivosDe, describirProyecto } from './proyecto';
+import { archivosDe, describirProyecto, rutaDelGlosario } from './proyecto';
 
 function proyectoCon(archivos: Record<string, string>): Promise<Proyecto> {
   const dir = dirTemporal();
@@ -226,6 +226,17 @@ describe('describirProyecto en otros proyectos', () => {
       { ruta: 'b.tex', titulo: 'b.tex', numero: null },
       { ruta: 'main.tex', titulo: 'main.tex', numero: null },
     ]);
+  });
+});
+
+describe('rutaDelGlosario', () => {
+  const capitulo = (ruta: string, titulo: string) => ({ ruta, titulo, numero: null });
+  it('es el capítulo titulado Glosario, sin importar mayúsculas ni espacios', () => {
+    expect(rutaDelGlosario([capitulo('main.tex', 'Portada'), capitulo('Cap0 - Glosario.tex', ' Glosario ')])).toBe('Cap0 - Glosario.tex');
+    expect(rutaDelGlosario([capitulo('G.tex', 'GLOSARIO')])).toBe('G.tex');
+  });
+  it('null si no hay, y no confunde un título que solo lo menciona', () => {
+    expect(rutaDelGlosario([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap9.tex', 'Glosario de siglas')])).toBeNull();
   });
 });
 

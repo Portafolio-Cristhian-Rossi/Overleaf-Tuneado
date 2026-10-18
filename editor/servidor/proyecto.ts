@@ -173,6 +173,11 @@ export async function describirProyecto(dirInforme: string, principal: string): 
   };
 }
 
+// El glosario es el capítulo que se titula exactamente "Glosario" (hoy Cap0 - Glosario.tex).
+export function rutaDelGlosario(capitulos: Capitulo[]): string | null {
+  return capitulos.find((c) => c.titulo.trim().toLowerCase() === 'glosario')?.ruta ?? null;
+}
+
 function paquetesDe(raiz: string, principal: Fuente): string[] {
   const preambulo = principal.elementos.find((e) => e.tipo === 'preambulo');
   const cabecera = principal.sinComentarios.slice(0, preambulo ? preambulo.hasta : principal.sinComentarios.length);

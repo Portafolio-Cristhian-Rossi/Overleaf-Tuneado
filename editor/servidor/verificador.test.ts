@@ -145,6 +145,37 @@ describe('verificador', () => {
     expect(prompt).not.toContain('Explicación del capítulo dos.');
   });
 
+  it('el glosario va a la foto y a la prompt, se puede citar y no cuenta como archivo revisado', async () => {
+    const CITA_GLOSARIO = '\\chapter{Introducción}';
+    const primera = crearVerificador({
+      config, verificaciones, rutasDelInforme: async () => ['Cap1.tex', 'Cap3.tex'], dirTemporales: temporales, ahora: () => reloj,
+      lanzar: lanzadorFalso(() => envoltura([contradiccion('Cap1.tex', CITA_GLOSARIO, 'Definición que no coincide.')])).lanzar,
+    });
+    await primera.iniciar('todo', null);
+    await primera.terminada();
+    await verificaciones.ignorar((await verificaciones.ultima())!.hallazgos[0]!.id);
+
+    let enFoto = false;
+    const falso = lanzadorFalso(({ cwd }) => {
+      enFoto = fs.existsSync(path.join(cwd, 'informe', 'Cap1.tex'));
+      return envoltura([contradiccion('Cap1.tex', CITA_GLOSARIO, 'Otra definición.')]);
+    });
+    const v = crearVerificador({
+      config, verificaciones, lanzar: falso.lanzar, rutasDelInforme: async () => ['Cap3.tex'],
+      rutaDelGlosario: async () => 'Cap1.tex', dirTemporales: temporales, ahora: () => reloj,
+    });
+    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.terminada();
+
+    const { prompt } = falso.llamadas[0]!;
+    expect(enFoto).toBe(true);
+    expect(prompt).toContain('## Glosario del informe\nEstá en informe/Cap1.tex.');
+    expect(prompt).not.toContain('- informe/Cap1.tex');
+    expect(prompt).toContain('Definición que no coincide.');
+    expect(await verificaciones.ultima()).toMatchObject({ archivos: ['Cap3.tex'], descartados: 0 });
+    expect((await verificaciones.ultima())!.hallazgos[0]).toMatchObject({ informe: { archivo: 'Cap1.tex', cita: CITA_GLOSARIO } });
+  });
+
   it('mientras corre, estado es en-curso y una segunda corrida es ocupado', async () => {
     let soltar: (s: SalidaDelAgente) => void = () => {};
     const falso = lanzadorFalso(() => new Promise<SalidaDelAgente>((r) => { soltar = r; }));
