@@ -11,6 +11,7 @@
   --acento-fondo: #e6f1fb;
   --exito: #3b6d11;
   --aviso: #854f0b;
+  --verificacion: #6b3fa0;
   --aviso-fondo: #faeeda;
   --peligro: #a32d2d;
   --peligro-fondo: #fcebeb;
@@ -31,6 +32,7 @@
     --acento-fondo: #0c2e52;
     --exito: #97c459;
     --aviso: #fac775;
+    --verificacion: #c4a7e7;
     --aviso-fondo: #412402;
     --peligro: #f09595;
     --peligro-fondo: #501313;
@@ -222,6 +224,7 @@ select {
 }
 #editor .cm-cita { background: var(--superficie-2); color: var(--texto-2); }
 #editor .cm-cita { cursor: pointer; }
+#editor .cm-verificacion { text-decoration: underline wavy var(--verificacion); text-decoration-skip-ink: none; text-underline-offset: 3px; cursor: pointer; }
 #editor .cm-ref-rota, #editor .cm-cita-rota { background: var(--peligro-fondo); color: var(--peligro); }
 /* Bloques: código */
 #editor .cm-codigo {
