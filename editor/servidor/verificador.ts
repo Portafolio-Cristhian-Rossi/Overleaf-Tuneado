@@ -62,13 +62,20 @@ function lineasEn(raiz: string, archivo: string): number | null {
   }
 }
 
-// Solo puede haber una corrida a la vez: cualquier carpeta que quedó es de una que se cortó.
-async function borrarCarpetasViejas(dir: string): Promise<void> {
+// Otro editor abierto (el de prueba, por ejemplo) comparte la carpeta temporal y puede tener una
+// corrida en marcha: solo se borran las carpetas más viejas que la corrida más larga posible.
+async function borrarCarpetasViejas(dir: string, anterioresA: number): Promise<void> {
   const nombres = await fs.promises.readdir(dir).catch(() => [] as string[]);
   for (const nombre of nombres.filter((n) => n.startsWith(PREFIJO))) {
-    await fs.promises.rm(path.join(dir, nombre), { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
+    const carpeta = path.join(dir, nombre);
+    const datos = await fs.promises.stat(carpeta).catch(() => null);
+    if (datos === null || datos.mtimeMs >= anterioresA) continue;
+    await fs.promises.rm(carpeta, { recursive: true, force: true, maxRetries: 5 }).catch(() => {});
   }
 }
+
+// setTimeout corre enseguida si la espera no entra en 32 bits.
+const ESPERA_MAXIMA = 2_147_483_647;
 
 export function crearVerificador(o: {
   config: ConfigVerificador; verificaciones: Verificaciones; lanzar: LanzarAgente;
@@ -102,7 +109,7 @@ export function crearVerificador(o: {
     const fallar = (e: ErrorDeCorrida) => { if (!c.cancelada) error = e; };
     let cwd: string | null = null;
     try {
-      await borrarCarpetasViejas(dirTemporales);
+      await borrarCarpetasViejas(dirTemporales, ahora() - (config.limiteVerificacion.todo + 10) * 60_000);
       cwd = await fs.promises.mkdtemp(path.join(dirTemporales, PREFIJO));
       const dirRepo = path.join(cwd, 'repositorio');
       const foto = await fotografiarRepositorio(config.repositorio!, config.ramaRepositorio, dirRepo);
@@ -121,7 +128,7 @@ export function crearVerificador(o: {
       c.proceso = proceso;
       const minutos = config.limiteVerificacion[c.alcance];
       let vencida = false;
-      const reloj = setTimeout(() => { vencida = true; proceso.detener(); }, minutos * 60_000);
+      const reloj = setTimeout(() => { vencida = true; proceso.detener(); }, Math.min(minutos * 60_000, ESPERA_MAXIMA));
       const salida = await proceso.terminado.finally(() => clearTimeout(reloj));
       if (c.cancelada) return;
       if (vencida) return fallar({ motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', String(minutos)) });

@@ -310,14 +310,38 @@ describe('verificador', () => {
     expect(falso.llamadas).toHaveLength(0);
   });
 
-  it('al iniciar borra carpetas editor-verificacion-* que quedaron de otra vez', async () => {
-    fs.mkdirSync(path.join(temporales, 'editor-verificacion-viejo', 'repositorio'), { recursive: true });
-    fs.writeFileSync(path.join(temporales, 'editor-verificacion-viejo', 'repositorio', 'a.py'), 'x\n');
+  it('al iniciar borra carpetas editor-verificacion-* viejas y deja las de una corrida que puede seguir', async () => {
+    reloj = Date.now();
+    const viejo = path.join(temporales, 'editor-verificacion-viejo');
+    fs.mkdirSync(path.join(viejo, 'repositorio'), { recursive: true });
+    fs.writeFileSync(path.join(viejo, 'repositorio', 'a.py'), 'x\n');
+    // Más vieja que limiteVerificacion.todo (45) más diez minutos.
+    const hace56Minutos = new Date(reloj - 56 * 60_000);
+    fs.utimesSync(viejo, hace56Minutos, hace56Minutos);
+    const reciente = path.join(temporales, 'editor-verificacion-reciente');
+    fs.mkdirSync(reciente);
+    const hace54Minutos = new Date(reloj - 54 * 60_000);
+    fs.utimesSync(reciente, hace54Minutos, hace54Minutos);
     fs.mkdirSync(path.join(temporales, 'otra-cosa'));
+
     const v = verificador(lanzadorFalso(() => envoltura([])).lanzar);
     await v.iniciar('capitulo', 'Cap3.tex');
     await v.terminada();
-    expect(fs.readdirSync(temporales)).toEqual(['otra-cosa']);
+    expect(fs.readdirSync(temporales).sort()).toEqual(['editor-verificacion-reciente', 'otra-cosa']);
+  });
+
+  it('un límite enorme no corta la corrida enseguida', async () => {
+    config.limiteVerificacion.capitulo = 60_000;
+    let soltar: (s: SalidaDelAgente) => void = () => {};
+    const falso = lanzadorFalso(() => new Promise<SalidaDelAgente>((r) => { soltar = r; }));
+    const v = verificador(falso.lanzar);
+    await v.iniciar('capitulo', 'Cap3.tex');
+    await falso.llamado;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(falso.detenciones()).toBe(0);
+    soltar(envoltura([]));
+    await v.terminada();
+    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
   });
 
   it('capítulo sin ruta o con una ruta que no está en el informe es invalido', async () => {
