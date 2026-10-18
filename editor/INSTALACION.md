@@ -396,6 +396,20 @@ npm install -g @anthropic-ai/claude-code
 claude
 ```
 
+   Si ya usás la extensión de Claude Code en VS Code y entraste con tu cuenta
+   ahí, podés saltear los pasos 1 y 2: la extensión trae su propio `claude.exe`.
+   Poné su ruta en `editor/config.json`, en `agente` (con barras `/`):
+
+```json
+{
+  "agente": "C:/Users/Cristhian Rossi/.vscode/extensions/anthropic.claude-code-2.1.300-win32-x64/resources/native-binary/claude.exe"
+}
+```
+
+   El número de versión de esa carpeta cambia cuando se actualiza la
+   extensión. Si la verificación dice que no encuentra Claude Code, buscá la
+   carpeta nueva en `.vscode/extensions` y corregí la ruta.
+
 3. Agregá a `editor/config.json`, junto a lo que ya tiene, dónde está el
    repositorio de la aplicación. Escribí la ruta con barras `/`:
 
@@ -436,9 +450,22 @@ es un repositorio de Git o no tiene esa rama.
   ignorados*, al final de la lista, permite recuperarlo.
 - `la frase cambió` quiere decir que la cita ya no está en el texto: la
   editaste después de verificar.
+- Debajo de la fecha, el panel dice cuánto tardó la verificación y cuánto
+  costó en tu cuenta de Claude. Como referencia, verificar el capítulo de la
+  solución tardó unos dos minutos y costó alrededor de US$ 0,50.
 - Leé cada hallazgo antes de tocar el informe: el agente se puede equivocar.
   El editor comprueba que las citas existan (las que no, se descartan y el
   encabezado lo cuenta), pero no que la explicación sea cierta.
+
+**El glosario.** El agente recibe siempre el capítulo que se titula
+*Glosario*, aunque verifiques otro. Lo usa para explicar con los términos del
+equipo y para reconocer en el código lo que el informe llama de otra forma
+(por ejemplo, `processing_orchestrator` es un orquestador). Las definiciones de
+la sección *Programación* describen la aplicación, así que si el código las
+contradice aparece como contradicción, citando el glosario. Las de *IA* y
+*Texto* son conceptos generales y no se comparan con el código, salvo los
+modelos de tópicos. También avisa, como "el informe no lo cuenta", los
+términos centrales del código que faltan en el glosario.
 
 **Qué lee el agente.** Solo la rama `ramaRepositorio` tal como está en Git:
 los archivos versionados, sin el `.env` ni nada de lo que Git ignora, y sin
@@ -485,6 +512,7 @@ viajan a Overleaf ni a GitHub. Al abrir el editor, la pestaña muestra la
 | `ramaRepositorio` | `main` | Rama de la aplicación contra la que se verifica. |
 | `limiteVerificacion` | `{ "capitulo": 15, "todo": 45 }` | Minutos que puede durar una verificación antes de cortarse. |
 | `verificaciones` | `../verificaciones` | Carpeta donde se guardan las verificaciones y los hallazgos ignorados. |
+| `agente` | sin valor | Ruta de `claude.exe`, si no está instalado el CLI (sección 6). Sin valor, se usa `claude`. |
 
 Después de cambiar una opción, cerrá las pestañas del editor, esperá a que se
 cierre (o reiniciá la máquina) y volvé a abrirlo.
