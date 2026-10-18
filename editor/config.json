@@ -1,1 +1,3 @@
-{ "informe": "../informe", "build": "../build", "principal": "main.tex", "puerto": 4317, "compilarAlGuardar": false, "corrector": true, "puertoCorrector": 4319 }
+{ "informe": "../informe", "build": "../build", "principal": "main.tex", "puerto": 4317, "compilarAlGuardar": false, "corrector": true, "puertoCorrector": 4319,
+  "repositorio": "C:/Users/Cristhian Rossi/Documents/GitHub/uy-social-topic-modeling",
+  "agente": "C:/Users/Cristhian Rossi/.vscode/extensions/anthropic.claude-code-2.1.300-win32-x64/resources/native-binary/claude.exe" }
