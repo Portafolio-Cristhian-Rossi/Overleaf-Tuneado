@@ -369,9 +369,9 @@ const editor = crearEditor(porId('editor'), {
     extensionCorreccion({ api: api.correccion, alCambiarEstado: (estado) => panelGramatica.mostrarEstado(estado) }),
     extensionPanelGramatica(() => panelGramatica.actualizar()),
     extensionSubrayadoVerificacion({
+      // Solo marca el hallazgo si ya está a la vista: un clic para escribir no debe cambiar el panel.
       alElegir: (id) => {
-        mostrarPestanaVerificacion();
-        panelVerificacion.resaltar(id);
+        if (!porId('cuerpo').classList.contains('sin-panel') && !zonaVerificacion.hidden) panelVerificacion.resaltar(id);
       },
     }),
   ],
@@ -490,7 +490,7 @@ function abrirPdfAparte(): void {
 }
 
 const botonMostrarPanel = el('button', {
-  type: 'button', hidden: true, title: 'Volver a mostrar el PDF y la gramática', alClick: () => verPanel(true, true),
+  type: 'button', hidden: true, title: 'Volver a mostrar el PDF, la gramática y la verificación', alClick: () => verPanel(true, true),
 }, 'Mostrar panel');
 barra.zonaAcciones.append(botonMostrarPanel);
 porId('panel').append(
@@ -527,7 +527,7 @@ const botonVerificacion = el('button', {
     const ruta = editor.rutaAbierta();
     // Mientras no se haya consultado al servidor, él decide al iniciar.
     const estado: EstadoVerificacion = verificacion?.estado ?? { estado: 'libre', error: null };
-    abrirMenuFlotante(botonVerificacion.getBoundingClientRect(), opcionesDeVerificacion(estado, ruta, esTex(ruta))
+    abrirMenuFlotante(botonVerificacion.getBoundingClientRect(), opcionesDeVerificacion(estado, ruta, esTex(ruta) && ruta !== principal)
       .map(({ alcance, texto, habilitada, ayuda }) => ({ texto, habilitada, ayuda, alElegir: () => { void verificar(alcance); } })));
   },
 }, 'Verificación ▾');

@@ -38,7 +38,8 @@ export function extensionSubrayadoVerificacion(o: { alElegir(id: string): void }
   return [
     campo,
     EditorView.domEventHandlers({
-      mousedown(e) {
+      // click y no mousedown: un arrastre que empieza en la frase para seleccionar no cuenta.
+      click(e) {
         const marca = (e.target as HTMLElement | null)?.closest?.('.cm-verificacion');
         const id = marca?.getAttribute('data-hallazgo');
         if (id) o.alElegir(id);

@@ -426,8 +426,8 @@ es un repositorio de Git o no tiene esa rama.
   la verificación termina igual y queda guardada.
 - Al terminar, la pestaña **Verificación** del panel derecho lista lo que
   encontró, por tipo y por archivo, y las frases citadas quedan subrayadas en
-  violeta en el texto. Un clic en un hallazgo te lleva a su frase; un clic en
-  un subrayado, a su hallazgo.
+  violeta en el texto. Un clic en un hallazgo te lleva a su frase; con la
+  pestaña a la vista, un clic en un subrayado marca su hallazgo.
 - Cada hallazgo dice en qué archivo y línea del código se apoya. *Copiar ruta*
   la copia; `repositorio/` es la carpeta de la aplicación.
 - *Marcar resuelto* lo oculta en esta verificación. Si una posterior lo vuelve
@@ -443,9 +443,14 @@ es un repositorio de Git o no tiene esa rama.
 **Qué lee el agente.** Solo la rama `ramaRepositorio` tal como está en Git:
 los archivos versionados, sin el `.env` ni nada de lo que Git ignora, y sin
 los cambios que no hayas commiteado. Trabaja sobre copias en una carpeta
-temporal que se borra al terminar, y solo puede leer: no escribe en el
+temporal que se borra al terminar, y solo puede leer: tiene únicamente las
+herramientas Read, Grep y Glob, ningún servidor MCP, y no escribe en el
 informe ni en el repositorio. Lo que lee viaja a Claude con tu cuenta, como
 cualquier uso de Claude Code.
+
+Se compara la rama local (`main`, salvo que cambies `ramaRepositorio`) de
+`uy-social-topic-modeling`, no la de GitHub: antes de verificar conviene
+hacer `git pull` en esa carpeta. El panel muestra el commit que se usó.
 
 **Dónde quedan.** Cada verificación se guarda en `Tesis/verificaciones/`, un
 archivo por corrida con su fecha y su commit, junto con `ignorados.json`. No
@@ -479,6 +484,7 @@ viajan a Overleaf ni a GitHub. Al abrir el editor, la pestaña muestra la
 | `repositorio` | sin valor | Carpeta del repositorio de la aplicación, para verificar el informe (sección 6). |
 | `ramaRepositorio` | `main` | Rama de la aplicación contra la que se verifica. |
 | `limiteVerificacion` | `{ "capitulo": 15, "todo": 45 }` | Minutos que puede durar una verificación antes de cortarse. |
+| `verificaciones` | `../verificaciones` | Carpeta donde se guardan las verificaciones y los hallazgos ignorados. |
 
 Después de cambiar una opción, cerrá las pestañas del editor, esperá a que se
 cierre (o reiniciá la máquina) y volvé a abrirlo.

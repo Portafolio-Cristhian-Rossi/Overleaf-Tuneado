@@ -60,8 +60,9 @@ export function crearPanelVerificacion(padre: HTMLElement, o: {
   function mostrar(datos: { estado: EstadoVerificacion; corrida: Corrida | null; ignorados: Ignorado[] }, ubicado: (h: Hallazgo) => boolean): void {
     const { estado, corrida, ignorados } = datos;
     const partes: HTMLElement[] = [];
-    if (corrida) partes.push(el('div', { clase: 'verificacion-encabezado' }, ...encabezado(corrida).map((l) => el('p', {}, l))));
+    // El error de la última corrida va arriba: el encabezado puede ser de una corrida anterior.
     for (const m of mensajesDelPanel(estado, corrida)) partes.push(el('p', { clase: 'verificacion-mensaje' }, m));
+    if (corrida) partes.push(el('div', { clase: 'verificacion-encabezado' }, ...encabezado(corrida).map((l) => el('p', {}, l))));
 
     const visibles = corrida && corrida.estado === 'ok' ? hallazgosVisibles(corrida, ignorados) : [];
     if (corrida?.estado === 'ok' && visibles.length === 0) partes.push(el('p', { clase: 'verificacion-mensaje' }, 'Sin diferencias en esta corrida.'));
