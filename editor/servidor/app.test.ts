@@ -106,6 +106,7 @@ beforeEach(async () => {
       estado: vi.fn(async () => ({ estado: 'libre' as const, error: null })),
       iniciar: vi.fn(async () => ({ tipo: 'ok' as const })),
       cancelar: vi.fn(),
+      cerrar: vi.fn(),
       terminada: vi.fn(async () => {}),
     },
     verificaciones: {

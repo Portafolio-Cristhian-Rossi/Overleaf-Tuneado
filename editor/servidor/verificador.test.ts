@@ -181,6 +181,27 @@ describe('verificador', () => {
     expect(fs.existsSync(falso.llamadas[0]!.cwd)).toBe(false);
   });
 
+  it('cerrar detiene el agente y borra la carpeta en el momento, y la corrida termina igual', async () => {
+    const falso = lanzadorFalso(nunca);
+    const v = verificador(falso.lanzar);
+    await v.iniciar('capitulo', 'Cap3.tex');
+    await falso.llamado;
+    v.cerrar();
+
+    // Al salir del proceso no corre nada asíncrono: tiene que estar borrada antes de esperar.
+    expect(falso.detenciones()).toBe(1);
+    expect(fs.existsSync(falso.llamadas[0]!.cwd)).toBe(false);
+    await v.terminada();
+    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
+    expect(await verificaciones.ultima()).toBeNull();
+    expect(fs.readdirSync(temporales)).toEqual([]);
+  });
+
+  it('cerrar sin corrida en curso no hace nada', () => {
+    const v = verificador(lanzadorFalso(nunca).lanzar);
+    expect(() => v.cerrar()).not.toThrow();
+  });
+
   it('cancelar antes de que arranque el agente no lo lanza', async () => {
     const falso = lanzadorFalso(() => envoltura([]));
     const v = verificador(falso.lanzar);

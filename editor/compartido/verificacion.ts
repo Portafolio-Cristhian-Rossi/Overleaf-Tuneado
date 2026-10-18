@@ -124,16 +124,17 @@ export function validarHallazgos(crudos: unknown, contexto: {
   lineasDelRepo(archivo: string): number | null; // null si no existe
 }): { hallazgos: Hallazgo[]; descartados: number } {
   if (!Array.isArray(crudos)) return { hallazgos: [], descartados: 0 };
-  const vistos = new Set<string>();
-  const hallazgos: Hallazgo[] = [];
+  // Los repetidos se fusionan en el primero: varios no-lo-cuenta del mismo par de archivos comparten id.
+  const porId = new Map<string, { hallazgo: Hallazgo; explicaciones: string[] }>();
   let descartados = 0;
   for (const crudo of crudos) {
     const h = validarUno(crudo, contexto);
     if (!h) { descartados++; continue; }
-    if (vistos.has(h.id)) continue;
-    vistos.add(h.id);
-    hallazgos.push(h);
+    const previo = porId.get(h.id);
+    if (!previo) porId.set(h.id, { hallazgo: h, explicaciones: [h.explicacion] });
+    else if (!previo.explicaciones.includes(h.explicacion)) previo.explicaciones.push(h.explicacion);
   }
+  const hallazgos = [...porId.values()].map(({ hallazgo, explicaciones }) => ({ ...hallazgo, explicacion: explicaciones.join(' ') }));
   return { hallazgos, descartados };
 }
 

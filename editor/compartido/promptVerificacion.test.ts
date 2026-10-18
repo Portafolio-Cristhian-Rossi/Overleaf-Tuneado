@@ -32,6 +32,7 @@ describe('armarPromptDeVerificacion', () => {
     expect(p).toContain('- Arquitectura general: Un solo diagrama. Y un párrafo por pieza. nota suelta');
     expect(p).toContain('## Ya ignorados');
     expect(p).toContain('- [no-lo-cuenta] Cap3.tex (repositorio/x.py): Falta x.');
+    expect(p).toContain('- Si en una misma sección faltan varias cosas del mismo archivo del repositorio, juntalas en un solo hallazgo "no-lo-cuenta".\n- Si no encontrás nada, devolvé [].');
     expect(p.trim().endsWith('Si no encontrás nada, devolvé [].')).toBe(true);
   });
 

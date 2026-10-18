@@ -109,9 +109,10 @@ describe('verificaciones', () => {
     expect(c.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 0 });
   });
 
-  it('una corrida fallida no sirve de anterior', async () => {
+  it('una corrida fallida no se compara ni sirve de anterior', async () => {
     await v.guardar(corrida({ ids: ['x'] }));
-    await v.guardar(corrida({ estado: 'fallida', crudo: 'basura', ids: [] }));
+    const fallida = await v.guardar(corrida({ estado: 'fallida', crudo: 'basura', ids: [] }));
+    expect(fallida.comparacion).toBeNull();
     const c = await v.guardar(corrida({ ids: ['x', 'y'] }));
     expect(c.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 0 });
   });

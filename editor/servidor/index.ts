@@ -48,8 +48,8 @@ const corrector = crearCorrector({
   puerto: config.puertoCorrector,
   diccionario: async () => (await diccionario.leer()).palabras,
 });
-// Al salir, por la vía que sea, no debe quedar Java corriendo.
-process.on('exit', () => { corrector.detener(); verificador.cancelar(); });
+// Al salir, por la vía que sea, no debe quedar Java corriendo ni la carpeta temporal del agente.
+process.on('exit', () => { corrector.detener(); verificador.cerrar(); });
 for (const senal of ['SIGINT', 'SIGTERM'] as const) process.on(senal, () => process.exit(0));
 
 const app = crearApp({

@@ -15,10 +15,16 @@ export interface ProcesoAgente {
 }
 export type LanzarAgente = (o: { cwd: string; prompt: string }) => ProcesoAgente;
 
+// --tools deja disponibles solo esas herramientas (--allowedTools solo evita preguntar por ellas);
+// --disallowedTools las niega aunque la configuración del usuario las habilite; --permission-mode
+// default ignora un modo más permisivo de esa configuración, y --strict-mcp-config sin --mcp-config
+// no carga ningún servidor MCP.
 export const ARGUMENTOS_DEL_AGENTE = [
   '-p', '--output-format', 'json',
-  '--allowedTools', 'Read,Grep,Glob',
-  '--disallowedTools', 'Bash,Edit,Write,NotebookEdit,WebFetch,WebSearch',
+  '--tools', 'Read,Grep,Glob',
+  '--disallowedTools', 'Bash,PowerShell,Edit,Write,NotebookEdit,WebFetch,WebSearch',
+  '--permission-mode', 'default',
+  '--strict-mcp-config',
 ];
 
 export function crearLanzadorAgente(comando: string[] = ['claude']): LanzarAgente {
@@ -80,7 +86,7 @@ export type SalidaInterpretada =
 const SIN_SESION = /login|log in|api key|not authenticated/i;
 const CMD_NO_ENCUENTRA = /no se reconoce|is not recognized/i;
 
-function envolturaDe(stdout: string): { is_error?: unknown; result?: unknown } | null {
+function envolturaDe(stdout: string): { is_error?: unknown; result?: unknown; subtype?: unknown } | null {
   try {
     const v: unknown = JSON.parse(stdout);
     return v !== null && typeof v === 'object' && !Array.isArray(v) ? v : null;
@@ -101,16 +107,21 @@ export function interpretarSalida(s: SalidaDelAgente): SalidaInterpretada {
 
   const texto = typeof envoltura.result === 'string' ? envoltura.result : '';
   if (envoltura.is_error === true) {
-    return SIN_SESION.test(texto) ? { tipo: 'sin-sesion', mensaje: texto } : { tipo: 'otro', mensaje: texto };
+    if (SIN_SESION.test(texto)) return { tipo: 'sin-sesion', mensaje: texto };
+    if (texto.trim() !== '') return { tipo: 'otro', mensaje: texto };
+    const subtype = typeof envoltura.subtype === 'string' && envoltura.subtype !== '' ? ` (${envoltura.subtype})` : '';
+    return { tipo: 'otro', mensaje: `El agente informó un error${subtype}.` };
   }
 
+  // La prosa de alrededor puede tener corchetes (por ejemplo \cite[p. 3]): se prueba desde cada [.
   const sinCercos = texto.replace(/```[a-zA-Z]*/g, '');
-  const desde = sinCercos.indexOf('[');
   const hasta = sinCercos.lastIndexOf(']');
-  if (desde === -1 || hasta < desde) return { tipo: 'ilegible', crudo: s.stdout };
-  try {
-    return { tipo: 'ok', crudos: JSON.parse(sinCercos.slice(desde, hasta + 1)) };
-  } catch {
-    return { tipo: 'ilegible', crudo: s.stdout };
+  for (let desde = sinCercos.indexOf('['); desde !== -1 && desde < hasta; desde = sinCercos.indexOf('[', desde + 1)) {
+    try {
+      return { tipo: 'ok', crudos: JSON.parse(sinCercos.slice(desde, hasta + 1)) };
+    } catch {
+      // No era el comienzo del arreglo.
+    }
   }
+  return { tipo: 'ilegible', crudo: s.stdout };
 }

@@ -45,12 +45,27 @@ describe('interpretarSalida', () => {
   it('otro error con su mensaje', () => {
     expect(interpretarSalida(salida(envoltura('Overloaded', true), 1))).toEqual({ tipo: 'otro', mensaje: 'Overloaded' });
   });
+  it('un error sin texto en result se informa con su subtype, si lo hay', () => {
+    const conSubtype = JSON.stringify({ type: 'result', subtype: 'error_max_turns', is_error: true });
+    expect(interpretarSalida(salida(conSubtype, 1))).toEqual({ tipo: 'otro', mensaje: 'El agente informó un error (error_max_turns).' });
+    const vacio = JSON.stringify({ type: 'result', is_error: true, result: '  ' });
+    expect(interpretarSalida(salida(vacio, 1))).toEqual({ tipo: 'otro', mensaje: 'El agente informó un error.' });
+    const noTexto = JSON.stringify({ type: 'result', is_error: true, result: { a: 1 } });
+    expect(interpretarSalida(salida(noTexto, 1))).toEqual({ tipo: 'otro', mensaje: 'El agente informó un error.' });
+  });
+  it('salta los corchetes de la prosa que no abren un arreglo JSON', () => {
+    const texto = 'Revisé la frase con \\cite[p. 3] del capítulo:\n[{"tipo":"x"}]\nListo.';
+    expect(interpretarSalida(salida(envoltura(texto)))).toEqual({ tipo: 'ok', crudos: [{ tipo: 'x' }] });
+  });
 });
 
 describe('crearLanzadorAgente', () => {
-  it('limita las herramientas del agente a lectura', () => {
-    expect(ARGUMENTOS_DEL_AGENTE).toContain('Read,Grep,Glob');
-    expect(ARGUMENTOS_DEL_AGENTE.join(' ')).toContain('Bash,Edit,Write');
+  it('limita las herramientas del agente a lectura y sin servidores MCP', () => {
+    expect(ARGUMENTOS_DEL_AGENTE).toEqual([
+      '-p', '--output-format', 'json', '--tools', 'Read,Grep,Glob',
+      '--disallowedTools', 'Bash,PowerShell,Edit,Write,NotebookEdit,WebFetch,WebSearch',
+      '--permission-mode', 'default', '--strict-mcp-config',
+    ]);
   });
   it('el lanzador pasa la prompt por la entrada estándar y devuelve la salida', async () => {
     const lanzar = crearLanzadorAgente(['node', FALSO]);

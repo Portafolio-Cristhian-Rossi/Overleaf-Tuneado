@@ -62,6 +62,7 @@ ${ignorados}## Reglas
 - Devolvé únicamente un arreglo JSON, sin texto alrededor ni bloque de código, con esta forma:
 [{"tipo": "contradiccion", "informe": {"archivo": "Cap3.tex", "linea": 14, "cita": "frase del informe"}, "repo": {"archivo": "backend/jobs.py", "linea": 88}, "explicacion": "qué no coincide"}]
 - En "no-lo-cuenta", "informe" lleva solo "archivo" y la "linea" del título donde iría. En "sin-respaldo", "repo" puede faltar.
+- Si en una misma sección faltan varias cosas del mismo archivo del repositorio, juntalas en un solo hallazgo "no-lo-cuenta".
 - Si no encontrás nada, devolvé [].
 `;
 }

@@ -17,6 +17,7 @@ export interface Verificador {
   estado(): Promise<EstadoVerificacion>;
   iniciar(alcance: Alcance, ruta: string | null): Promise<{ tipo: 'ok' } | { tipo: 'ocupado' } | { tipo: 'invalido'; mensaje: string }>;
   cancelar(): void;
+  cerrar(): void;               // cancela y borra la carpeta de la corrida sin esperar: para el exit del proceso
   terminada(): Promise<void>;   // se resuelve cuando no hay corrida en curso (para pruebas y el cierre)
 }
 
@@ -42,6 +43,7 @@ interface EnCurso {
   desde: number;
   cancelada: boolean;
   proceso: ProcesoAgente | null;
+  carpeta: string | null;
   fin: Promise<void>;
 }
 
@@ -111,6 +113,7 @@ export function crearVerificador(o: {
     try {
       await borrarCarpetasViejas(dirTemporales, ahora() - (config.limiteVerificacion.todo + 10) * 60_000);
       cwd = await fs.promises.mkdtemp(path.join(dirTemporales, PREFIJO));
+      c.carpeta = cwd;
       const dirRepo = path.join(cwd, 'repositorio');
       const foto = await fotografiarRepositorio(config.repositorio!, config.ramaRepositorio, dirRepo);
       if (foto.tipo === 'error') return fallar(foto.motivo === 'rama' ? { motivo: 'rama', mensaje: foto.mensaje } : falla(foto.mensaje));
@@ -160,6 +163,12 @@ export function crearVerificador(o: {
     }
   }
 
+  function cancelar(): void {
+    if (!enCurso) return;
+    enCurso.cancelada = true;
+    enCurso.proceso?.detener();
+  }
+
   return {
     async estado() {
       if (enCurso) return { estado: 'en-curso', alcance: enCurso.alcance, desde: enCurso.desde };
@@ -183,16 +192,21 @@ export function crearVerificador(o: {
       if (enCurso) return { tipo: 'ocupado' };
 
       error = null;
-      const c: EnCurso = { alcance, desde: ahora(), cancelada: false, proceso: null, fin: Promise.resolve() };
+      const c: EnCurso = { alcance, desde: ahora(), cancelada: false, proceso: null, carpeta: null, fin: Promise.resolve() };
       enCurso = c;
       c.fin = correr(c, rutas);
       return { tipo: 'ok' };
     },
 
-    cancelar() {
-      if (!enCurso) return;
-      enCurso.cancelada = true;
-      enCurso.proceso?.detener();
+    cancelar,
+
+    // En el exit del proceso no llega a correr el finally asíncrono de la corrida.
+    cerrar() {
+      const carpeta = enCurso?.carpeta ?? null;
+      cancelar();
+      if (carpeta !== null) {
+        try { fs.rmSync(carpeta, { recursive: true, force: true, maxRetries: 5 }); } catch { /* queda para la próxima corrida */ }
+      }
     },
 
     terminada() {

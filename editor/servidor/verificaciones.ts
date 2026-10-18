@@ -101,7 +101,7 @@ export function crearVerificaciones(dir: string): Verificaciones {
       const completa: Corrida = {
         ...c,
         resueltos: [],
-        comparacion: anterior ? compararCorridas(anterior.corrida.hallazgos, c.hallazgos) : null,
+        comparacion: anterior && c.estado === 'ok' ? compararCorridas(anterior.corrida.hallazgos, c.hallazgos) : null,
       };
       const base = nombreBase(c);
       const existentes = new Set(await fs.readdir(dir).catch(() => [] as string[]));

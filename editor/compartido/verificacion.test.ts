@@ -73,6 +73,30 @@ describe('validarHallazgos', () => {
     expect(r.hallazgos[0].repo?.archivo).toBe('backend/jobs.py');
   });
 
+  it('fusiona los no-lo-cuenta con el mismo par de archivos y junta las explicaciones distintas', () => {
+    const falta = (linea: number, explicacion: string) =>
+      crudo({ tipo: 'no-lo-cuenta', informe: { archivo: 'Cap3.tex', linea, cita: null }, repo: { archivo: 'backend/jobs.py', linea }, explicacion });
+    const r = validarHallazgos([
+      falta(2, 'No cuenta los reintentos.'),
+      falta(5, 'No cuenta el límite de tiempo.'),
+      falta(7, 'No cuenta los reintentos.'),
+    ], contexto);
+    expect(r.descartados).toBe(0);
+    expect(r.hallazgos).toHaveLength(1);
+    expect(r.hallazgos[0]).toMatchObject({
+      informe: { linea: 2 }, repo: { linea: 2 },
+      explicacion: 'No cuenta los reintentos. No cuenta el límite de tiempo.',
+    });
+  });
+
+  it('no repite la explicación cuando los repetidos dicen lo mismo', () => {
+    const falta = (linea: number) =>
+      crudo({ tipo: 'no-lo-cuenta', informe: { archivo: 'Cap3.tex', linea, cita: null }, explicacion: 'No cuenta los reintentos.' });
+    const r = validarHallazgos([falta(2), falta(3)], contexto);
+    expect(r).toMatchObject({ descartados: 0, hallazgos: [{ informe: { linea: 2 }, explicacion: 'No cuenta los reintentos.' }] });
+    expect(r.hallazgos).toHaveLength(1);
+  });
+
   it('si lo crudo no es un arreglo, no hay hallazgos ni descartados', () => {
     expect(validarHallazgos({ a: 1 }, contexto)).toEqual({ hallazgos: [], descartados: 0 });
   });
