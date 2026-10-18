@@ -47,4 +47,35 @@ describe('cargarConfig', () => {
   it('sin archivo de configuración usa todos los valores por defecto', () => {
     expect(cargarConfig(dirTemporal(), 'config.json').puerto).toBe(4317);
   });
+
+  it('la verificación tiene valores por defecto', () => {
+    const dir = dirCon({});
+    const c = cargarConfig(dir, 'config.json');
+    expect(c).toMatchObject({ repositorio: null, ramaRepositorio: 'main', limiteVerificacion: { capitulo: 15, todo: 45 } });
+    expect(c.verificaciones).toBe(path.resolve(dir, '../verificaciones'));
+  });
+
+  it('el repositorio se resuelve como ruta absoluta respecto de editor/', () => {
+    const dir = dirCon({ repositorio: '../../app', ramaRepositorio: 'desarrollo' });
+    const c = cargarConfig(dir, 'config.json');
+    expect(c.repositorio).toBe(path.resolve(dir, '../../app'));
+    expect(c.ramaRepositorio).toBe('desarrollo');
+  });
+
+  it('rechaza un repositorio que no es una ruta', () => {
+    expect(() => cargarConfig(dirCon({ repositorio: 5 }), 'config.json')).toThrow(/repositorio tiene que ser la ruta de una carpeta/);
+  });
+
+  it.each(['', 3])('rechaza la rama %j', (ramaRepositorio) => {
+    expect(() => cargarConfig(dirCon({ ramaRepositorio }), 'config.json')).toThrow(/ramaRepositorio/);
+  });
+
+  it('el límite parcial se completa con los valores por defecto', () => {
+    expect(cargarConfig(dirCon({ limiteVerificacion: { todo: 60 } }), 'config.json').limiteVerificacion).toEqual({ capitulo: 15, todo: 60 });
+  });
+
+  it.each([{ capitulo: 0 }, { todo: -1 }, { capitulo: 'x' }, { todo: null }])('rechaza el límite %j', (limiteVerificacion) => {
+    expect(() => cargarConfig(dirCon({ limiteVerificacion }), 'config.json'))
+      .toThrow('config: limiteVerificacion necesita capitulo y todo, en minutos mayores que cero');
+  });
 });

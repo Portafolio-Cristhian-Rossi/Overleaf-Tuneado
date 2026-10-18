@@ -12,6 +12,8 @@ import { crearGuia } from './guia';
 import { crearImagenes } from './imagenes';
 import { describirProyecto } from './proyecto';
 import { crearReferencias } from './referencias';
+import { HallazgoDesconocido } from './verificaciones';
+import type { Corrida, Ignorado } from '../compartido/verificacion';
 
 let dir: string;
 let servidor: Server;
@@ -23,6 +25,12 @@ const ITEM_DE_ZOTERO: ItemZotero = {
   biblioteca: 'groups/6491700', nombreBiblioteca: 'Tesis2026-Cris,Pache,Nacho', item: 'ZXBADSCP', tipo: 'conferencePaper',
   titulo: 'TopicGPT: A Prompt-based Topic Modeling Framework', autores: ['Pham', 'Hoyle'], anio: '2024', doi: '10.18653/v1/2024.naacl-long.164',
 };
+
+const CORRIDA: Corrida = {
+  fecha: '2026-10-18T12:00:00.000Z', alcance: 'todo', archivos: ['Cap4.tex'], rama: 'main', commit: 'abc1234',
+  duracionMs: 1000, estado: 'ok', crudo: null, descartados: 0, hallazgos: [], resueltos: [], comparacion: null,
+};
+const IGNORADO: Ignorado = { id: 'h1', tipo: 'sin-respaldo', archivoInforme: 'Cap4.tex', cita: null, archivoRepo: null, explicacion: 'x', fecha: '2026-10-18T12:00:00.000Z' };
 
 const ESTADO: EstadoGit ={ cambiosLocales: true, commitsSinEnviar: 1, commitsSinTraer: 2, combinacionEnCurso: false, archivosEnConflicto: [] };
 
@@ -48,7 +56,7 @@ beforeEach(async () => {
   copiarFixture(informe);
   fs.mkdirSync(path.join(dir, 'estaticos'));
   fs.writeFileSync(path.join(dir, 'estaticos', 'index.html'), '<title>Editor</title>');
-  const config: Config = { informe, build: path.join(dir, 'build'), principal: 'main.tex', puerto: 0, compilarAlGuardar: true, corrector: true, puertoCorrector: 4319 };
+  const config: Config = { informe, build: path.join(dir, 'build'), principal: 'main.tex', puerto: 0, compilarAlGuardar: true, corrector: true, puertoCorrector: 4319, verificaciones: path.join(dir, 'verificaciones'), repositorio: null, ramaRepositorio: 'main', limiteVerificacion: { capitulo: 15, todo: 45 } };
 
   d = {
     config,
@@ -93,6 +101,20 @@ beforeEach(async () => {
         if (!/^(users\/0|groups\/\d+)$/.test(biblioteca) || !/^[A-Z0-9]{8}$/.test(item)) throw new RutaInvalida('Identificador de Zotero no válido.');
         return item === 'ZXBADSCP' ? BIBTEX_DE_ZOTERO : null;
       }),
+    },
+    verificador: {
+      estado: vi.fn(async () => ({ estado: 'libre' as const, error: null })),
+      iniciar: vi.fn(async () => ({ tipo: 'ok' as const })),
+      cancelar: vi.fn(),
+      terminada: vi.fn(async () => {}),
+    },
+    verificaciones: {
+      guardar: vi.fn(async () => CORRIDA),
+      ultima: vi.fn(async () => CORRIDA),
+      marcarResuelto: vi.fn(async (id: string) => { if (id === 'zzz') throw new HallazgoDesconocido(); }),
+      ignorados: vi.fn(async () => [IGNORADO]),
+      ignorar: vi.fn(async (id: string) => { if (id === 'zzz') throw new HallazgoDesconocido(); }),
+      recuperar: vi.fn(async (id: string) => { if (id === 'zzz') throw new HallazgoDesconocido(); }),
     },
     abrirVsCode: vi.fn(async () => {}),
     dirEstaticos: path.join(dir, 'estaticos'),
@@ -599,5 +621,74 @@ describe('zotero', () => {
     expect(r.status).toBe(403);
     expect(d.zotero.bibtex).not.toHaveBeenCalled();
     expect((await fetch(`${base}/api/zotero/items`, { headers: { Origin: 'https://sitio-ajeno.example' } })).status).toBe(403);
+  });
+});
+
+describe('verificación', () => {
+  const MAL_FORMADO = { mensaje: 'Pedido mal formado.' };
+
+  it('GET devuelve el estado, la última corrida y los ignorados', async () => {
+    expect(await get('/api/verificacion')).toEqual({ estado: { estado: 'libre', error: null }, corrida: CORRIDA, ignorados: [IGNORADO] });
+  });
+
+  it('POST inicia una corrida y responde 202', async () => {
+    const r = await pedir('POST', '/api/verificacion', { alcance: 'capitulo', ruta: 'Cap4.tex' });
+    expect(r.status).toBe(202);
+    expect(r.cuerpo).toEqual({});
+    expect(d.verificador.iniciar).toHaveBeenCalledWith('capitulo', 'Cap4.tex');
+  });
+
+  it('POST de todo no necesita ruta', async () => {
+    expect((await pedir('POST', '/api/verificacion', { alcance: 'todo' })).status).toBe(202);
+    expect(d.verificador.iniciar).toHaveBeenCalledWith('todo', null);
+  });
+
+  it.each([[{ alcance: 'otro' }], [{}], [{ alcance: 'capitulo', ruta: 5 }]])('POST con %j da 400', async (cuerpo) => {
+    const r = await pedir('POST', '/api/verificacion', cuerpo);
+    expect(r.status).toBe(400);
+    expect(r.cuerpo).toEqual(MAL_FORMADO);
+    expect(d.verificador.iniciar).not.toHaveBeenCalled();
+  });
+
+  it('POST inválido da 400 con el mensaje del verificador', async () => {
+    d.verificador.iniciar = vi.fn(async () => ({ tipo: 'invalido' as const, mensaje: 'Falta la ruta.' }));
+    const r = await pedir('POST', '/api/verificacion', { alcance: 'capitulo' });
+    expect(r.status).toBe(400);
+    expect(r.cuerpo).toEqual({ mensaje: 'Falta la ruta.' });
+  });
+
+  it('POST con una corrida en curso da 409', async () => {
+    d.verificador.iniciar = vi.fn(async () => ({ tipo: 'ocupado' as const }));
+    const r = await pedir('POST', '/api/verificacion', { alcance: 'todo' });
+    expect(r.status).toBe(409);
+    expect(r.cuerpo).toEqual({ mensaje: 'Ya hay una verificación en curso.' });
+  });
+
+  it('cancelar', async () => {
+    expect((await post('/api/verificacion/cancelar')).cuerpo).toEqual({});
+    expect(d.verificador.cancelar).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    ['resuelto', 'marcarResuelto'], ['ignorar', 'ignorar'], ['recuperar', 'recuperar'],
+  ] as const)('%s actúa sobre el id', async (ruta, metodo) => {
+    const r = await pedir('POST', `/api/verificacion/${ruta}`, { id: 'h1' });
+    expect(r.status).toBe(200);
+    expect(r.cuerpo).toEqual({});
+    expect(d.verificaciones[metodo]).toHaveBeenCalledWith('h1');
+  });
+
+  it.each(['resuelto', 'ignorar', 'recuperar'])('%s con un id desconocido da 404', async (ruta) => {
+    const r = await pedir('POST', `/api/verificacion/${ruta}`, { id: 'zzz' });
+    expect(r.status).toBe(404);
+    expect(r.cuerpo).toEqual({ mensaje: 'Ese hallazgo ya no está en la última corrida.' });
+  });
+
+  it.each(['resuelto', 'ignorar', 'recuperar'])('%s sin id da 400', async (ruta) => {
+    for (const cuerpo of [{}, { id: 5 }]) {
+      const r = await pedir('POST', `/api/verificacion/${ruta}`, cuerpo);
+      expect(r.status).toBe(400);
+      expect(r.cuerpo).toEqual(MAL_FORMADO);
+    }
   });
 });

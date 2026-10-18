@@ -10,6 +10,8 @@ import { GuiaInvalida, type Guia } from './guia';
 import type { Imagenes } from './imagenes';
 import type { Corrector } from './languagetool';
 import type { Referencias } from './referencias';
+import { HallazgoDesconocido, type Verificaciones } from './verificaciones';
+import type { Verificador } from './verificador';
 import type { Vigia } from './vigia';
 import type { Zotero } from './zotero';
 
@@ -17,6 +19,7 @@ export interface Dependencias {
   config: Config; archivos: Archivos; proyecto: () => Promise<Proyecto>;
   git: Git; compilador: Compilador; vigia: Vigia;
   corrector: Corrector; diccionario: Diccionario; guia: Guia; imagenes: Imagenes; referencias: Referencias; zotero: Zotero;
+  verificador: Verificador; verificaciones: Verificaciones;
   abrirVsCode: () => Promise<void>; dirEstaticos: string;
 }
 
@@ -42,6 +45,7 @@ function esEscrituraValida(c: any): c is { ruta: string; contenido: string; finD
     && typeof c.bom === 'boolean' && typeof c.versionBase === 'string';
 }
 
+const PEDIDO_MAL_FORMADO = { mensaje: 'Pedido mal formado.' };
 const MAXIMO_DE_PARRAFOS = 2000;
 const LIMITE_DE_IMAGEN = '20mb';
 const MAXIMO_DE_BIBTEX = 200000;
@@ -189,6 +193,36 @@ export function crearApp(d: Dependencias): express.Express {
   app.get('/api/ia/guia', async (_req, res) => { res.json({ texto: await d.guia.leer() }); });
   app.put('/api/ia/guia', async (req, res) => { await d.guia.guardar(req.body?.texto); res.json({}); });
 
+  // El verificador compara el informe con el repositorio de la aplicación; no escribe en ninguno.
+  // Iniciar responde enseguida: la corrida sigue sola y el cliente la consulta con GET.
+  app.get('/api/verificacion', async (_req, res) => {
+    res.json({ estado: await d.verificador.estado(), corrida: await d.verificaciones.ultima(), ignorados: await d.verificaciones.ignorados() });
+  });
+  app.post('/api/verificacion', async (req, res) => {
+    const { alcance, ruta } = req.body ?? {};
+    if ((alcance !== 'capitulo' && alcance !== 'todo') || (ruta !== undefined && typeof ruta !== 'string')) {
+      res.status(400).json(PEDIDO_MAL_FORMADO);
+      return;
+    }
+    const r = await d.verificador.iniciar(alcance, ruta ?? null);
+    if (r.tipo === 'ok') res.status(202).json({});
+    else if (r.tipo === 'ocupado') res.status(409).json({ mensaje: 'Ya hay una verificación en curso.' });
+    else res.status(400).json({ mensaje: r.mensaje });
+  });
+  app.post('/api/verificacion/cancelar', (_req, res) => { d.verificador.cancelar(); res.json({}); });
+  const sobreHallazgo = (actuar: (id: string) => Promise<void>): RequestHandler => async (req, res) => {
+    const id = req.body?.id;
+    if (typeof id !== 'string') {
+      res.status(400).json(PEDIDO_MAL_FORMADO);
+      return;
+    }
+    await actuar(id);
+    res.json({});
+  };
+  app.post('/api/verificacion/resuelto', sobreHallazgo((id) => d.verificaciones.marcarResuelto(id)));
+  app.post('/api/verificacion/ignorar', sobreHallazgo((id) => d.verificaciones.ignorar(id)));
+  app.post('/api/verificacion/recuperar', sobreHallazgo((id) => d.verificaciones.recuperar(id)));
+
   app.post('/api/latido', (_req, res) => { d.vigia.latido(); res.json({}); });
 
   app.use('/api', (_req, res) => { res.status(404).json({ mensaje: 'Ruta desconocida.' }); });
@@ -199,6 +233,7 @@ export function crearApp(d: Dependencias): express.Express {
     else if (error?.type === 'entity.too.large') {
       res.status(413).json({ mensaje: req.path === '/api/imagenes' ? 'La imagen supera los 20 MB.' : 'El pedido es demasiado grande.' });
     }
+    else if (error instanceof HallazgoDesconocido) res.status(404).json({ mensaje: 'Ese hallazgo ya no está en la última corrida.' });
     else if (error instanceof ArchivoProtegido) res.status(423).json({ mensaje: error.message });
     else if (error?.code === 'ENOENT') res.status(404).json({ mensaje: 'El archivo no existe.' });
     else if (error?.type === 'entity.parse.failed') res.status(400).json({ mensaje: 'Pedido mal formado.' });

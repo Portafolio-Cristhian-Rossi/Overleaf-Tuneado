@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { crearApp } from './app';
+import { crearLanzadorAgente } from './agente';
 import { crearArchivos } from './archivos';
 import { crearCompilador } from './compilar';
 import { cargarConfig } from './config';
@@ -11,6 +12,8 @@ import { crearImagenes } from './imagenes';
 import { crearCorrector } from './languagetool';
 import { describirProyecto } from './proyecto';
 import { crearReferencias } from './referencias';
+import { crearVerificaciones } from './verificaciones';
+import { crearVerificador } from './verificador';
 import { crearVigia } from './vigia';
 import { crearZotero } from './zotero';
 
@@ -28,6 +31,15 @@ const vigia = crearVigia({
   alVencer: () => process.exit(0),
 });
 
+// Las corridas del verificador viven fuera de informe/ y del repositorio de la aplicación.
+const verificaciones = crearVerificaciones(config.verificaciones);
+const verificador = crearVerificador({
+  config,
+  verificaciones,
+  lanzar: crearLanzadorAgente(),
+  rutasDelInforme: async () => (await describirProyecto(config.informe, config.principal)).capitulos.map((c) => c.ruta),
+});
+
 // El corrector (LanguageTool) y el diccionario personal viven en editor/, nunca en el informe.
 const diccionario = crearDiccionario(path.join(DIR_EDITOR, 'correccion.json'));
 const corrector = crearCorrector({
@@ -36,7 +48,7 @@ const corrector = crearCorrector({
   diccionario: async () => (await diccionario.leer()).palabras,
 });
 // Al salir, por la vía que sea, no debe quedar Java corriendo.
-process.on('exit', () => corrector.detener());
+process.on('exit', () => { corrector.detener(); verificador.cancelar(); });
 for (const senal of ['SIGINT', 'SIGTERM'] as const) process.on(senal, () => process.exit(0));
 
 const app = crearApp({
@@ -53,6 +65,8 @@ const app = crearApp({
   referencias: crearReferencias(config.informe, async () => (await describirProyecto(config.informe, config.principal)).bibliografia),
   // EDITOR_ZOTERO permite probar contra un Zotero de mentira; normalmente no está definida.
   zotero: crearZotero({ base: process.env.EDITOR_ZOTERO }),
+  verificador,
+  verificaciones,
   abrirVsCode: () => new Promise<void>((resolver, rechazar) => {
     // `code` es un .cmd en Windows: hay que lanzarlo a través de cmd.
     const proceso = spawn('cmd', ['/c', 'code', config.informe], { stdio: 'ignore', windowsHide: true, detached: true });
@@ -67,7 +81,13 @@ const servidor = app.listen(config.puerto, '127.0.0.1');
 servidor.on('listening', () => {
   console.log(`Editor del informe en http://127.0.0.1:${config.puerto}`);
   console.log(`Informe: ${config.informe}`);
-  setInterval(() => vigia.revisar(), INTERVALO_DE_REVISION_MS);
+  // Mientras el agente trabaja no hace falta ninguna pestaña abierta: la corrida cuenta como actividad.
+  setInterval(async () => {
+    try {
+      if ((await verificador.estado()).estado === 'en-curso') vigia.latido();
+    } catch { /* si no se pudo consultar, igual se revisa */ }
+    vigia.revisar();
+  }, INTERVALO_DE_REVISION_MS);
 
   const buscar = () => { git.buscar().catch(() => undefined); };
   git.verificar().then((problema) => { if (problema) console.error(problema); });

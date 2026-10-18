@@ -13,6 +13,10 @@ export interface Config {
   informe: string; build: string;      // rutas absolutas
   principal: string; puerto: number; compilarAlGuardar: boolean;
   corrector: boolean; puertoCorrector: number;
+  verificaciones: string;              // ruta absoluta: dónde se guardan las corridas del verificador
+  repositorio: string | null;          // ruta absoluta del repositorio de la aplicación, si se configuró
+  ramaRepositorio: string;
+  limiteVerificacion: { capitulo: number; todo: number };   // minutos
 }
 
 export interface ArchivoLeido {
