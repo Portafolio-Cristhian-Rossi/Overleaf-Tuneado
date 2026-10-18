@@ -3,7 +3,7 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Proyecto } from '../compartido/tipos';
 import { DIR_FIXTURE, dirTemporal } from '../pruebas/ayudas/temporales';
-import { describirProyecto } from './proyecto';
+import { archivosDe, describirProyecto } from './proyecto';
 
 function proyectoCon(archivos: Record<string, string>): Promise<Proyecto> {
   const dir = dirTemporal();
@@ -226,5 +226,25 @@ describe('describirProyecto en otros proyectos', () => {
       { ruta: 'b.tex', titulo: 'b.tex', numero: null },
       { ruta: 'main.tex', titulo: 'main.tex', numero: null },
     ]);
+  });
+});
+
+describe('archivosDe', () => {
+  it('un archivo sin \\input devuelve solo él', () => {
+    expect(archivosDe(DIR_FIXTURE, 'Cap6.tex')).toEqual(['Cap6.tex']);
+  });
+
+  it('suma lo incluido, recursivo, sin repetir y sin contar los comentarios', () => {
+    const dir = dirTemporal();
+    const poner = (ruta: string, contenido: string) => {
+      fs.mkdirSync(path.dirname(path.join(dir, ruta)), { recursive: true });
+      fs.writeFileSync(path.join(dir, ruta), contenido);
+    };
+    poner('Anexos.tex', '\\chapter{Anexos}\n\\input{Anexos/A}\n% \\input{Anexos/B}\n\\input{Anexos/A.tex}\n\\input{Anexos/C}\n');
+    poner('Anexos/A.tex', 'A\n\\input{Anexos/D}\n');
+    poner('Anexos/B.tex', 'B\n');
+    poner('Anexos/C.tex', 'C\n');
+    poner('Anexos/D.tex', 'D\n');
+    expect(archivosDe(dir, 'Anexos.tex')).toEqual(['Anexos.tex', 'Anexos/A.tex', 'Anexos/D.tex', 'Anexos/C.tex']);
   });
 });

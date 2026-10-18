@@ -38,6 +38,24 @@ function primerCapitulo(f: Fuente) {
   return e?.tipo === 'titulo' ? e : null;
 }
 
+// La ruta y todo lo que incluye con \input o \include, recursivo, sin repetir, en orden de aparición.
+export function archivosDe(dirInforme: string, ruta: string): string[] {
+  const raiz = path.resolve(dirInforme);
+  const vistos: string[] = [];
+  const visitar = (r: string): void => {
+    if (vistos.includes(r)) return;
+    vistos.push(r);
+    const f = leerFuente(path.join(raiz, r));
+    if (!f) return;
+    for (const m of f.sinComentarios.matchAll(/\\(?:include|input)\{([^}]*)\}/g)) {
+      const incluida = resolverIncluido(raiz, m[1]);
+      if (incluida !== null) visitar(incluida);
+    }
+  };
+  visitar(ruta);
+  return vistos;
+}
+
 function nombresDePaquetes(texto: string, comando: 'usepackage' | 'RequirePackage'): string[] {
   const patron = new RegExp(`\\\\${comando}(?:\\[[^\\]]*\\])?\\{([^}]*)\\}`, 'g');
   return [...texto.matchAll(patron)].flatMap((m) => m[1].split(',').map((p) => p.trim()).filter(Boolean));
