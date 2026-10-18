@@ -57,6 +57,20 @@ describe('interpretarSalida', () => {
     const texto = 'Revisé la frase con \\cite[p. 3] del capítulo:\n[{"tipo":"x"}]\nListo.';
     expect(interpretarSalida(salida(envoltura(texto)))).toEqual({ tipo: 'ok', crudos: [{ tipo: 'x' }] });
   });
+  // Pasó con el agente real: explicó en prosa que no pudo leer y la prosa citaba `[]`.
+  it('un [] dentro de la prosa no cuenta como "sin hallazgos"', () => {
+    const s = salida(envoltura('No pude hacer la revisión. No devolví `[]` porque eso diría que coinciden.'));
+    expect(interpretarSalida(s)).toEqual({ tipo: 'ilegible', crudo: s.stdout });
+  });
+  it('[] vale si es toda la respuesta', () => {
+    expect(interpretarSalida(salida(envoltura('  []\n')))).toEqual({ tipo: 'ok', crudos: [] });
+  });
+  it('los permisos denegados al agente son un error, aunque haya devuelto un arreglo', () => {
+    const stdout = JSON.stringify({ type: 'result', is_error: false, result: '[]', permission_denials: [{ tool_name: 'Read' }, { tool_name: 'Grep' }] });
+    expect(interpretarSalida(salida(stdout))).toEqual({
+      tipo: 'otro', mensaje: 'Claude Code no dejó leer al agente los archivos de la verificación (2 permisos denegados).',
+    });
+  });
 });
 
 describe('crearLanzadorAgente', () => {

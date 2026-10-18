@@ -108,6 +108,9 @@ describe('verificador', () => {
       vistos.repo = fs.existsSync(path.join(cwd, 'repositorio', 'backend', 'app.py'));
       vistos.env = fs.existsSync(path.join(cwd, 'repositorio', '.env'));
       vistos.otroCapitulo = fs.existsSync(path.join(cwd, 'informe', 'Cap2.tex'));
+      // Claude Code pide permiso para leer bajo una ruta corta de Windows (CRISTH~1), y sin nadie
+      // que lo apruebe el agente no lee nada: la carpeta tiene que llegarle con su ruta larga.
+      vistos.rutaLarga = fs.realpathSync.native(cwd) === cwd;
       return envoltura([]);
     });
     const v = verificador(falso.lanzar);
@@ -115,9 +118,9 @@ describe('verificador', () => {
     await v.terminada();
 
     const { cwd } = falso.llamadas[0]!;
-    expect(path.dirname(cwd)).toBe(temporales);
+    expect(path.dirname(cwd)).toBe(fs.realpathSync.native(temporales));
     expect(path.basename(cwd)).toMatch(/^editor-verificacion-/);
-    expect(vistos).toEqual({ informe: true, repo: true, env: false, otroCapitulo: false });
+    expect(vistos).toEqual({ informe: true, repo: true, env: false, otroCapitulo: false, rutaLarga: true });
     expect(fs.existsSync(cwd)).toBe(false);
     expect(fs.readdirSync(temporales)).toEqual([]);
   });

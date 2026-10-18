@@ -86,7 +86,7 @@ export type SalidaInterpretada =
 const SIN_SESION = /login|log in|api key|not authenticated/i;
 const CMD_NO_ENCUENTRA = /no se reconoce|is not recognized/i;
 
-function envolturaDe(stdout: string): { is_error?: unknown; result?: unknown; subtype?: unknown } | null {
+function envolturaDe(stdout: string): { is_error?: unknown; result?: unknown; subtype?: unknown; permission_denials?: unknown } | null {
   try {
     const v: unknown = JSON.parse(stdout);
     return v !== null && typeof v === 'object' && !Array.isArray(v) ? v : null;
@@ -113,15 +113,33 @@ export function interpretarSalida(s: SalidaDelAgente): SalidaInterpretada {
     return { tipo: 'otro', mensaje: `El agente informó un error${subtype}.` };
   }
 
-  // La prosa de alrededor puede tener corchetes (por ejemplo \cite[p. 3]): se prueba desde cada [.
-  const sinCercos = texto.replace(/```[a-zA-Z]*/g, '');
-  const hasta = sinCercos.lastIndexOf(']');
-  for (let desde = sinCercos.indexOf('['); desde !== -1 && desde < hasta; desde = sinCercos.indexOf('[', desde + 1)) {
-    try {
-      return { tipo: 'ok', crudos: JSON.parse(sinCercos.slice(desde, hasta + 1)) };
-    } catch {
-      // No era el comienzo del arreglo.
-    }
+  // Un agente al que no dejaron leer puede contestar igual: lo que diga no vale como revisión.
+  const denegados = Array.isArray(envoltura.permission_denials) ? envoltura.permission_denials.length : 0;
+  if (denegados > 0) {
+    return { tipo: 'otro', mensaje: `Claude Code no dejó leer al agente los archivos de la verificación (${denegados} permisos denegados).` };
+  }
+
+  // Toda la respuesta, o un bloque de código entero, puede ser el arreglo, incluso vacío.
+  const enteros = [texto, ...[...texto.matchAll(/```[a-zA-Z]*\n?([\s\S]*?)```/g)].map((m) => m[1])];
+  for (const candidato of enteros) {
+    const arreglo = arregloDe(candidato.trim());
+    if (arreglo) return { tipo: 'ok', crudos: arreglo };
+  }
+  // Si no, se busca desde cada [ (la prosa puede tener \cite[p. 3]). Un [] suelto en la prosa no
+  // cuenta: puede ser el agente explicando por qué no lo devolvió.
+  const hasta = texto.lastIndexOf(']');
+  for (let desde = texto.indexOf('['); desde !== -1 && desde < hasta; desde = texto.indexOf('[', desde + 1)) {
+    const arreglo = arregloDe(texto.slice(desde, hasta + 1));
+    if (arreglo && arreglo.length > 0 && arreglo.every((x) => x !== null && typeof x === 'object')) return { tipo: 'ok', crudos: arreglo };
   }
   return { tipo: 'ilegible', crudo: s.stdout };
+}
+
+function arregloDe(texto: string): unknown[] | null {
+  try {
+    const v: unknown = JSON.parse(texto);
+    return Array.isArray(v) ? v : null;
+  } catch {
+    return null;
+  }
 }

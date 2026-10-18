@@ -112,7 +112,9 @@ export function crearVerificador(o: {
     let cwd: string | null = null;
     try {
       await borrarCarpetasViejas(dirTemporales, ahora() - (config.limiteVerificacion.todo + 10) * 60_000);
-      cwd = await fs.promises.mkdtemp(path.join(dirTemporales, PREFIJO));
+      // Con la ruta corta de Windows (CRISTH~1), Claude Code pide permiso para leer y, sin nadie
+      // que lo apruebe, el agente no lee nada: se le pasa la ruta larga.
+      cwd = fs.realpathSync.native(await fs.promises.mkdtemp(path.join(dirTemporales, PREFIJO)));
       c.carpeta = cwd;
       const dirRepo = path.join(cwd, 'repositorio');
       const foto = await fotografiarRepositorio(config.repositorio!, config.ramaRepositorio, dirRepo);
