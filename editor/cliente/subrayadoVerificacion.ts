@@ -1,7 +1,8 @@
 import { StateEffect, StateField, type EditorState, type Extension } from '@codemirror/state';
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 
-export interface CitaSubrayada { desde: number; hasta: number; id: string }
+// lado: la cita principal del hallazgo o la de su referencia, que puede estar en otro archivo.
+export interface CitaSubrayada { desde: number; hasta: number; id: string; lado: 'informe' | 'referencia' }
 
 export const fijarCitas = StateEffect.define<CitaSubrayada[]>();
 
@@ -15,7 +16,7 @@ const campo = StateField.define<DecorationSet>({
       const largo = tr.state.doc.length;
       const marcas = ef.value
         .filter((c) => c.desde >= 0 && c.hasta <= largo && c.desde < c.hasta)
-        .map((c) => Decoration.mark({ class: 'cm-verificacion', attributes: { 'data-hallazgo': c.id } }).range(c.desde, c.hasta));
+        .map((c) => Decoration.mark({ class: 'cm-verificacion', attributes: { 'data-hallazgo': c.id, 'data-lado': c.lado } }).range(c.desde, c.hasta));
       decos = Decoration.set(marcas, true);
     }
     return decos;
@@ -29,7 +30,7 @@ export function citasSubrayadas(estado: EditorState): CitaSubrayada[] {
   const salida: CitaSubrayada[] = [];
   decos.between(0, estado.doc.length, (desde, hasta, d) => {
     // Mapear puede dejar un rango vacío cuando se borró todo el texto citado.
-    if (desde < hasta) salida.push({ desde, hasta, id: d.spec.attributes['data-hallazgo'] });
+    if (desde < hasta) salida.push({ desde, hasta, id: d.spec.attributes['data-hallazgo'], lado: d.spec.attributes['data-lado'] });
   });
   return salida;
 }
