@@ -126,7 +126,9 @@ export function crearVerificador(o: {
       const glosario = (await o.rutaDelGlosario?.()) ?? null;
       const enFoto = glosario && !rutas.includes(glosario) ? [...rutas, glosario] : rutas;
       const textos = await fotografiarInforme(config.informe, enFoto, path.join(cwd, 'informe'));
-      const ignorados = (await verificaciones.ignorados()).filter((i) => enFoto.includes(i.archivoInforme));
+      // Las sugerencias ignoradas no le dicen nada al agente: nunca las reporta.
+      const ignorados = (await verificaciones.ignorados())
+        .filter((i) => i.tipo !== 'sugerencia' && enFoto.includes(i.archivoInforme));
       const prompt = armarPromptDeVerificacion({
         archivos: rutas.map((r) => ({ ruta: r, texto: textos.get(r) ?? '' })),
         rama: config.ramaRepositorio, commit: foto.commit, ignorados,

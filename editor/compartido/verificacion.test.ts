@@ -54,6 +54,24 @@ describe('validarHallazgos', () => {
     expect(r.hallazgos[1].informe.cita).toBeNull();
   });
 
+  it('el agente no puede devolver sugerencias', () => {
+    expect(validarHallazgos([crudo({ tipo: 'sugerencia', repo: null })], contexto)).toEqual({ hallazgos: [], descartados: 1 });
+  });
+
+  it('con el tipo sugerencia pedido, exige la cita y deja el repo en null', () => {
+    const r = validarHallazgos([
+      crudo({ tipo: 'sugerencia', repo: null }),
+      crudo({ tipo: 'sugerencia', informe: { archivo: 'Cap3.tex', linea: 1, cita: 'escribe en la base' } }),
+      crudo({ tipo: 'sugerencia', informe: { archivo: 'Cap3.tex', linea: 1, cita: null }, repo: null }),
+      crudo(),
+    ], contexto, ['sugerencia']);
+    expect(r.descartados).toBe(2);
+    expect(r.hallazgos.map((h) => [h.tipo, h.informe.cita, h.repo])).toEqual([
+      ['sugerencia', 'La API escribe en la base', null],
+      ['sugerencia', 'escribe en la base', null],
+    ]);
+  });
+
   it('conserva la línea del informe solo si es un entero positivo', () => {
     const [a, b] = validarHallazgos([
       crudo({ informe: { archivo: 'Cap3.tex', linea: 2.5, cita: 'La API' } }),

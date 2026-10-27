@@ -110,6 +110,18 @@ describe('verificaciones', () => {
     expect(c.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 0 });
   });
 
+  it('las sugerencias se comparan solo con sugerencias del mismo autor', async () => {
+    await v.guardar(corrida({ ids: ['x'] }));
+    const sugerencias = await v.guardar(corrida({ ids: ['x', 'y'], autor: 'Claude' }));
+    expect(sugerencias.comparacion).toBeNull();
+    const otro = await v.guardar(corrida({ ids: ['y'], autor: 'Ignacio' }));
+    expect(otro.comparacion).toBeNull();
+    const agente = await v.guardar(corrida({ ids: ['x', 'z'] }));
+    expect(agente.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 0 });
+    const masSugerencias = await v.guardar(corrida({ ids: ['y'], autor: 'Claude' }));
+    expect(masSugerencias.comparacion).toEqual({ nuevos: 0, yaNoAparecen: 1 });
+  });
+
   it('una corrida fallida no se compara ni sirve de anterior', async () => {
     await v.guardar(corrida({ ids: ['x'] }));
     const fallida = await v.guardar(corrida({ estado: 'fallida', crudo: 'basura', ids: [] }));

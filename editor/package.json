@@ -11,6 +11,7 @@
     "test": "vitest run",
     "entorno-prueba": "node --import tsx pruebas/ayudas/entornoPrueba.ts",
     "companero": "node --import tsx pruebas/ayudas/companero.ts",
+    "sugerencias": "node --import tsx servidor/sugerencias.ts",
     "acceso-directo": "powershell -NoProfile -ExecutionPolicy Bypass -File lanzador/crear-acceso-directo.ps1",
     "instalar-corrector": "powershell -NoProfile -ExecutionPolicy Bypass -File lanzador/instalar-corrector.ps1"
   },

@@ -1,13 +1,15 @@
 // Tipos y reglas del verificador informe ↔ repositorio. Sin módulos de Node: lo usa también el cliente.
 
-export type TipoDeHallazgo = 'contradiccion' | 'no-lo-cuenta' | 'sin-respaldo';
+// «sugerencia» no la devuelve el agente: son observaciones de redacción que se cargan con
+// npm run sugerencias y no se apoyan en el código.
+export type TipoDeHallazgo = 'contradiccion' | 'no-lo-cuenta' | 'sin-respaldo' | 'sugerencia';
 export type Alcance = 'capitulo' | 'todo';
 
 export interface Hallazgo {
   id: string;
   tipo: TipoDeHallazgo;
   informe: { archivo: string; linea: number | null; cita: string | null };   // cita null solo en no-lo-cuenta
-  repo: { archivo: string; linea: number | null } | null;                    // null solo en sin-respaldo
+  repo: { archivo: string; linea: number | null } | null;                    // null solo en sin-respaldo y sugerencia
   explicacion: string;
 }
 
@@ -25,6 +27,7 @@ export interface Corrida {
   hallazgos: Hallazgo[];
   resueltos: string[];
   comparacion: { nuevos: number; yaNoAparecen: number } | null;
+  autor?: string;                      // solo en las corridas de sugerencias: quién las dejó
 }
 
 export interface Ignorado {
@@ -44,7 +47,9 @@ export type EstadoVerificacion =
   | { estado: 'libre'; error: { motivo: MotivoDeFalla; mensaje: string } | null }
   | { estado: 'en-curso'; alcance: Alcance; desde: number };   // desde: Date.now() al iniciar
 
-const TIPOS: readonly string[] = ['contradiccion', 'no-lo-cuenta', 'sin-respaldo'];
+export const TIPOS_DEL_AGENTE: readonly TipoDeHallazgo[] = ['contradiccion', 'no-lo-cuenta', 'sin-respaldo'];
+
+const sinRepo = (tipo: string) => tipo === 'sin-respaldo' || tipo === 'sugerencia';
 
 export function normalizarEspacios(texto: string): string {
   return texto.replace(/\s+/g, ' ').trim();
@@ -77,10 +82,11 @@ const esEnteroPositivo = (v: unknown): v is number => typeof v === 'number' && N
 function validarUno(
   crudo: unknown,
   contexto: { informe: ReadonlyMap<string, string>; lineasDelRepo(archivo: string): number | null },
+  tipos: readonly string[],
 ): Hallazgo | null {
   if (!esObjeto(crudo)) return null;
   const { tipo, informe, repo, explicacion } = crudo;
-  if (typeof tipo !== 'string' || !TIPOS.includes(tipo)) return null;
+  if (typeof tipo !== 'string' || !tipos.includes(tipo)) return null;
   if (typeof explicacion !== 'string' || explicacion.trim() === '') return null;
   if (!esObjeto(informe) || typeof informe.archivo !== 'string') return null;
 
@@ -98,7 +104,7 @@ function validarUno(
   if (cita === null && tipo !== 'no-lo-cuenta') return null;
 
   let ladoRepo: Hallazgo['repo'] = null;
-  if (tipo !== 'sin-respaldo') {
+  if (!sinRepo(tipo)) {
     if (!esObjeto(repo) || typeof repo.archivo !== 'string') return null;
     const archivoRepo = normalizarRuta(repo.archivo, 'repositorio');
     const lineas = archivoRepo === null ? null : contexto.lineasDelRepo(archivoRepo);
@@ -120,16 +126,17 @@ function validarUno(
 }
 
 // Se queda con lo que se puede comprobar contra el informe y el repositorio; el resto se cuenta como descartado.
+// Por defecto acepta solo los tipos que puede devolver el agente.
 export function validarHallazgos(crudos: unknown, contexto: {
   informe: ReadonlyMap<string, string>;          // ruta relativa → texto con \n
   lineasDelRepo(archivo: string): number | null; // null si no existe
-}): { hallazgos: Hallazgo[]; descartados: number } {
+}, tipos: readonly TipoDeHallazgo[] = TIPOS_DEL_AGENTE): { hallazgos: Hallazgo[]; descartados: number } {
   if (!Array.isArray(crudos)) return { hallazgos: [], descartados: 0 };
   // Los repetidos se fusionan en el primero: varios no-lo-cuenta del mismo par de archivos comparten id.
   const porId = new Map<string, { hallazgo: Hallazgo; explicaciones: string[] }>();
   let descartados = 0;
   for (const crudo of crudos) {
-    const h = validarUno(crudo, contexto);
+    const h = validarUno(crudo, contexto, tipos);
     if (!h) { descartados++; continue; }
     const previo = porId.get(h.id);
     if (!previo) porId.set(h.id, { hallazgo: h, explicaciones: [h.explicacion] });

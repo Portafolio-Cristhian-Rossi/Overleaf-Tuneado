@@ -96,8 +96,10 @@ export function crearVerificaciones(dir: string): Verificaciones {
   return {
     guardar: (c) => enSerie(async () => {
       const previas = await corridas();
+      // Las sugerencias se comparan solo con sugerencias del mismo autor, y las del agente, entre sí.
       const anterior = previas.find(({ corrida }) =>
-        corrida.estado === 'ok' && corrida.alcance === c.alcance && mismosArchivos(corrida.archivos, c.archivos));
+        corrida.estado === 'ok' && corrida.alcance === c.alcance && mismosArchivos(corrida.archivos, c.archivos)
+        && corrida.autor === c.autor);
       const completa: Corrida = {
         ...c,
         resueltos: [],

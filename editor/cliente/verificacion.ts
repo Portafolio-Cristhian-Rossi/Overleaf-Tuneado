@@ -6,9 +6,10 @@ export const NOMBRE_DE_TIPO: Record<TipoDeHallazgo, string> = {
   'contradiccion': 'Contradicción',
   'no-lo-cuenta': 'El informe no lo cuenta',
   'sin-respaldo': 'Sin respaldo en el código',
+  'sugerencia': 'Sugerencia',
 };
 
-const ORDEN_DE_TIPOS: TipoDeHallazgo[] = ['contradiccion', 'sin-respaldo', 'no-lo-cuenta'];
+const ORDEN_DE_TIPOS: TipoDeHallazgo[] = ['contradiccion', 'sin-respaldo', 'no-lo-cuenta', 'sugerencia'];
 
 const escaparRegExp = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -99,13 +100,19 @@ const dos = (n: number) => String(n).padStart(2, '0');
 
 export function encabezado(c: Corrida): string[] {
   const f = new Date(c.fecha);
-  const alcance = c.alcance === 'capitulo' ? 'capítulo' : 'todo el informe';
-  const lineas = [`${dos(f.getDate())}/${dos(f.getMonth() + 1)} ${dos(f.getHours())}:${dos(f.getMinutes())} · ${alcance} · ${c.rama} ${c.commit.slice(0, 7)}`];
-  // Cada corrida gasta de la cuenta de Claude de quien la lanza: se muestra cuánto.
-  const costo = typeof c.costoUsd === 'number'
-    ? ` · costó US$ ${c.costoUsd.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : '';
-  lineas.push(`Tardó ${tiempoTranscurrido(c.duracionMs)}${costo}`);
+  const fecha = `${dos(f.getDate())}/${dos(f.getMonth() + 1)} ${dos(f.getHours())}:${dos(f.getMinutes())}`;
+  const lineas: string[] = [];
+  // Las sugerencias no salen del agente: no tienen rama, ni duración, ni costo.
+  if (c.autor !== undefined) lineas.push(`${fecha} · sugerencias de ${c.autor}`);
+  else {
+    const alcance = c.alcance === 'capitulo' ? 'capítulo' : 'todo el informe';
+    lineas.push(`${fecha} · ${alcance} · ${c.rama} ${c.commit.slice(0, 7)}`);
+    // Cada corrida gasta de la cuenta de Claude de quien la lanza: se muestra cuánto.
+    const costo = typeof c.costoUsd === 'number'
+      ? ` · costó US$ ${c.costoUsd.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : '';
+    lineas.push(`Tardó ${tiempoTranscurrido(c.duracionMs)}${costo}`);
+  }
   if (c.comparacion) lineas.push(`${c.comparacion.nuevos} nuevos · ${c.comparacion.yaNoAparecen} ya no aparecen`);
   if (c.descartados > 0) {
     lineas.push(c.descartados === 1

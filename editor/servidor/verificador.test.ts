@@ -161,6 +161,22 @@ describe('verificador', () => {
     expect(prompt).not.toContain('Explicación del capítulo dos.');
   });
 
+  it('la prompt no lleva las sugerencias ignoradas', async () => {
+    await verificaciones.guardar({
+      fecha: new Date(reloj).toISOString(), alcance: 'todo', archivos: ['Cap3.tex'], rama: '', commit: 'sugerencias',
+      duracionMs: 0, costoUsd: null, estado: 'ok', crudo: null, descartados: 0, autor: 'Claude',
+      hallazgos: [{ id: 's1', tipo: 'sugerencia', informe: { archivo: 'Cap3.tex', linea: 1, cita: CITA_CAP3 }, repo: null, explicacion: 'Sugerencia de redacción.' }],
+    });
+    await verificaciones.ignorar('s1');
+
+    const falso = lanzadorFalso(() => envoltura([]));
+    const v = verificador(falso.lanzar);
+    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.terminada();
+    expect(falso.llamadas[0]!.prompt).not.toContain('Sugerencia de redacción.');
+    expect(falso.llamadas[0]!.prompt).not.toContain('Ya ignorados');
+  });
+
   it('el glosario va a la foto y a la prompt, se puede citar y no cuenta como archivo revisado', async () => {
     const CITA_GLOSARIO = '\\chapter{Introducción}';
     const primera = crearVerificador({

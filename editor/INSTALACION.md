@@ -484,6 +484,28 @@ archivo por corrida con su fecha y su commit, junto con `ignorados.json`. No
 viajan a Overleaf ni a GitHub. Al abrir el editor, la pestaña muestra la
 última.
 
+**Sugerencias de redacción.** Las observaciones de una revisión (por ejemplo,
+las que te deja Claude sobre un capítulo) también se pueden ver en esta
+pestaña, agrupadas como *Sugerencia*. Van en un archivo JSON, una por
+entrada, con la frase citada tal como está en el informe:
+
+```json
+[{ "archivo": "Cap2 - Antecedentes.tex", "cita": "frase del informe", "explicacion": "qué cambiar" }]
+```
+
+Se cargan desde la carpeta `editor` con:
+
+```bash
+npm run sugerencias -- sugerencias.json Claude
+```
+
+El último dato es de quién son; sin él, dice Claude. Las que tienen una cita
+que no está en el informe no se cargan, y el comando dice cuáles. Después
+recargá la pestaña del editor. Se marcan resueltas y se ignoran como
+cualquier hallazgo, pero el agente no las produce ni recibe las ignoradas.
+Como cada carga es una corrida, la próxima verificación pasa a ser la última
+y las sugerencias dejan de verse: conviene terminar de revisarlas antes.
+
 ## 7. Qué no hace
 
 - **No es en tiempo real.** Los demás ven tus cambios recién cuando apretás

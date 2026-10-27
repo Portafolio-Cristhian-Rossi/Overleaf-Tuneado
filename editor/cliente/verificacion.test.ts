@@ -6,7 +6,8 @@ import {
 } from './verificacion';
 
 function hallazgo(id: string, tipo: TipoDeHallazgo, archivo = 'a.tex'): Hallazgo {
-  return { id, tipo, informe: { archivo, linea: 1, cita: 'x' }, repo: tipo === 'sin-respaldo' ? null : { archivo: 'r.py', linea: 1 }, explicacion: 'e' };
+  const sinRepo = tipo === 'sin-respaldo' || tipo === 'sugerencia';
+  return { id, tipo, informe: { archivo, linea: 1, cita: 'x' }, repo: sinRepo ? null : { archivo: 'r.py', linea: 1 }, explicacion: 'e' };
 }
 
 function corrida(extra: Partial<Corrida> = {}): Corrida {
@@ -49,15 +50,16 @@ describe('hallazgosVisibles', () => {
 });
 
 describe('agrupar', () => {
-  it('agrupa en orden contradicción, sin respaldo, no lo cuenta, y por archivo', () => {
+  it('agrupa en orden contradicción, sin respaldo, no lo cuenta, sugerencia, y por archivo', () => {
     const grupos = agrupar([
+      hallazgo('6', 'sugerencia', 'a.tex'),
       hallazgo('1', 'no-lo-cuenta', 'b.tex'),
       hallazgo('2', 'sin-respaldo', 'a.tex'),
       hallazgo('3', 'contradiccion', 'b.tex'),
       hallazgo('4', 'contradiccion', 'a.tex'),
       hallazgo('5', 'contradiccion', 'b.tex'),
     ]);
-    expect(grupos.map((g) => g.tipo)).toEqual(['contradiccion', 'sin-respaldo', 'no-lo-cuenta']);
+    expect(grupos.map((g) => g.tipo)).toEqual(['contradiccion', 'sin-respaldo', 'no-lo-cuenta', 'sugerencia']);
     expect(grupos[0].archivos.map((a) => [a.archivo, a.hallazgos.map((h) => h.id)])).toEqual([['b.tex', ['3', '5']], ['a.tex', ['4']]]);
   });
 
@@ -68,7 +70,9 @@ describe('agrupar', () => {
 
 describe('NOMBRE_DE_TIPO', () => {
   it('usa los textos del panel', () => {
-    expect(NOMBRE_DE_TIPO).toEqual({ contradiccion: 'Contradicción', 'no-lo-cuenta': 'El informe no lo cuenta', 'sin-respaldo': 'Sin respaldo en el código' });
+    expect(NOMBRE_DE_TIPO).toEqual({
+      contradiccion: 'Contradicción', 'no-lo-cuenta': 'El informe no lo cuenta', 'sin-respaldo': 'Sin respaldo en el código', sugerencia: 'Sugerencia',
+    });
   });
 });
 
@@ -90,6 +94,11 @@ describe('encabezado', () => {
     expect(encabezado(corrida({ descartados: 2 }))).toEqual(['18/10 14:32 · capítulo · main abcdef1', 'Tardó 0:01', '2 hallazgos descartados por citas que no existen']);
     expect(encabezado(corrida({ descartados: 1 }))[2]).toBe('1 hallazgo descartado por una cita que no existe');
     expect(encabezado(corrida({ comparacion: { nuevos: 0, yaNoAparecen: 0 }, descartados: 1 }))).toHaveLength(4);
+  });
+
+  it('una corrida de sugerencias dice de quién son, sin rama ni duración', () => {
+    expect(encabezado(corrida({ autor: 'Claude', rama: '', commit: 'sugerencias', duracionMs: 0 }))).toEqual(['18/10 14:32 · sugerencias de Claude']);
+    expect(encabezado(corrida({ autor: 'Claude', descartados: 1 }))).toEqual(['18/10 14:32 · sugerencias de Claude', '1 hallazgo descartado por una cita que no existe']);
   });
 });
 
