@@ -541,7 +541,8 @@ const verificaciones = Object.fromEntries(VERIFICACIONES.map((v) => {
     alClick: () => {
       const ruta = editor.rutaAbierta();
       // Mientras no se haya consultado al servidor, él decide al iniciar.
-      const estado: EstadoVerificacion = verificacion?.estado ?? { estado: 'libre', motivos: { codigo: null, informe: null }, error: null };
+      const estado: EstadoVerificacion = verificacion?.estado
+        ?? { estado: 'libre', motivos: { codigo: null, informe: null }, errores: { codigo: null, informe: null } };
       abrirMenuFlotante(boton.getBoundingClientRect(), opcionesDeVerificacion(estado, v.contra, ruta, esTex(ruta) && ruta !== principal)
         .map(({ alcance, texto, habilitada, ayuda }) => ({ texto, habilitada, ayuda, alElegir: () => { void verificar(v.contra, alcance); } })));
     },

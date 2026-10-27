@@ -108,7 +108,8 @@ export function crearVerificador(o: {
   const dirTemporales = o.dirTemporales ?? os.tmpdir();
   const ahora = o.ahora ?? Date.now;
   let enCurso: EnCurso | null = null;
-  let error: ErrorDeVerificacion | null = null;
+  // El error de la última corrida fallida de cada tipo: correr uno no borra el del otro.
+  const errores: Record<Contra, ErrorDeVerificacion | null> = { codigo: null, informe: null };
 
   // Contra el informe, el agente ve todo el informe: cada capítulo y lo que incluye, sin repetir.
   async function todoElInforme(): Promise<string[]> {
@@ -177,7 +178,7 @@ export function crearVerificador(o: {
   }
 
   async function correr(c: EnCurso, rutas: string[]): Promise<void> {
-    const fallar = (e: ErrorDeCorrida) => { if (!c.cancelada) error = { contra: c.contra, ...e }; };
+    const fallar = (e: ErrorDeCorrida) => { if (!c.cancelada) errores[c.contra] = { contra: c.contra, ...e }; };
     let cwd: string | null = null;
     try {
       await borrarCarpetasViejas(dirTemporales, ahora() - (config.limiteVerificacion.todo + 10) * 60_000);
@@ -236,10 +237,11 @@ export function crearVerificador(o: {
 
   return {
     async estado() {
-      if (enCurso) return { estado: 'en-curso', contra: enCurso.contra, alcance: enCurso.alcance, desde: enCurso.desde };
       // Contra el informe no hace falta nada más que el informe.
-      const codigo = await problemaDelRepositorio(config.repositorio, config.ramaRepositorio);
-      return { estado: 'libre', motivos: { codigo, informe: null }, error };
+      const motivos = { codigo: await problemaDelRepositorio(config.repositorio, config.ramaRepositorio), informe: null };
+      const comun = { motivos, errores: { ...errores } };
+      if (enCurso) return { ...comun, estado: 'en-curso', contra: enCurso.contra, alcance: enCurso.alcance, desde: enCurso.desde };
+      return { ...comun, estado: 'libre' };
     },
 
     async iniciar(contra, alcance, ruta) {
@@ -256,7 +258,7 @@ export function crearVerificador(o: {
       // Se vuelve a mirar: mientras se esperaba pudo haber arrancado otra.
       if (enCurso) return { tipo: 'ocupado' };
 
-      error = null;
+      errores[contra] = null;
       const c: EnCurso = { contra, alcance, desde: ahora(), cancelada: false, proceso: null, carpeta: null, fin: Promise.resolve() };
       enCurso = c;
       c.fin = correr(c, rutas);

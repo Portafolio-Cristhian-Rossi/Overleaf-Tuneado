@@ -78,7 +78,9 @@ interface DatosDeVerificacion { estado: EstadoVerificacion; corridas: Record<Con
 export function avisoAlTerminar(anterior: EstadoVerificacion | null, actual: DatosDeVerificacion):
   { texto: string; tipo: 'info' | 'error' } | null {
   if (anterior?.estado !== 'en-curso' || actual.estado.estado === 'en-curso') return null;
-  if (actual.estado.error) return { texto: actual.estado.error.mensaje, tipo: 'error' };
+  // Al iniciar se borra el error de ese tipo: si hay uno, es de esta corrida.
+  const error = actual.estado.errores[anterior.contra];
+  if (error) return { texto: error.mensaje, tipo: 'error' };
   const c = actual.corridas[anterior.contra];
   if (c === null || c.estado !== 'ok' || c.fecha !== new Date(anterior.desde).toISOString()) return null;
   const n = hallazgosVisibles(c, actual.ignorados).length;
@@ -92,8 +94,9 @@ const PRIMERA: Record<Contra, string> = {
 
 export function mensajesDelPanel(e: EstadoVerificacion, contra: Contra, c: Corrida | null): string[] {
   const mensajes = [];
-  const error = e.estado === 'libre' && e.error?.contra === contra ? e.error : null;
-  if (e.estado === 'libre' && e.motivos[contra]) mensajes.push(e.motivos[contra]);
+  // Mientras corre una verificación, la otra pestaña sigue mostrando su motivo y su error.
+  const error = e.errores[contra];
+  if (e.motivos[contra]) mensajes.push(e.motivos[contra]);
   if (error) mensajes.push(error.mensaje);
   if (c === null) mensajes.push(PRIMERA[contra]);
   // El error de respuesta ilegible ya dice que la corrida quedó guardada como fallida.

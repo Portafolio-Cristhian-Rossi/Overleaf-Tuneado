@@ -17,7 +17,7 @@ function corrida(extra: Partial<Corrida> = {}): Corrida {
   };
 }
 
-const LIBRE = { estado: 'libre', motivos: { codigo: null, informe: null }, error: null } as const;
+const LIBRE = { estado: 'libre', motivos: { codigo: null, informe: null }, errores: { codigo: null, informe: null } } as const;
 
 describe('ubicarCita', () => {
   it('ubica una cita con otros espacios y saltos de línea', () => {
@@ -146,7 +146,7 @@ describe('opcionesDeVerificacion', () => {
   });
 
   it('en curso deshabilita los dos botones con "Ya hay una verificación en curso."', () => {
-    const enCurso = { estado: 'en-curso', contra: 'codigo', alcance: 'todo', desde: 0 } as const;
+    const enCurso = { ...LIBRE, estado: 'en-curso', contra: 'codigo', alcance: 'todo', desde: 0 } as const;
     for (const contra of ['codigo', 'informe'] as const) {
       expect(opcionesDeVerificacion(enCurso, contra, 'a.tex', true).map((o) => [o.habilitada, o.ayuda]))
         .toEqual([[false, 'Ya hay una verificación en curso.'], [false, 'Ya hay una verificación en curso.']]);
@@ -222,7 +222,7 @@ describe('tiempoTranscurrido', () => {
 
 describe('avisoAlTerminar', () => {
   const desde = new Date(2026, 9, 18, 15, 0).getTime();
-  const enCurso = { estado: 'en-curso', contra: 'codigo', alcance: 'capitulo', desde } as const;
+  const enCurso = { ...LIBRE, estado: 'en-curso', contra: 'codigo', alcance: 'capitulo', desde } as const;
   const tres = [hallazgo('1', 'contradiccion'), hallazgo('2', 'contradiccion'), hallazgo('3', 'contradiccion')];
   const nueva = corrida({ fecha: new Date(desde).toISOString(), hallazgos: tres, resueltos: ['3'] });
   const datos = (estado: EstadoVerificacion, codigo: Corrida | null, ignorados: Ignorado[] = [], informe: Corrida | null = null) =>
@@ -246,7 +246,7 @@ describe('avisoAlTerminar', () => {
 
   it('si terminó con error, avisa el error', () => {
     const error = { contra: 'codigo', motivo: 'sin-cli', mensaje: 'No se encontró Claude Code.' } as const;
-    expect(avisoAlTerminar(enCurso, datos({ ...LIBRE, error }, null)))
+    expect(avisoAlTerminar(enCurso, datos({ ...LIBRE, errores: { codigo: error, informe: null } }, null)))
       .toEqual({ texto: 'No se encontró Claude Code.', tipo: 'error' });
   });
 
@@ -273,15 +273,36 @@ describe('mensajesDelPanel', () => {
   });
 
   it('el error del estado va arriba', () => {
-    const estado = { ...LIBRE, error: { contra: 'codigo', motivo: 'limite', mensaje: 'Se cortó.' } } as const;
+    const estado = { ...LIBRE, errores: { ...LIBRE.errores, codigo: { contra: 'codigo', motivo: 'limite', mensaje: 'Se cortó.' } } } as const;
     expect(mensajesDelPanel(estado, 'codigo', corrida())).toEqual(['Se cortó.']);
     expect(mensajesDelPanel(estado, 'codigo', null)).toEqual(['Se cortó.', primeraCodigo]);
   });
 
   it('el error se muestra solo en la pestaña de su tipo', () => {
-    const estado = { ...LIBRE, error: { contra: 'informe', motivo: 'limite', mensaje: 'Se cortó.' } } as const;
+    const estado = { ...LIBRE, errores: { ...LIBRE.errores, informe: { contra: 'informe', motivo: 'limite', mensaje: 'Se cortó.' } } } as const;
     expect(mensajesDelPanel(estado, 'informe', corrida({ contra: 'informe' }))).toEqual(['Se cortó.']);
     expect(mensajesDelPanel(estado, 'codigo', corrida())).toEqual([]);
+  });
+
+  it('mientras corre Informe, Código sigue mostrando su motivo y su error', () => {
+    const estado = {
+      estado: 'en-curso', contra: 'informe', alcance: 'capitulo', desde: 0,
+      motivos: { codigo: 'Falta repositorio.', informe: null },
+      errores: { codigo: { contra: 'codigo', motivo: 'limite', mensaje: 'Se cortó.' }, informe: null },
+    } as const;
+    expect(mensajesDelPanel(estado, 'codigo', corrida())).toEqual(['Falta repositorio.', 'Se cortó.']);
+    expect(mensajesDelPanel(estado, 'informe', corrida({ contra: 'informe' }))).toEqual([]);
+  });
+
+  it('un error de Informe al terminar avisa aunque Código tenga uno viejo', () => {
+    const viejo = { contra: 'codigo', motivo: 'limite', mensaje: 'Error viejo de Código.' } as const;
+    const nuevo = { contra: 'informe', motivo: 'sin-cli', mensaje: 'No se encontró Claude Code.' } as const;
+    const enCursoInforme = { ...LIBRE, errores: { codigo: viejo, informe: null }, estado: 'en-curso', contra: 'informe', alcance: 'todo', desde: 0 } as const;
+    const despues = { ...LIBRE, errores: { codigo: viejo, informe: nuevo } };
+    expect(avisoAlTerminar(enCursoInforme, { estado: despues, corridas: { codigo: null, informe: null }, ignorados: [] }))
+      .toEqual({ texto: 'No se encontró Claude Code.', tipo: 'error' });
+    expect(avisoAlTerminar(enCursoInforme, { estado: { ...LIBRE, errores: { codigo: viejo, informe: null } }, corridas: { codigo: null, informe: null }, ignorados: [] }))
+      .toBeNull();
   });
 
   it('el motivo de Código se muestra solo en Código', () => {
@@ -293,7 +314,7 @@ describe('mensajesDelPanel', () => {
   it('corrida fallida, sin repetir el aviso de respuesta ilegible', () => {
     const fallida = corrida({ estado: 'fallida', crudo: 'basura' });
     expect(mensajesDelPanel(LIBRE, 'codigo', fallida)).toEqual(['La última verificación falló: la respuesta del agente no se pudo leer.']);
-    const estado = { ...LIBRE, error: { contra: 'codigo', motivo: 'ilegible', mensaje: 'No se pudo leer.' } } as const;
+    const estado = { ...LIBRE, errores: { ...LIBRE.errores, codigo: { contra: 'codigo', motivo: 'ilegible', mensaje: 'No se pudo leer.' } } } as const;
     expect(mensajesDelPanel(estado, 'codigo', fallida)).toEqual(['No se pudo leer.']);
   });
 });

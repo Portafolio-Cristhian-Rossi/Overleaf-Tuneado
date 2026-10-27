@@ -47,7 +47,8 @@ function lanzadorFalso(responder: (o: { cwd: string; prompt: string }) => Salida
 }
 
 const nunca = () => new Promise<SalidaDelAgente>(() => {});
-const LIBRE = { estado: 'libre', motivos: { codigo: null, informe: null }, error: null } as const;
+const SIN_ERRORES = { codigo: null, informe: null } as const;
+const LIBRE = { estado: 'libre', motivos: { codigo: null, informe: null }, errores: SIN_ERRORES } as const;
 
 let dir: string;
 let informe: string;
@@ -215,10 +216,10 @@ describe('verificador', () => {
     const falso = lanzadorFalso(() => new Promise<SalidaDelAgente>((r) => { soltar = r; }));
     const v = verificador(falso.lanzar);
     expect(await v.iniciar('codigo', 'capitulo', 'Cap3.tex')).toEqual({ tipo: 'ok' });
-    expect(await v.estado()).toEqual({ estado: 'en-curso', contra: 'codigo', alcance: 'capitulo', desde: 1_000 });
+    expect(await v.estado()).toEqual({ ...LIBRE, estado: 'en-curso', contra: 'codigo', alcance: 'capitulo', desde: 1_000 });
     await falso.llamado;
     expect(await v.iniciar('codigo', 'todo', null)).toEqual({ tipo: 'ocupado' });
-    expect(await v.estado()).toEqual({ estado: 'en-curso', contra: 'codigo', alcance: 'capitulo', desde: 1_000 });
+    expect(await v.estado()).toEqual({ ...LIBRE, estado: 'en-curso', contra: 'codigo', alcance: 'capitulo', desde: 1_000 });
 
     soltar(envoltura([]));
     await v.terminada();
@@ -293,7 +294,7 @@ describe('verificador', () => {
     expect(falso.detenciones()).toBe(1);
     expect(MENSAJES.limite.replace('{n}', '0.001')).toBe(
       'La verificación se cortó a los 0.001 minutos. Si necesita más tiempo, subí limiteVerificacion en config.json.');
-    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.001') } });
+    expect(await v.estado()).toEqual({ ...LIBRE, errores: { ...SIN_ERRORES, codigo: { contra: 'codigo', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.001') } } });
     expect(await verificaciones.ultima('codigo')).toBeNull();
     expect(fs.readdirSync(temporales)).toEqual([]);
   });
@@ -303,14 +304,14 @@ describe('verificador', () => {
     const v = verificador(lanzadorFalso(nunca).lanzar);
     await v.iniciar('codigo', 'todo', null);
     await v.terminada();
-    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.0005') } });
+    expect(await v.estado()).toEqual({ ...LIBRE, errores: { ...SIN_ERRORES, codigo: { contra: 'codigo', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.0005') } } });
   });
 
   it('CLI ausente y sesión no iniciada dejan su mensaje y no guardan corrida', async () => {
     const sinCli = verificador(lanzadorFalso(() => ({ codigo: null, stdout: '', stderr: '', noEncontrado: true })).lanzar);
     await sinCli.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await sinCli.terminada();
-    expect(await sinCli.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'sin-cli', mensaje: MENSAJES['sin-cli'] } });
+    expect(await sinCli.estado()).toEqual({ ...LIBRE, errores: { ...SIN_ERRORES, codigo: { contra: 'codigo', motivo: 'sin-cli', mensaje: MENSAJES['sin-cli'] } } });
     expect(MENSAJES['sin-cli']).toBe('No se encontró Claude Code. Instalalo con `npm install -g @anthropic-ai/claude-code`, o poné en config.json, en "agente", la ruta de claude.exe. Después volvé a probar.');
 
     const sinSesion = verificador(lanzadorFalso(() => ({
@@ -318,7 +319,7 @@ describe('verificador', () => {
     })).lanzar);
     await sinSesion.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await sinSesion.terminada();
-    expect(await sinSesion.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'sin-sesion', mensaje: MENSAJES['sin-sesion'] } });
+    expect(await sinSesion.estado()).toEqual({ ...LIBRE, errores: { ...SIN_ERRORES, codigo: { contra: 'codigo', motivo: 'sin-sesion', mensaje: MENSAJES['sin-sesion'] } } });
     expect(MENSAJES['sin-sesion']).toBe('Claude Code no tiene una sesión iniciada. Abrí una terminal, corré `claude` una vez para entrar y volvé a probar.');
 
     expect(await verificaciones.ultima('codigo')).toBeNull();
@@ -330,7 +331,7 @@ describe('verificador', () => {
     const v = verificador(lanzadorFalso(() => respuesta).lanzar);
     await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
-    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'otro', mensaje: 'La verificación falló: algo salió mal' } });
+    expect(await v.estado()).toEqual({ ...LIBRE, errores: { ...SIN_ERRORES, codigo: { contra: 'codigo', motivo: 'otro', mensaje: 'La verificación falló: algo salió mal' } } });
     expect(await verificaciones.ultima('codigo')).toBeNull();
 
     respuesta = envoltura([]);
@@ -347,8 +348,8 @@ describe('verificador', () => {
     await v.terminada();
 
     const estado = await v.estado();
-    expect(estado).toMatchObject({ ...LIBRE, error: { contra: 'codigo', motivo: 'otro' } });
-    if (estado.estado === 'libre') expect(estado.error!.mensaje).toMatch(/^La verificación falló: .*NoExiste\.tex/);
+    expect(estado).toMatchObject({ ...LIBRE, errores: { ...SIN_ERRORES, codigo: { contra: 'codigo', motivo: 'otro' } } });
+    expect(estado.errores.codigo!.mensaje).toMatch(/^La verificación falló: .*NoExiste\.tex/);
     expect(falso.llamadas).toHaveLength(0);
     expect(fs.readdirSync(temporales)).toEqual([]);
   });
@@ -361,7 +362,7 @@ describe('verificador', () => {
     expect(await verificaciones.ultima('codigo')).toMatchObject({
       estado: 'fallida', crudo: 'esto no es json', hallazgos: [], descartados: 0, archivos: ['Cap3.tex'], commit: datos.commitDeMain,
     });
-    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'ilegible', mensaje: MENSAJES.ilegible } });
+    expect(await v.estado()).toEqual({ ...LIBRE, errores: { ...SIN_ERRORES, codigo: { contra: 'codigo', motivo: 'ilegible', mensaje: MENSAJES.ilegible } } });
     expect(MENSAJES.ilegible).toBe('La respuesta del agente no se pudo leer. La corrida quedó guardada como fallida en verificaciones/.');
   });
 
@@ -385,7 +386,7 @@ describe('verificador', () => {
     await v.terminada();
     // Se vuelve a crear para que estado() no la vea deshabilitada y muestre el error.
     execFileSync('git', ['-C', datos.repo, 'branch', '-q', 'main', datos.commitDeMain]);
-    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'rama', mensaje: `No se encontró la rama main en ${datos.repo}.` } });
+    expect(await v.estado()).toEqual({ ...LIBRE, errores: { ...SIN_ERRORES, codigo: { contra: 'codigo', motivo: 'rama', mensaje: `No se encontró la rama main en ${datos.repo}.` } } });
     expect(falso.llamadas).toHaveLength(0);
   });
 
@@ -533,7 +534,7 @@ describe('verificador', () => {
       const falso = lanzadorFalso(nunca);
       const v = verificador(falso.lanzar);
       await v.iniciar('informe', 'todo', null);
-      expect(await v.estado()).toEqual({ estado: 'en-curso', contra: 'informe', alcance: 'todo', desde: 1_000 });
+      expect(await v.estado()).toEqual({ ...LIBRE, estado: 'en-curso', contra: 'informe', alcance: 'todo', desde: 1_000 });
       v.cancelar();
       await v.terminada();
     });
@@ -543,12 +544,45 @@ describe('verificador', () => {
       expect(await v.iniciar('informe', 'todo', null)).toEqual({ tipo: 'invalido', mensaje: 'El informe no tiene capítulos para verificar.' });
     });
 
+    it('correr un tipo no borra el error ni el motivo del otro', async () => {
+      config.repositorio = null;
+      const motivo = 'Falta "repositorio" en config.json: la ruta de la aplicación a comparar.';
+      config.limiteVerificacion.capitulo = 0.001;
+      const v = verificador(lanzadorFalso(nunca).lanzar);
+      await v.iniciar('informe', 'capitulo', 'Cap3.tex');
+      await v.terminada();
+      const errorInforme = { contra: 'informe', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.001') };
+
+      config.limiteVerificacion.capitulo = 15;
+      expect(await v.estado()).toMatchObject({ estado: 'libre', motivos: { codigo: motivo }, errores: { informe: errorInforme, codigo: null } });
+
+      // Mientras corre Código, Informe sigue mostrando su error.
+      config.repositorio = datos.repo;
+      await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
+      expect(await v.estado()).toMatchObject({ estado: 'en-curso', contra: 'codigo', errores: { informe: errorInforme } });
+      v.cancelar();
+      await v.terminada();
+      expect(await v.estado()).toMatchObject({ estado: 'libre', errores: { informe: errorInforme, codigo: null } });
+    });
+
+    it('al volver a correr un tipo se borra su propio error', async () => {
+      config.limiteVerificacion.capitulo = 0.001;
+      const v = verificador(lanzadorFalso(nunca).lanzar);
+      await v.iniciar('informe', 'capitulo', 'Cap3.tex');
+      await v.terminada();
+      config.limiteVerificacion.capitulo = 15;
+      await v.iniciar('informe', 'capitulo', 'Cap3.tex');
+      expect(await v.estado()).toMatchObject({ estado: 'en-curso', errores: { informe: null, codigo: null } });
+      v.cancelar();
+      await v.terminada();
+    });
+
     it('el error de una corrida fallida dice de qué tipo fue', async () => {
       config.limiteVerificacion.capitulo = 0.001;
       const v = verificador(lanzadorFalso(nunca).lanzar);
       await v.iniciar('informe', 'capitulo', 'Cap3.tex');
       await v.terminada();
-      expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'informe', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.001') } });
+      expect(await v.estado()).toEqual({ ...LIBRE, errores: { ...SIN_ERRORES, informe: { contra: 'informe', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.001') } } });
     });
   });
 

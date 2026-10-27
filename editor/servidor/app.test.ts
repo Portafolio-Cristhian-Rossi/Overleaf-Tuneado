@@ -104,7 +104,7 @@ beforeEach(async () => {
       }),
     },
     verificador: {
-      estado: vi.fn(async () => ({ estado: 'libre' as const, motivos: { codigo: null, informe: null }, error: null })),
+      estado: vi.fn(async () => ({ estado: 'libre' as const, motivos: { codigo: null, informe: null }, errores: { codigo: null, informe: null } })),
       iniciar: vi.fn(async () => ({ tipo: 'ok' as const })),
       cancelar: vi.fn(),
       cerrar: vi.fn(),
@@ -631,7 +631,7 @@ describe('verificación', () => {
 
   it('GET devuelve el estado, la última corrida de cada tipo y los ignorados', async () => {
     expect(await get('/api/verificacion')).toEqual({
-      estado: { estado: 'libre', motivos: { codigo: null, informe: null }, error: null },
+      estado: { estado: 'libre', motivos: { codigo: null, informe: null }, errores: { codigo: null, informe: null } },
       corridas: { codigo: CORRIDA, informe: CORRIDA_INFORME },
       ignorados: [IGNORADO],
     });

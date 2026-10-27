@@ -53,10 +53,15 @@ export type MotivoDeFalla = 'sin-cli' | 'sin-sesion' | 'rama' | 'limite' | 'ileg
 
 export interface ErrorDeVerificacion { contra: Contra; motivo: MotivoDeFalla; mensaje: string }
 
-// motivos: por qué no se puede lanzar cada verificación, o null si se puede.
-export type EstadoVerificacion =
-  | { estado: 'libre'; motivos: Record<Contra, string | null>; error: ErrorDeVerificacion | null }
-  | { estado: 'en-curso'; contra: Contra; alcance: Alcance; desde: number };   // desde: Date.now() al iniciar
+// motivos: por qué no se puede lanzar cada verificación, o null si se puede. errores: el de la
+// última corrida fallida de cada tipo. Los dos son por tipo: correr una no cambia lo que muestra la otra.
+export type EstadoVerificacion = {
+  motivos: Record<Contra, string | null>;
+  errores: Record<Contra, ErrorDeVerificacion | null>;
+} & (
+  | { estado: 'libre' }
+  | { estado: 'en-curso'; contra: Contra; alcance: Alcance; desde: number }   // desde: Date.now() al iniciar
+);
 
 export const TIPOS_DEL_AGENTE: Record<Contra, readonly TipoDeHallazgo[]> = {
   codigo: ['contradiccion', 'no-lo-cuenta', 'sin-respaldo'],
