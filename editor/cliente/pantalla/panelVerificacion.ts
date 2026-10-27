@@ -1,10 +1,12 @@
-import type { Corrida, EstadoVerificacion, Hallazgo, Ignorado } from '../../compartido/verificacion';
-import { agrupar, encabezado, hallazgosVisibles, mensajesDelPanel, NOMBRE_DE_TIPO, rutaParaCopiar } from '../verificacion';
+import type { Contra, Corrida, EstadoVerificacion, Hallazgo, Ignorado } from '../../compartido/verificacion';
+import { agrupar, encabezado, hallazgosVisibles, mensajesDelPanel, NOMBRE_DE_TIPO, rutaParaCopiar, type Lado } from '../verificacion';
 import { el } from './dom';
 
-// La última corrida del verificador, agrupada por tipo y por archivo del informe.
+// La última corrida de una de las dos verificaciones (contra el código o contra el informe),
+// agrupada por tipo y por archivo del informe. Hay un panel por pestaña.
 export function crearPanelVerificacion(padre: HTMLElement, o: {
-  alElegir(h: Hallazgo): void;
+  contra: Contra;
+  alElegir(h: Hallazgo, lado: Lado): void;
   alResolver(id: string): void;
   alIgnorar(id: string): void;
   alRecuperar(id: string): void;
@@ -30,14 +32,20 @@ export function crearPanelVerificacion(padre: HTMLElement, o: {
     return boton;
   }
 
-  function item(h: Hallazgo, ubicado: boolean): HTMLElement {
+  function item(h: Hallazgo, ubicado: (h: Hallazgo, lado?: Lado) => boolean): HTMLElement {
+    const cambio = (lado: Lado) => !ubicado(h, lado) && el('span', { clase: 'verificacion-cambio' }, 'la frase cambió');
     return el('li', { clase: 'verificacion-hallazgo', 'data-hallazgo': h.id },
-      el('button', { type: 'button', clase: 'verificacion-aviso', alClick: () => o.alElegir(h) },
+      el('button', { type: 'button', clase: 'verificacion-aviso', alClick: () => o.alElegir(h, 'informe') },
         h.informe.cita === null
           ? el('span', { clase: 'verificacion-seccion' }, `Sección: ${h.informe.archivo}`)
           : el('span', { clase: 'verificacion-cita' }, `«${h.informe.cita}»`),
-        !ubicado && el('span', { clase: 'verificacion-cambio' }, 'la frase cambió'),
+        cambio('informe'),
         el('span', { clase: 'verificacion-explicacion' }, h.explicacion)),
+      // El otro lugar del informe: otro capítulo, o la definición del glosario o del marco teórico.
+      h.referencia && el('button', { type: 'button', clase: 'verificacion-aviso verificacion-referencia', alClick: () => o.alElegir(h, 'referencia') },
+        el('span', { clase: 'verificacion-seccion' }, `ver en ${h.referencia.archivo}`),
+        el('span', { clase: 'verificacion-cita' }, `«${h.referencia.cita}»`),
+        cambio('referencia')),
       el('div', { clase: 'verificacion-pie' },
         h.repo && el('span', { clase: 'verificacion-repo' }, rutaParaCopiar(h.repo)),
         h.repo && botonCopiar(rutaParaCopiar(h.repo)),
@@ -57,21 +65,22 @@ export function crearPanelVerificacion(padre: HTMLElement, o: {
         el('button', { type: 'button', clase: 'verificacion-chico', alClick: () => o.alRecuperar(i.id) }, 'Recuperar')));
   }
 
-  function mostrar(datos: { estado: EstadoVerificacion; corrida: Corrida | null; ignorados: Ignorado[] }, ubicado: (h: Hallazgo) => boolean): void {
+  // ignorados: solo los de los tipos de esta pestaña.
+  function mostrar(datos: { estado: EstadoVerificacion; corrida: Corrida | null; ignorados: Ignorado[] }, ubicado: (h: Hallazgo, lado?: Lado) => boolean): void {
     const { estado, corrida, ignorados } = datos;
     const partes: HTMLElement[] = [];
     // El error de la última corrida va arriba: el encabezado puede ser de una corrida anterior.
-    for (const m of mensajesDelPanel(estado, corrida)) partes.push(el('p', { clase: 'verificacion-mensaje' }, m));
+    for (const m of mensajesDelPanel(estado, o.contra, corrida)) partes.push(el('p', { clase: 'verificacion-mensaje' }, m));
     if (corrida) partes.push(el('div', { clase: 'verificacion-encabezado' }, ...encabezado(corrida).map((l) => el('p', {}, l))));
 
     const visibles = corrida && corrida.estado === 'ok' ? hallazgosVisibles(corrida, ignorados) : [];
     if (corrida?.estado === 'ok' && visibles.length === 0) partes.push(el('p', { clase: 'verificacion-mensaje' }, 'Sin diferencias en esta corrida.'));
-    for (const grupo of agrupar(visibles)) {
+    for (const grupo of agrupar(visibles, o.contra)) {
       partes.push(el('section', { clase: 'verificacion-grupo' },
         el('h3', { clase: `verificacion-tipo ${grupo.tipo}` }, NOMBRE_DE_TIPO[grupo.tipo]),
         ...grupo.archivos.flatMap(({ archivo, hallazgos }) => [
           el('h4', { clase: 'verificacion-archivo' }, archivo),
-          el('ul', { clase: 'verificacion-lista' }, ...hallazgos.map((h) => item(h, ubicado(h)))),
+          el('ul', { clase: 'verificacion-lista' }, ...hallazgos.map((h) => item(h, ubicado))),
         ])));
     }
 

@@ -358,7 +358,7 @@ MiKTeX descarga paquetes.
 
 **Más lugar para escribir.** Arriba del PDF, a la derecha, hay dos botones:
 
-- *Ocultar* saca el panel derecho (el PDF, Gramática y Verificación) y el
+- *Ocultar* saca el panel derecho (el PDF, Gramática, Código e Informe) y el
   texto ocupa todo el ancho. Vuelve con **Mostrar panel**, arriba a la
   derecha. El editor recuerda cómo lo dejaste.
 - *Otra ventana* abre el PDF en una ventana propia, para llevarla a un segundo
@@ -372,14 +372,21 @@ emergente, permitilas para esta página.
 **La costumbre que evita problemas:** Traer al sentarte a escribir y Enviar al
 terminar.
 
-## 6. Verificar el informe contra la aplicación
+## 6. Verificar el informe contra la aplicación y contra sí mismo
 
-El botón **Verificación** de la barra compara el informe con el código de la
-aplicación (`uy-social-topic-modeling`) y te dice dónde no coinciden: lo que
-el informe cuenta de una forma y el código hace de otra, lo que el informe
-afirma y no aparece en el código, y lo que está en el código y la sección
-debería contar. Para eso lanza a Claude Code, un agente de IA, con tu cuenta
-de Claude.
+La barra tiene dos botones de verificación, y cada uno muestra lo que encontró
+en su pestaña del panel derecho:
+
+- **Contra código** compara el informe con el código de la aplicación
+  (`uy-social-topic-modeling`) y te dice dónde no coinciden: lo que el informe
+  cuenta de una forma y el código hace de otra, lo que el informe afirma y no
+  aparece en el código, y lo que está en el código y la sección debería
+  contar. Sus hallazgos van a la pestaña **Código**.
+- **Contra informe** revisa que el informe sea coherente consigo mismo (ver
+  más abajo). Sus hallazgos van a la pestaña **Informe**.
+
+Para eso lanzan a Claude Code, un agente de IA, con tu cuenta de Claude. Hay
+una sola verificación a la vez, de cualquiera de los dos tipos.
 
 **Preparar, una sola vez.**
 
@@ -426,19 +433,19 @@ cuántos minutos puede durar una verificación antes de cortarse. Si te sirven
 esos valores, alcanza con poner `repositorio`. Después cerrá el editor y
 volvé a abrirlo, como dice la sección 8.
 
-Si falta algo, la pestaña **Verificación** dice qué: la carpeta no existe, no
+Si falta algo, la pestaña **Código** dice qué: la carpeta no existe, no
 es un repositorio de Git o no tiene esa rama.
 
 **Usar.**
 
-- **Verificación** → *Verificar capítulo* revisa el archivo abierto y los que
+- **Contra código** → *Verificar capítulo* revisa el archivo abierto y los que
   incluye con `\input` o `\include`. *Verificar todo* revisa el informe
   entero y tarda bastante más.
 - Mientras corre, el botón dice `Verificando…` con el tiempo que lleva, y al
   lado aparece *Cancelar*. Podés seguir escribiendo: el agente trabaja sobre
   una copia de los archivos tal como estaban al empezar. Si cerrás la pestaña,
   la verificación termina igual y queda guardada.
-- Al terminar, la pestaña **Verificación** del panel derecho lista lo que
+- Al terminar, la pestaña **Código** del panel derecho lista lo que
   encontró, por tipo y por archivo, y las frases citadas quedan subrayadas en
   violeta en el texto. Un clic en un hallazgo te lleva a su frase; con la
   pestaña a la vista, un clic en un subrayado marca su hallazgo.
@@ -481,12 +488,37 @@ hacer `git pull` en esa carpeta. El panel muestra el commit que se usó.
 
 **Dónde quedan.** Cada verificación se guarda en `Tesis/verificaciones/`, un
 archivo por corrida con su fecha y su commit, junto con `ignorados.json`. No
-viajan a Overleaf ni a GitHub. Al abrir el editor, la pestaña muestra la
-última.
+viajan a Overleaf ni a GitHub. Al abrir el editor, cada pestaña muestra la
+última verificación de su tipo.
+
+**Contra el informe.** *Contra informe* → *Verificar capítulo* revisa el
+archivo abierto, y *Verificar todo* el informe entero (también el glosario y
+el marco teórico entre sí). No necesita el repositorio: funciona aunque
+`repositorio` no esté en la configuración. El agente lee todo el informe para
+tener el contexto, pero solo reporta problemas de lo que estás verificando, en
+cuatro tipos:
+
+- *Se contradice*: dos partes del informe dicen cosas incompatibles. Muestra
+  las dos frases.
+- *Definición distinta*: un término se usa con otro sentido del que le dan el
+  glosario o el marco teórico (el capítulo cuyo título habla de antecedentes o
+  de marco teórico; hoy, *Revisión de antecedentes*). Muestra el uso y la
+  definición.
+- *Corta el hilo*: da por sabido algo que no se presentó antes, salta sin
+  conexión con lo anterior o repite lo ya dicho. "Antes" es el orden en que
+  `main.tex` incluye los capítulos.
+- *Sin definir*: un término o concepto central que no está ni en el glosario
+  ni en el marco teórico.
+
+Cuando un hallazgo cita dos lugares, *ver en …* te lleva al segundo, aunque
+esté en otro archivo; al abrirlo, esa frase también queda subrayada. Las
+secciones que todavía son solo notas `%` no se revisan, y lo que sus notas
+anuncian cuenta como ya presentado. Tampoco reclama redacción ni estilo: eso
+es de Gramática y de las sugerencias.
 
 **Sugerencias de redacción.** Las observaciones de una revisión (por ejemplo,
-las que te deja Claude sobre un capítulo) también se pueden ver en esta
-pestaña, agrupadas como *Sugerencia*. Van en un archivo JSON, una por
+las que te deja Claude sobre un capítulo) también se pueden ver, en la
+pestaña **Informe**, agrupadas como *Sugerencia*. Van en un archivo JSON, una por
 entrada, con la frase citada tal como está en el informe:
 
 ```json
@@ -503,8 +535,9 @@ El último dato es de quién son; sin él, dice Claude. Las que tienen una cita
 que no está en el informe no se cargan, y el comando dice cuáles. Después
 recargá la pestaña del editor. Se marcan resueltas y se ignoran como
 cualquier hallazgo, pero el agente no las produce ni recibe las ignoradas.
-Como cada carga es una corrida, la próxima verificación pasa a ser la última
-y las sugerencias dejan de verse: conviene terminar de revisarlas antes.
+Como cada carga es una corrida, la próxima verificación contra el informe pasa
+a ser la última de esa pestaña y las sugerencias dejan de verse: conviene
+terminar de revisarlas antes.
 
 ## 7. Qué no hace
 

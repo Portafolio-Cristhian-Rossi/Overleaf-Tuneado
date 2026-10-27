@@ -4,7 +4,7 @@ import { analizarBib, type ProblemaBib } from '../compartido/bib';
 import { candidatos, type Bibliografia, type Candidato } from '../compartido/citas';
 import type { AccionDeIa } from '../compartido/prompt';
 import type { Etiqueta, Proyecto } from '../compartido/tipos';
-import type { Alcance, EstadoVerificacion, Hallazgo } from '../compartido/verificacion';
+import { contraDeTipo, type Alcance, type Contra, type EstadoVerificacion, type Hallazgo } from '../compartido/verificacion';
 import { api, mantenerVivoAlServidor, urlDeImagen } from './api';
 import { aplicarEdicion, darFormato, darNivel, extensionAtajos, type Nivel } from './atajos';
 import { confirmarCeldaAbierta, formatoEnCeldaAbierta } from './bloques/edicionTabla';
@@ -31,7 +31,9 @@ import { elegirImagen } from './pantalla/selectorImagen';
 import { crearSincronizacion } from './pantalla/sincronizacion';
 import { PLANTILLAS } from './plantillas';
 import { citasSubrayadas, extensionSubrayadoVerificacion, fijarCitas } from './subrayadoVerificacion';
-import { avisoAlTerminar, hallazgosVisibles, opcionesDeVerificacion, tiempoTranscurrido, ubicarEnArchivo } from './verificacion';
+import {
+  avisoAlTerminar, hallazgosVisibles, ignoradosDe, opcionesDeVerificacion, tiempoTranscurrido, ubicarEnArchivo, type Lado,
+} from './verificacion';
 import { contextoCambiado, extensionVista } from './vista';
 
 const CLAVE_ULTIMO = 'editor-informe:ultimo-archivo';
@@ -369,9 +371,12 @@ const editor = crearEditor(porId('editor'), {
     extensionCorreccion({ api: api.correccion, alCambiarEstado: (estado) => panelGramatica.mostrarEstado(estado) }),
     extensionPanelGramatica(() => panelGramatica.actualizar()),
     extensionSubrayadoVerificacion({
-      // Solo marca el hallazgo si ya está a la vista: un clic para escribir no debe cambiar el panel.
+      // Solo marca el hallazgo si su pestaña ya está a la vista: un clic para escribir no debe cambiar el panel.
       alElegir: (id) => {
-        if (!porId('cuerpo').classList.contains('sin-panel') && !zonaVerificacion.hidden) panelVerificacion.resaltar(id);
+        const h = Object.values(verificacion?.corridas ?? {}).flatMap((c) => c?.hallazgos ?? []).find((x) => x.id === id);
+        if (!h) return;
+        const { zona, panel } = verificaciones[contraDeTipo(h.tipo)];
+        if (!porId('cuerpo').classList.contains('sin-panel') && !zona.hidden) panel.resaltar(id);
       },
     }),
   ],
@@ -450,14 +455,16 @@ const sincronizacion = crearSincronizacion(barra, {
   alConflicto: (archivos) => bloqueo.mostrar(archivos),
 });
 
-// Panel derecho con tres pestañas: el PDF, los avisos de gramática y la verificación.
+// Panel derecho con cuatro pestañas: el PDF, los avisos de gramática y las dos verificaciones.
 const zonaPdf = el('div', { clase: 'pestana' });
 const zonaGramatica = el('div', { clase: 'pestana', hidden: true });
-const zonaVerificacion = el('div', { clase: 'pestana', hidden: true });
+const zonaCodigo = el('div', { clase: 'pestana', hidden: true });
+const zonaInforme = el('div', { clase: 'pestana', hidden: true });
 const pestanas: [HTMLButtonElement, HTMLElement][] = [
   [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(0) }, 'PDF'), zonaPdf],
   [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(1) }, 'Gramática'), zonaGramatica],
-  [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(2) }, 'Verificación'), zonaVerificacion],
+  [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(2) }, 'Código'), zonaCodigo],
+  [el('button', { type: 'button', role: 'tab', alClick: () => elegirPestana(3) }, 'Informe'), zonaInforme],
 ];
 function elegirPestana(indice: number): void {
   pestanas.forEach(([boton, zona], i) => {
@@ -490,7 +497,7 @@ function abrirPdfAparte(): void {
 }
 
 const botonMostrarPanel = el('button', {
-  type: 'button', hidden: true, title: 'Volver a mostrar el PDF, la gramática y la verificación', alClick: () => verPanel(true, true),
+  type: 'button', hidden: true, title: 'Volver a mostrar el PDF, la gramática y las verificaciones', alClick: () => verPanel(true, true),
 }, 'Mostrar panel');
 barra.zonaAcciones.append(botonMostrarPanel);
 porId('panel').append(
@@ -499,7 +506,7 @@ porId('panel').append(
     el('button', { type: 'button', title: 'Abrir el PDF en otra ventana, para llevarlo a otra pantalla', alClick: abrirPdfAparte }, 'Otra ventana'),
     el('button', { type: 'button', title: 'Ocultar este panel y escribir a todo el ancho', alClick: () => verPanel(false, true) }, 'Ocultar'),
   ),
-  zonaPdf, zonaGramatica, zonaVerificacion,
+  zonaPdf, zonaGramatica, zonaCodigo, zonaInforme,
 );
 elegirPestana(0);
 if (panelOcultoRecordado()) verPanel(false, false);
@@ -511,8 +518,9 @@ const panelGramatica = crearPanelGramatica(zonaGramatica, {
   alContar: (cantidad) => { pestanas[1][0].textContent = cantidad > 0 ? `Gramática (${cantidad})` : 'Gramática'; },
 });
 
-// Verificación: un agente de solo lectura compara el informe con el repositorio de la aplicación.
-// La corrida la hace el servidor; acá se la consulta, se la muestra y se subrayan sus citas.
+// Verificaciones: un agente de solo lectura compara el informe con el código de la aplicación
+// (Código) o con sí mismo (Informe). La corrida la hace el servidor; acá se la consulta, se la
+// muestra en su pestaña y se subrayan sus citas.
 type DatosDeVerificacion = Awaited<ReturnType<typeof api.verificacion.leer>>;
 const INTERVALO_DE_CONSULTA_MS = 2000;
 let verificacion: DatosDeVerificacion | null = null;
@@ -521,53 +529,71 @@ let ultimaConsulta = 0;
 let relojDeConsulta: ReturnType<typeof setTimeout> | undefined;
 let relojDeTiempo: ReturnType<typeof setInterval> | undefined;
 
-const botonVerificacion = el('button', {
-  type: 'button', title: 'Comparar el informe con el código de la aplicación', 'aria-haspopup': 'menu',
-  alClick: () => {
-    const ruta = editor.rutaAbierta();
-    // Mientras no se haya consultado al servidor, él decide al iniciar.
-    const estado: EstadoVerificacion = verificacion?.estado ?? { estado: 'libre', error: null };
-    abrirMenuFlotante(botonVerificacion.getBoundingClientRect(), opcionesDeVerificacion(estado, ruta, esTex(ruta) && ruta !== principal)
-      .map(({ alcance, texto, habilitada, ayuda }) => ({ texto, habilitada, ayuda, alElegir: () => { void verificar(alcance); } })));
-  },
-}, 'Verificación ▾');
+// Lo de cada verificación: su botón en la barra, su pestaña y su panel.
+const VERIFICACIONES: { contra: Contra; boton: string; titulo: string; pestana: number; nombre: string; zona: HTMLElement }[] = [
+  { contra: 'codigo', boton: 'Contra código ▾', titulo: 'Comparar el informe con el código de la aplicación', pestana: 2, nombre: 'Código', zona: zonaCodigo },
+  { contra: 'informe', boton: 'Contra informe ▾', titulo: 'Revisar que el informe sea coherente consigo mismo', pestana: 3, nombre: 'Informe', zona: zonaInforme },
+];
+
+const verificaciones = Object.fromEntries(VERIFICACIONES.map((v) => {
+  const boton = el('button', {
+    type: 'button', title: v.titulo, 'aria-haspopup': 'menu',
+    alClick: () => {
+      const ruta = editor.rutaAbierta();
+      // Mientras no se haya consultado al servidor, él decide al iniciar.
+      const estado: EstadoVerificacion = verificacion?.estado ?? { estado: 'libre', motivos: { codigo: null, informe: null }, error: null };
+      abrirMenuFlotante(boton.getBoundingClientRect(), opcionesDeVerificacion(estado, v.contra, ruta, esTex(ruta) && ruta !== principal)
+        .map(({ alcance, texto, habilitada, ayuda }) => ({ texto, habilitada, ayuda, alElegir: () => { void verificar(v.contra, alcance); } })));
+    },
+  }, v.boton);
+  const panel = crearPanelVerificacion(v.zona, {
+    contra: v.contra,
+    alElegir: (h, lado) => { void irAHallazgo(h, lado); },
+    alResolver: (id) => { void sobreVerificacion(() => api.verificacion.resuelto(id)); },
+    alIgnorar: (id) => { void sobreVerificacion(() => api.verificacion.ignorar(id)); },
+    alRecuperar: (id) => { void sobreVerificacion(() => api.verificacion.recuperar(id)); },
+    alContar: (cantidad) => { pestanas[v.pestana][0].textContent = cantidad > 0 ? `${v.nombre} (${cantidad})` : v.nombre; },
+  });
+  return [v.contra, { ...v, botonBarra: boton, panel }];
+})) as Record<Contra, (typeof VERIFICACIONES)[number] & { botonBarra: HTMLButtonElement; panel: ReturnType<typeof crearPanelVerificacion> }>;
+
 const botonCancelarVerificacion = el('button', {
   type: 'button', hidden: true, title: 'Detener la verificación en curso',
   alClick: () => { void sobreVerificacion(api.verificacion.cancelar); },
 }, 'Cancelar');
-barra.zonaAcciones.prepend(botonVerificacion, botonCancelarVerificacion);
+barra.zonaAcciones.prepend(verificaciones.codigo.botonBarra, verificaciones.informe.botonBarra, botonCancelarVerificacion);
 
-const panelVerificacion = crearPanelVerificacion(zonaVerificacion, {
-  alElegir: (h) => { void irAHallazgo(h); },
-  alResolver: (id) => { void sobreVerificacion(() => api.verificacion.resuelto(id)); },
-  alIgnorar: (id) => { void sobreVerificacion(() => api.verificacion.ignorar(id)); },
-  alRecuperar: (id) => { void sobreVerificacion(() => api.verificacion.recuperar(id)); },
-  alContar: (cantidad) => { pestanas[2][0].textContent = cantidad > 0 ? `Verificación (${cantidad})` : 'Verificación'; },
-});
-
-function mostrarPestanaVerificacion(): void {
+function mostrarPestanaVerificacion(contra: Contra): void {
   verPanel(true, false);
-  elegirPestana(2);
+  elegirPestana(verificaciones[contra].pestana);
 }
 
 // Las citas se buscan en el texto actual del archivo abierto; las de los demás, al abrirlos.
+// Se subrayan las de las dos verificaciones.
 function mostrarVerificacion(): void {
   if (!verificacion) return;
-  const visibles = verificacion.corrida ? hallazgosVisibles(verificacion.corrida, verificacion.ignorados) : [];
+  const datos = verificacion;
+  const visibles = VERIFICACIONES.flatMap(({ contra }) => {
+    const c = datos.corridas[contra];
+    return c ? hallazgosVisibles(c, datos.ignorados) : [];
+  });
   const { citas, ubicado } = ubicarEnArchivo(editor.vista.state.doc.toString(), editor.rutaAbierta(), visibles);
   editor.vista.dispatch({ effects: fijarCitas.of(citas) });
-  panelVerificacion.mostrar(verificacion, ubicado);
+  for (const { contra } of VERIFICACIONES) {
+    verificaciones[contra].panel.mostrar(
+      { estado: datos.estado, corrida: datos.corridas[contra], ignorados: ignoradosDe(datos.ignorados, contra) }, ubicado);
+  }
 }
 
+// El botón de la corrida en curso muestra el reloj; el otro conserva su texto.
 function mostrarProgreso(): void {
   const e = verificacion?.estado;
   clearInterval(relojDeTiempo);
   botonCancelarVerificacion.hidden = e?.estado !== 'en-curso';
-  if (e?.estado !== 'en-curso') {
-    botonVerificacion.textContent = 'Verificación ▾';
-    return;
-  }
-  const poner = () => { botonVerificacion.textContent = `Verificando… ${tiempoTranscurrido(Date.now() - e.desde)}`; };
+  for (const { contra, boton } of VERIFICACIONES) verificaciones[contra].botonBarra.textContent = boton;
+  if (e?.estado !== 'en-curso') return;
+  const boton = verificaciones[e.contra].botonBarra;
+  const poner = () => { boton.textContent = `Verificando… ${tiempoTranscurrido(Date.now() - e.desde)}`; };
   poner();
   relojDeTiempo = setInterval(poner, 1000);
 }
@@ -610,7 +636,7 @@ async function sobreVerificacion(accion: () => Promise<unknown>): Promise<void> 
 }
 
 // El agente lee los archivos del disco: antes entra lo que esté a medio escribir.
-async function verificar(alcance: Alcance): Promise<void> {
+async function verificar(contra: Contra, alcance: Alcance): Promise<void> {
   if (alcance === 'todo') {
     const acepta = await preguntar('Verificar todo el informe tarda bastante más que un capítulo.', [
       { texto: 'Verificar todo', valor: true, principal: true },
@@ -621,22 +647,24 @@ async function verificar(alcance: Alcance): Promise<void> {
   confirmarCeldaAbierta();
   await editor.guardarAhora();
   try {
-    await api.verificacion.iniciar(alcance, alcance === 'capitulo' ? editor.rutaAbierta() : null);
+    await api.verificacion.iniciar(contra, alcance, alcance === 'capitulo' ? editor.rutaAbierta() : null);
   } catch (e) {
     barra.avisar((e as Error).message, 'error');
     return;
   }
-  mostrarPestanaVerificacion();
+  mostrarPestanaVerificacion(contra);
   await leerVerificacion();
 }
 
-async function irAHallazgo(h: Hallazgo): Promise<void> {
-  const ruta = h.informe.archivo;
+// lado: la cita principal o la referencia, que puede estar en otro archivo.
+async function irAHallazgo(h: Hallazgo, lado: Lado): Promise<void> {
+  const lugar = lado === 'referencia' && h.referencia ? h.referencia : h.informe;
+  const ruta = lugar.archivo;
   if (editor.rutaAbierta() !== ruta) await abrir(ruta);
   if (editor.rutaAbierta() !== ruta) return;
-  const cita = citasSubrayadas(editor.vista.state).find((c) => c.id === h.id);
+  const cita = citasSubrayadas(editor.vista.state).find((c) => c.id === h.id && c.lado === lado);
   if (cita) editor.irA(cita.desde);
-  else if (h.informe.linea !== null) editor.irALinea(h.informe.linea);
+  else if (lugar.linea !== null) editor.irALinea(lugar.linea);
   else editor.vista.focus();
 }
 

@@ -12,6 +12,10 @@
   --exito: #3b6d11;
   --aviso: #854f0b;
   --verificacion: #6b3fa0;
+  --se-contradice: #a3324f;
+  --definicion-distinta: #1f6f8b;
+  --corta-el-hilo: #8a5a00;
+  --sin-definir: #3f6b2a;
   --aviso-fondo: #faeeda;
   --peligro: #a32d2d;
   --peligro-fondo: #fcebeb;
@@ -33,6 +37,10 @@
     --exito: #97c459;
     --aviso: #fac775;
     --verificacion: #c4a7e7;
+    --se-contradice: #f0a3b6;
+    --definicion-distinta: #8fcde3;
+    --corta-el-hilo: #e6c27a;
+    --sin-definir: #a9d69a;
     --aviso-fondo: #412402;
     --peligro: #f09595;
     --peligro-fondo: #501313;
@@ -368,6 +376,11 @@ button.pdf-problema:hover { background: var(--superficie-2); }
 .verificacion-tipo.sin-respaldo { color: var(--aviso); }
 .verificacion-tipo.no-lo-cuenta { color: var(--verificacion); }
 .verificacion-tipo.sugerencia { color: var(--acento); }
+.verificacion-tipo.se-contradice { color: var(--se-contradice); }
+.verificacion-tipo.definicion-distinta { color: var(--definicion-distinta); }
+.verificacion-tipo.corta-el-hilo { color: var(--corta-el-hilo); }
+.verificacion-tipo.sin-definir { color: var(--sin-definir); }
+.verificacion-referencia { font-size: 13px; }
 .verificacion-archivo { margin: 6px 8px 2px; color: var(--texto-3); font-family: var(--mono); font-size: 12px; font-weight: normal; }
 .verificacion-lista { margin: 0; padding: 0; list-style: none; }
 .verificacion-hallazgo { margin: 2px 0; border-radius: 6px; }
