@@ -3,7 +3,7 @@ import type {
   ArchivoLeido, Aviso, EstadoCorrector, EstadoGit, EstadoZotero, FinDeLinea, ItemZotero, Proyecto, ResultadoAgregar, ResultadoCompilacion, ResultadoEnviar,
   ResultadoEscritura, ResultadoTerminar, ResultadoTraer,
 } from '../compartido/tipos';
-import type { Alcance, Corrida, EstadoVerificacion, Ignorado } from '../compartido/verificacion';
+import type { Alcance, Contra, Corrida, EstadoVerificacion, Ignorado } from '../compartido/verificacion';
 
 export class ErrorDeApi extends Error {
   constructor(mensaje: string, readonly estado: number) { super(mensaje); }
@@ -91,10 +91,10 @@ export const api = {
     guardarGuia: (texto: string) => pedir<void>('PUT', '/api/ia/guia', { texto }),
   },
   verificacion: {
-    leer: () => pedir<{ estado: EstadoVerificacion; corrida: Corrida | null; ignorados: Ignorado[] }>('GET', '/api/verificacion'),
+    leer: () => pedir<{ estado: EstadoVerificacion; corridas: Record<Contra, Corrida | null>; ignorados: Ignorado[] }>('GET', '/api/verificacion'),
     // El servidor responde 202 al aceptar la corrida; 409 y 400 llegan como ErrorDeApi con su mensaje.
-    iniciar: (alcance: Alcance, ruta: string | null) =>
-      pedir<unknown>('POST', '/api/verificacion', { alcance, ...(ruta === null ? {} : { ruta }) }).then(() => undefined),
+    iniciar: (contra: Contra, alcance: Alcance, ruta: string | null) =>
+      pedir<unknown>('POST', '/api/verificacion', { contra, alcance, ...(ruta === null ? {} : { ruta }) }).then(() => undefined),
     cancelar: () => pedir<void>('POST', '/api/verificacion/cancelar'),
     resuelto: (id: string) => pedir<void>('POST', '/api/verificacion/resuelto', { id }),
     ignorar: (id: string) => pedir<void>('POST', '/api/verificacion/ignorar', { id }),

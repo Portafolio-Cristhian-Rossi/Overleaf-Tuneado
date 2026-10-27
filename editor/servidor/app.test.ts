@@ -13,7 +13,7 @@ import { crearImagenes } from './imagenes';
 import { describirProyecto } from './proyecto';
 import { crearReferencias } from './referencias';
 import { HallazgoDesconocido } from './verificaciones';
-import type { Corrida, Ignorado } from '../compartido/verificacion';
+import type { Contra, Corrida, Ignorado } from '../compartido/verificacion';
 
 let dir: string;
 let servidor: Server;
@@ -27,9 +27,10 @@ const ITEM_DE_ZOTERO: ItemZotero = {
 };
 
 const CORRIDA: Corrida = {
-  fecha: '2026-10-18T12:00:00.000Z', alcance: 'todo', archivos: ['Cap4.tex'], rama: 'main', commit: 'abc1234',
+  fecha: '2026-10-18T12:00:00.000Z', contra: 'codigo', alcance: 'todo', archivos: ['Cap4.tex'], rama: 'main', commit: 'abc1234',
   duracionMs: 1000, costoUsd: null, estado: 'ok', crudo: null, descartados: 0, hallazgos: [], resueltos: [], comparacion: null,
 };
+const CORRIDA_INFORME: Corrida = { ...CORRIDA, contra: 'informe', rama: null, commit: null };
 const IGNORADO: Ignorado = { id: 'h1', tipo: 'sin-respaldo', archivoInforme: 'Cap4.tex', cita: null, archivoRepo: null, explicacion: 'x', fecha: '2026-10-18T12:00:00.000Z' };
 
 const ESTADO: EstadoGit ={ cambiosLocales: true, commitsSinEnviar: 1, commitsSinTraer: 2, combinacionEnCurso: false, archivosEnConflicto: [] };
@@ -103,7 +104,7 @@ beforeEach(async () => {
       }),
     },
     verificador: {
-      estado: vi.fn(async () => ({ estado: 'libre' as const, error: null })),
+      estado: vi.fn(async () => ({ estado: 'libre' as const, motivos: { codigo: null, informe: null }, error: null })),
       iniciar: vi.fn(async () => ({ tipo: 'ok' as const })),
       cancelar: vi.fn(),
       cerrar: vi.fn(),
@@ -111,7 +112,7 @@ beforeEach(async () => {
     },
     verificaciones: {
       guardar: vi.fn(async () => CORRIDA),
-      ultima: vi.fn(async () => CORRIDA),
+      ultima: vi.fn(async (contra: Contra) => (contra === 'codigo' ? CORRIDA : CORRIDA_INFORME)),
       marcarResuelto: vi.fn(async (id: string) => { if (id === 'zzz') throw new HallazgoDesconocido(); }),
       ignorados: vi.fn(async () => [IGNORADO]),
       ignorar: vi.fn(async (id: string) => { if (id === 'zzz') throw new HallazgoDesconocido(); }),
@@ -628,23 +629,35 @@ describe('zotero', () => {
 describe('verificación', () => {
   const MAL_FORMADO = { mensaje: 'Pedido mal formado.' };
 
-  it('GET devuelve el estado, la última corrida y los ignorados', async () => {
-    expect(await get('/api/verificacion')).toEqual({ estado: { estado: 'libre', error: null }, corrida: CORRIDA, ignorados: [IGNORADO] });
+  it('GET devuelve el estado, la última corrida de cada tipo y los ignorados', async () => {
+    expect(await get('/api/verificacion')).toEqual({
+      estado: { estado: 'libre', motivos: { codigo: null, informe: null }, error: null },
+      corridas: { codigo: CORRIDA, informe: CORRIDA_INFORME },
+      ignorados: [IGNORADO],
+    });
   });
 
   it('POST inicia una corrida y responde 202', async () => {
-    const r = await pedir('POST', '/api/verificacion', { alcance: 'capitulo', ruta: 'Cap4.tex' });
+    const r = await pedir('POST', '/api/verificacion', { contra: 'codigo', alcance: 'capitulo', ruta: 'Cap4.tex' });
     expect(r.status).toBe(202);
     expect(r.cuerpo).toEqual({});
-    expect(d.verificador.iniciar).toHaveBeenCalledWith('capitulo', 'Cap4.tex');
+    expect(d.verificador.iniciar).toHaveBeenCalledWith('codigo', 'capitulo', 'Cap4.tex');
+  });
+
+  it('POST pasa contra al verificador', async () => {
+    expect((await pedir('POST', '/api/verificacion', { contra: 'informe', alcance: 'capitulo', ruta: 'Cap4.tex' })).status).toBe(202);
+    expect(d.verificador.iniciar).toHaveBeenCalledWith('informe', 'capitulo', 'Cap4.tex');
   });
 
   it('POST de todo no necesita ruta', async () => {
-    expect((await pedir('POST', '/api/verificacion', { alcance: 'todo' })).status).toBe(202);
-    expect(d.verificador.iniciar).toHaveBeenCalledWith('todo', null);
+    expect((await pedir('POST', '/api/verificacion', { contra: 'informe', alcance: 'todo' })).status).toBe(202);
+    expect(d.verificador.iniciar).toHaveBeenCalledWith('informe', 'todo', null);
   });
 
-  it.each([[{ alcance: 'otro' }], [{}], [{ alcance: 'capitulo', ruta: 5 }]])('POST con %j da 400', async (cuerpo) => {
+  it.each([
+    [{ contra: 'codigo', alcance: 'otro' }], [{}], [{ contra: 'codigo', alcance: 'capitulo', ruta: 5 }],
+    [{ alcance: 'todo' }], [{ contra: 'repositorio', alcance: 'todo' }],
+  ])('POST con %j da 400', async (cuerpo) => {
     const r = await pedir('POST', '/api/verificacion', cuerpo);
     expect(r.status).toBe(400);
     expect(r.cuerpo).toEqual(MAL_FORMADO);
@@ -653,14 +666,14 @@ describe('verificación', () => {
 
   it('POST inválido da 400 con el mensaje del verificador', async () => {
     d.verificador.iniciar = vi.fn(async () => ({ tipo: 'invalido' as const, mensaje: 'Falta la ruta.' }));
-    const r = await pedir('POST', '/api/verificacion', { alcance: 'capitulo' });
+    const r = await pedir('POST', '/api/verificacion', { contra: 'codigo', alcance: 'capitulo' });
     expect(r.status).toBe(400);
     expect(r.cuerpo).toEqual({ mensaje: 'Falta la ruta.' });
   });
 
   it('POST con una corrida en curso da 409', async () => {
     d.verificador.iniciar = vi.fn(async () => ({ tipo: 'ocupado' as const }));
-    const r = await pedir('POST', '/api/verificacion', { alcance: 'todo' });
+    const r = await pedir('POST', '/api/verificacion', { contra: 'codigo', alcance: 'todo' });
     expect(r.status).toBe(409);
     expect(r.cuerpo).toEqual({ mensaje: 'Ya hay una verificación en curso.' });
   });

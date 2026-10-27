@@ -193,18 +193,24 @@ export function crearApp(d: Dependencias): express.Express {
   app.get('/api/ia/guia', async (_req, res) => { res.json({ texto: await d.guia.leer() }); });
   app.put('/api/ia/guia', async (req, res) => { await d.guia.guardar(req.body?.texto); res.json({}); });
 
-  // El verificador compara el informe con el repositorio de la aplicación; no escribe en ninguno.
-  // Iniciar responde enseguida: la corrida sigue sola y el cliente la consulta con GET.
+  // Dos verificaciones: el informe contra el código de la aplicación y el informe contra sí mismo.
+  // Ninguna escribe en el informe ni en el repositorio. Iniciar responde enseguida: la corrida
+  // sigue sola y el cliente la consulta con GET.
   app.get('/api/verificacion', async (_req, res) => {
-    res.json({ estado: await d.verificador.estado(), corrida: await d.verificaciones.ultima(), ignorados: await d.verificaciones.ignorados() });
+    res.json({
+      estado: await d.verificador.estado(),
+      corridas: { codigo: await d.verificaciones.ultima('codigo'), informe: await d.verificaciones.ultima('informe') },
+      ignorados: await d.verificaciones.ignorados(),
+    });
   });
   app.post('/api/verificacion', async (req, res) => {
-    const { alcance, ruta } = req.body ?? {};
-    if ((alcance !== 'capitulo' && alcance !== 'todo') || (ruta !== undefined && typeof ruta !== 'string')) {
+    const { contra, alcance, ruta } = req.body ?? {};
+    if ((contra !== 'codigo' && contra !== 'informe') || (alcance !== 'capitulo' && alcance !== 'todo')
+      || (ruta !== undefined && typeof ruta !== 'string')) {
       res.status(400).json(PEDIDO_MAL_FORMADO);
       return;
     }
-    const r = await d.verificador.iniciar(alcance, ruta ?? null);
+    const r = await d.verificador.iniciar(contra, alcance, ruta ?? null);
     if (r.tipo === 'ok') res.status(202).json({});
     else if (r.tipo === 'ocupado') res.status(409).json({ mensaje: 'Ya hay una verificación en curso.' });
     else res.status(400).json({ mensaje: r.mensaje });
