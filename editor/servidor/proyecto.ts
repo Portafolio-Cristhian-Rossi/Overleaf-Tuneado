@@ -178,6 +178,13 @@ export function rutaDelGlosario(capitulos: Capitulo[]): string | null {
   return capitulos.find((c) => c.titulo.trim().toLowerCase() === 'glosario')?.ruta ?? null;
 }
 
+// El marco teórico es el primer capítulo cuyo título habla de antecedentes o de marco teórico
+// (hoy Cap2 - Antecedentes.tex, "Revisión de antecedentes").
+export function rutaDelMarcoTeorico(capitulos: Capitulo[]): string | null {
+  const sinTildes = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+  return capitulos.find((c) => /antecedentes|marco teorico/.test(sinTildes(c.titulo)))?.ruta ?? null;
+}
+
 function paquetesDe(raiz: string, principal: Fuente): string[] {
   const preambulo = principal.elementos.find((e) => e.tipo === 'preambulo');
   const cabecera = principal.sinComentarios.slice(0, preambulo ? preambulo.hasta : principal.sinComentarios.length);

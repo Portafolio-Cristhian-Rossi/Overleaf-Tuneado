@@ -3,7 +3,7 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { Proyecto } from '../compartido/tipos';
 import { DIR_FIXTURE, dirTemporal } from '../pruebas/ayudas/temporales';
-import { archivosDe, describirProyecto, rutaDelGlosario } from './proyecto';
+import { archivosDe, describirProyecto, rutaDelGlosario, rutaDelMarcoTeorico } from './proyecto';
 
 function proyectoCon(archivos: Record<string, string>): Promise<Proyecto> {
   const dir = dirTemporal();
@@ -257,5 +257,14 @@ describe('archivosDe', () => {
     poner('Anexos/C.tex', 'C\n');
     poner('Anexos/D.tex', 'D\n');
     expect(archivosDe(dir, 'Anexos.tex')).toEqual(['Anexos.tex', 'Anexos/A.tex', 'Anexos/D.tex', 'Anexos/C.tex']);
+  });
+});
+
+describe('rutaDelMarcoTeorico', () => {
+  const capitulo = (ruta: string, titulo: string) => ({ ruta, titulo, numero: null });
+  it('reconoce "Revisión de antecedentes" y "Marco Teórico", y null si no hay', () => {
+    expect(rutaDelMarcoTeorico([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap2.tex', 'Revisión de antecedentes')])).toBe('Cap2.tex');
+    expect(rutaDelMarcoTeorico([capitulo('Cap2.tex', 'MARCO TEORICO'), capitulo('Cap3.tex', 'Marco Teórico')])).toBe('Cap2.tex');
+    expect(rutaDelMarcoTeorico([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap0.tex', 'Glosario')])).toBeNull();
   });
 });

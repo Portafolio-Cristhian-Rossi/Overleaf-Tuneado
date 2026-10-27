@@ -4,6 +4,7 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { crearRepoDePrueba, type RepoDePrueba } from '../pruebas/ayudas/repoDePrueba';
 import { copiarFixture, dirTemporal } from '../pruebas/ayudas/temporales';
+import type { Hallazgo } from '../compartido/verificacion';
 import type { LanzarAgente, SalidaDelAgente } from './agente';
 import { crearVerificaciones, type Verificaciones } from './verificaciones';
 import { crearVerificador, MENSAJES, type ConfigVerificador } from './verificador';
@@ -46,6 +47,7 @@ function lanzadorFalso(responder: (o: { cwd: string; prompt: string }) => Salida
 }
 
 const nunca = () => new Promise<SalidaDelAgente>(() => {});
+const LIBRE = { estado: 'libre', motivos: { codigo: null, informe: null }, error: null } as const;
 
 let dir: string;
 let informe: string;
@@ -78,17 +80,17 @@ describe('verificador', () => {
       return envoltura([contradiccion('Cap3.tex', CITA_CAP3), contradiccion('Cap3.tex', 'una frase que no está')]);
     });
     const v = verificador(falso.lanzar);
-    expect(await v.iniciar('capitulo', 'Cap3.tex')).toEqual({ tipo: 'ok' });
+    expect(await v.iniciar('codigo', 'capitulo', 'Cap3.tex')).toEqual({ tipo: 'ok' });
     await v.terminada();
 
-    const ultima = await verificaciones.ultima();
+    const ultima = await verificaciones.ultima('codigo');
     expect(ultima).toMatchObject({
       estado: 'ok', alcance: 'capitulo', archivos: ['Cap3.tex'], rama: 'main', commit: datos.commitDeMain,
       descartados: 1, crudo: null, fecha: new Date(1_000).toISOString(), duracionMs: 4_000,
     });
     expect(ultima!.hallazgos).toHaveLength(1);
     expect(ultima!.hallazgos[0]).toMatchObject({ informe: { archivo: 'Cap3.tex', cita: CITA_CAP3 }, repo: { archivo: 'backend/app.py', linea: 2 } });
-    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
+    expect(await v.estado()).toEqual(LIBRE);
   });
 
   it('guarda lo que costó la corrida en la cuenta, o null si el agente no lo informa', async () => {
@@ -97,14 +99,14 @@ describe('verificador', () => {
       stdout: JSON.stringify({ type: 'result', is_error: false, result: '[]', total_cost_usd: 0.25 }),
     };
     const v = verificador(lanzadorFalso(() => conCosto).lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
-    expect((await verificaciones.ultima())!.costoUsd).toBe(0.25);
+    expect((await verificaciones.ultima('codigo'))!.costoUsd).toBe(0.25);
 
     const sinCosto = verificador(lanzadorFalso(() => envoltura([])).lanzar);
-    await sinCosto.iniciar('capitulo', 'Cap3.tex');
+    await sinCosto.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await sinCosto.terminada();
-    expect((await verificaciones.ultima())!.costoUsd).toBeNull();
+    expect((await verificaciones.ultima('codigo'))!.costoUsd).toBeNull();
   });
 
   it('se descartan las líneas fuera de rango y los archivos del repo que no existen', async () => {
@@ -112,9 +114,9 @@ describe('verificador', () => {
     const v = verificador(lanzadorFalso(() => envoltura([
       enRepo('backend/app.py', 3), enRepo('backend/no-existe.py', 1), enRepo('backend', 1), enRepo('.env', 1),
     ])).lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
-    expect(await verificaciones.ultima()).toMatchObject({ estado: 'ok', hallazgos: [], descartados: 4 });
+    expect(await verificaciones.ultima('codigo')).toMatchObject({ estado: 'ok', hallazgos: [], descartados: 4 });
   });
 
   it('el agente trabaja en una carpeta con informe/ y repositorio/, y se borra al terminar', async () => {
@@ -130,7 +132,7 @@ describe('verificador', () => {
       return envoltura([]);
     });
     const v = verificador(falso.lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
 
     const { cwd } = falso.llamadas[0]!;
@@ -146,13 +148,13 @@ describe('verificador', () => {
       contradiccion('Cap2.tex', CITA_CAP2, 'Explicación del capítulo dos.'),
       contradiccion('Cap3.tex', CITA_CAP3, 'Explicación del capítulo tres.'),
     ])).lanzar);
-    await primera.iniciar('todo', null);
+    await primera.iniciar('codigo', 'todo', null);
     await primera.terminada();
-    for (const h of (await verificaciones.ultima())!.hallazgos) await verificaciones.ignorar(h.id);
+    for (const h of (await verificaciones.ultima('codigo'))!.hallazgos) await verificaciones.ignorar(h.id);
 
     const falso = lanzadorFalso(() => envoltura([]));
     const v = verificador(falso.lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
     const { prompt } = falso.llamadas[0]!;
     expect(prompt).toContain('informe/Cap3.tex');
@@ -163,7 +165,7 @@ describe('verificador', () => {
 
   it('la prompt no lleva las sugerencias ignoradas', async () => {
     await verificaciones.guardar({
-      fecha: new Date(reloj).toISOString(), alcance: 'todo', archivos: ['Cap3.tex'], rama: '', commit: 'sugerencias',
+      fecha: new Date(reloj).toISOString(), contra: 'informe', alcance: 'todo', archivos: ['Cap3.tex'], rama: '', commit: 'sugerencias',
       duracionMs: 0, costoUsd: null, estado: 'ok', crudo: null, descartados: 0, autor: 'Claude',
       hallazgos: [{ id: 's1', tipo: 'sugerencia', informe: { archivo: 'Cap3.tex', linea: 1, cita: CITA_CAP3 }, repo: null, explicacion: 'Sugerencia de redacción.' }],
     });
@@ -171,7 +173,7 @@ describe('verificador', () => {
 
     const falso = lanzadorFalso(() => envoltura([]));
     const v = verificador(falso.lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
     expect(falso.llamadas[0]!.prompt).not.toContain('Sugerencia de redacción.');
     expect(falso.llamadas[0]!.prompt).not.toContain('Ya ignorados');
@@ -183,9 +185,9 @@ describe('verificador', () => {
       config, verificaciones, rutasDelInforme: async () => ['Cap1.tex', 'Cap3.tex'], dirTemporales: temporales, ahora: () => reloj,
       lanzar: lanzadorFalso(() => envoltura([contradiccion('Cap1.tex', CITA_GLOSARIO, 'Definición que no coincide.')])).lanzar,
     });
-    await primera.iniciar('todo', null);
+    await primera.iniciar('codigo', 'todo', null);
     await primera.terminada();
-    await verificaciones.ignorar((await verificaciones.ultima())!.hallazgos[0]!.id);
+    await verificaciones.ignorar((await verificaciones.ultima('codigo'))!.hallazgos[0]!.id);
 
     let enFoto = false;
     const falso = lanzadorFalso(({ cwd }) => {
@@ -196,7 +198,7 @@ describe('verificador', () => {
       config, verificaciones, lanzar: falso.lanzar, rutasDelInforme: async () => ['Cap3.tex'],
       rutaDelGlosario: async () => 'Cap1.tex', dirTemporales: temporales, ahora: () => reloj,
     });
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
 
     const { prompt } = falso.llamadas[0]!;
@@ -204,30 +206,30 @@ describe('verificador', () => {
     expect(prompt).toContain('## Glosario del informe\nEstá en informe/Cap1.tex.');
     expect(prompt).not.toContain('- informe/Cap1.tex');
     expect(prompt).toContain('Definición que no coincide.');
-    expect(await verificaciones.ultima()).toMatchObject({ archivos: ['Cap3.tex'], descartados: 0 });
-    expect((await verificaciones.ultima())!.hallazgos[0]).toMatchObject({ informe: { archivo: 'Cap1.tex', cita: CITA_GLOSARIO } });
+    expect(await verificaciones.ultima('codigo')).toMatchObject({ archivos: ['Cap3.tex'], descartados: 0 });
+    expect((await verificaciones.ultima('codigo'))!.hallazgos[0]).toMatchObject({ informe: { archivo: 'Cap1.tex', cita: CITA_GLOSARIO } });
   });
 
   it('mientras corre, estado es en-curso y una segunda corrida es ocupado', async () => {
     let soltar: (s: SalidaDelAgente) => void = () => {};
     const falso = lanzadorFalso(() => new Promise<SalidaDelAgente>((r) => { soltar = r; }));
     const v = verificador(falso.lanzar);
-    expect(await v.iniciar('capitulo', 'Cap3.tex')).toEqual({ tipo: 'ok' });
-    expect(await v.estado()).toEqual({ estado: 'en-curso', alcance: 'capitulo', desde: 1_000 });
+    expect(await v.iniciar('codigo', 'capitulo', 'Cap3.tex')).toEqual({ tipo: 'ok' });
+    expect(await v.estado()).toEqual({ estado: 'en-curso', contra: 'codigo', alcance: 'capitulo', desde: 1_000 });
     await falso.llamado;
-    expect(await v.iniciar('todo', null)).toEqual({ tipo: 'ocupado' });
-    expect(await v.estado()).toEqual({ estado: 'en-curso', alcance: 'capitulo', desde: 1_000 });
+    expect(await v.iniciar('codigo', 'todo', null)).toEqual({ tipo: 'ocupado' });
+    expect(await v.estado()).toEqual({ estado: 'en-curso', contra: 'codigo', alcance: 'capitulo', desde: 1_000 });
 
     soltar(envoltura([]));
     await v.terminada();
     expect(falso.llamadas).toHaveLength(1);
-    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
+    expect(await v.estado()).toEqual(LIBRE);
   });
 
   it('dos iniciar al mismo tiempo lanzan una sola corrida', async () => {
     const falso = lanzadorFalso(() => envoltura([]));
     const v = verificador(falso.lanzar);
-    const respuestas = await Promise.all([v.iniciar('capitulo', 'Cap3.tex'), v.iniciar('capitulo', 'Cap3.tex')]);
+    const respuestas = await Promise.all([v.iniciar('codigo', 'capitulo', 'Cap3.tex'), v.iniciar('codigo', 'capitulo', 'Cap3.tex')]);
     await v.terminada();
     expect(respuestas.map((r) => r.tipo).sort()).toEqual(['ocupado', 'ok']);
     expect(falso.llamadas).toHaveLength(1);
@@ -236,21 +238,21 @@ describe('verificador', () => {
   it('cancelar detiene el agente, borra la carpeta y no guarda corrida', async () => {
     const falso = lanzadorFalso(nunca);
     const v = verificador(falso.lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await falso.llamado;
     v.cancelar();
     await v.terminada();
 
     expect(falso.detenciones()).toBe(1);
-    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
-    expect(await verificaciones.ultima()).toBeNull();
+    expect(await v.estado()).toEqual(LIBRE);
+    expect(await verificaciones.ultima('codigo')).toBeNull();
     expect(fs.existsSync(falso.llamadas[0]!.cwd)).toBe(false);
   });
 
   it('cerrar detiene el agente y borra la carpeta en el momento, y la corrida termina igual', async () => {
     const falso = lanzadorFalso(nunca);
     const v = verificador(falso.lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await falso.llamado;
     v.cerrar();
 
@@ -258,8 +260,8 @@ describe('verificador', () => {
     expect(falso.detenciones()).toBe(1);
     expect(fs.existsSync(falso.llamadas[0]!.cwd)).toBe(false);
     await v.terminada();
-    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
-    expect(await verificaciones.ultima()).toBeNull();
+    expect(await v.estado()).toEqual(LIBRE);
+    expect(await verificaciones.ultima('codigo')).toBeNull();
     expect(fs.readdirSync(temporales)).toEqual([]);
   });
 
@@ -271,13 +273,13 @@ describe('verificador', () => {
   it('cancelar antes de que arranque el agente no lo lanza', async () => {
     const falso = lanzadorFalso(() => envoltura([]));
     const v = verificador(falso.lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     v.cancelar();
     await v.terminada();
 
     expect(falso.llamadas).toHaveLength(0);
-    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
-    expect(await verificaciones.ultima()).toBeNull();
+    expect(await v.estado()).toEqual(LIBRE);
+    expect(await verificaciones.ultima('codigo')).toBeNull();
     expect(fs.readdirSync(temporales)).toEqual([]);
   });
 
@@ -285,67 +287,67 @@ describe('verificador', () => {
     config.limiteVerificacion.capitulo = 0.001;
     const falso = lanzadorFalso(nunca);
     const v = verificador(falso.lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
 
     expect(falso.detenciones()).toBe(1);
     expect(MENSAJES.limite.replace('{n}', '0.001')).toBe(
       'La verificación se cortó a los 0.001 minutos. Si necesita más tiempo, subí limiteVerificacion en config.json.');
-    expect(await v.estado()).toEqual({ estado: 'libre', error: { motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.001') } });
-    expect(await verificaciones.ultima()).toBeNull();
+    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.001') } });
+    expect(await verificaciones.ultima('codigo')).toBeNull();
     expect(fs.readdirSync(temporales)).toEqual([]);
   });
 
   it('el límite de todo el informe sale de limiteVerificacion.todo, sin decimales de más', async () => {
     config.limiteVerificacion.todo = 0.0005;
     const v = verificador(lanzadorFalso(nunca).lanzar);
-    await v.iniciar('todo', null);
+    await v.iniciar('codigo', 'todo', null);
     await v.terminada();
-    expect(await v.estado()).toEqual({ estado: 'libre', error: { motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.0005') } });
+    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.0005') } });
   });
 
   it('CLI ausente y sesión no iniciada dejan su mensaje y no guardan corrida', async () => {
     const sinCli = verificador(lanzadorFalso(() => ({ codigo: null, stdout: '', stderr: '', noEncontrado: true })).lanzar);
-    await sinCli.iniciar('capitulo', 'Cap3.tex');
+    await sinCli.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await sinCli.terminada();
-    expect(await sinCli.estado()).toEqual({ estado: 'libre', error: { motivo: 'sin-cli', mensaje: MENSAJES['sin-cli'] } });
+    expect(await sinCli.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'sin-cli', mensaje: MENSAJES['sin-cli'] } });
     expect(MENSAJES['sin-cli']).toBe('No se encontró Claude Code. Instalalo con `npm install -g @anthropic-ai/claude-code`, o poné en config.json, en "agente", la ruta de claude.exe. Después volvé a probar.');
 
     const sinSesion = verificador(lanzadorFalso(() => ({
       codigo: 1, stdout: JSON.stringify({ is_error: true, result: 'Invalid API key · Please run /login' }), stderr: '', noEncontrado: false,
     })).lanzar);
-    await sinSesion.iniciar('capitulo', 'Cap3.tex');
+    await sinSesion.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await sinSesion.terminada();
-    expect(await sinSesion.estado()).toEqual({ estado: 'libre', error: { motivo: 'sin-sesion', mensaje: MENSAJES['sin-sesion'] } });
+    expect(await sinSesion.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'sin-sesion', mensaje: MENSAJES['sin-sesion'] } });
     expect(MENSAJES['sin-sesion']).toBe('Claude Code no tiene una sesión iniciada. Abrí una terminal, corré `claude` una vez para entrar y volvé a probar.');
 
-    expect(await verificaciones.ultima()).toBeNull();
+    expect(await verificaciones.ultima('codigo')).toBeNull();
     expect(fs.readdirSync(temporales)).toEqual([]);
   });
 
   it('otro error del agente deja su detalle, y una corrida nueva borra el error anterior', async () => {
     let respuesta: SalidaDelAgente = { codigo: 1, stdout: '', stderr: 'algo salió mal\n', noEncontrado: false };
     const v = verificador(lanzadorFalso(() => respuesta).lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
-    expect(await v.estado()).toEqual({ estado: 'libre', error: { motivo: 'otro', mensaje: 'La verificación falló: algo salió mal' } });
-    expect(await verificaciones.ultima()).toBeNull();
+    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'otro', mensaje: 'La verificación falló: algo salió mal' } });
+    expect(await verificaciones.ultima('codigo')).toBeNull();
 
     respuesta = envoltura([]);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     expect(await v.estado()).toMatchObject({ estado: 'en-curso' });
     await v.terminada();
-    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
+    expect(await v.estado()).toEqual(LIBRE);
   });
 
   it('una excepción en un paso queda como error otro, limpia y vuelve a libre', async () => {
     const falso = lanzadorFalso(() => envoltura([]));
     const v = verificador(falso.lanzar, async () => ['Cap3.tex', 'NoExiste.tex']);
-    expect(await v.iniciar('todo', null)).toEqual({ tipo: 'ok' });
+    expect(await v.iniciar('codigo', 'todo', null)).toEqual({ tipo: 'ok' });
     await v.terminada();
 
     const estado = await v.estado();
-    expect(estado).toMatchObject({ estado: 'libre', error: { motivo: 'otro' } });
+    expect(estado).toMatchObject({ ...LIBRE, error: { contra: 'codigo', motivo: 'otro' } });
     if (estado.estado === 'libre') expect(estado.error!.mensaje).toMatch(/^La verificación falló: .*NoExiste\.tex/);
     expect(falso.llamadas).toHaveLength(0);
     expect(fs.readdirSync(temporales)).toEqual([]);
@@ -353,13 +355,13 @@ describe('verificador', () => {
 
   it('salida ilegible se guarda como corrida fallida con lo crudo', async () => {
     const v = verificador(lanzadorFalso(() => ({ codigo: 0, stdout: 'esto no es json', stderr: '', noEncontrado: false })).lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
 
-    expect(await verificaciones.ultima()).toMatchObject({
+    expect(await verificaciones.ultima('codigo')).toMatchObject({
       estado: 'fallida', crudo: 'esto no es json', hallazgos: [], descartados: 0, archivos: ['Cap3.tex'], commit: datos.commitDeMain,
     });
-    expect(await v.estado()).toEqual({ estado: 'libre', error: { motivo: 'ilegible', mensaje: MENSAJES.ilegible } });
+    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'ilegible', mensaje: MENSAJES.ilegible } });
     expect(MENSAJES.ilegible).toBe('La respuesta del agente no se pudo leer. La corrida quedó guardada como fallida en verificaciones/.');
   });
 
@@ -368,8 +370,8 @@ describe('verificador', () => {
     config.ramaRepositorio = 'no-existe';
     const v = verificador(falso.lanzar);
     const motivo = `No se encontró la rama no-existe en ${datos.repo}.`;
-    expect(await v.estado()).toEqual({ estado: 'deshabilitada', motivo });
-    expect(await v.iniciar('capitulo', 'Cap3.tex')).toEqual({ tipo: 'invalido', mensaje: motivo });
+    expect(await v.estado()).toEqual({ ...LIBRE, motivos: { codigo: motivo, informe: null } });
+    expect(await v.iniciar('codigo', 'capitulo', 'Cap3.tex')).toEqual({ tipo: 'invalido', mensaje: motivo });
     expect(falso.llamadas).toHaveLength(0);
   });
 
@@ -379,21 +381,21 @@ describe('verificador', () => {
       execFileSync('git', ['-C', datos.repo, 'branch', '-q', '-D', 'main']);
       return ['Cap3.tex'];
     });
-    await v.iniciar('todo', null);
+    await v.iniciar('codigo', 'todo', null);
     await v.terminada();
     // Se vuelve a crear para que estado() no la vea deshabilitada y muestre el error.
     execFileSync('git', ['-C', datos.repo, 'branch', '-q', 'main', datos.commitDeMain]);
-    expect(await v.estado()).toEqual({ estado: 'libre', error: { motivo: 'rama', mensaje: `No se encontró la rama main en ${datos.repo}.` } });
+    expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'codigo', motivo: 'rama', mensaje: `No se encontró la rama main en ${datos.repo}.` } });
     expect(falso.llamadas).toHaveLength(0);
   });
 
-  it('sin repositorio en la config, estado es deshabilitada con el motivo', async () => {
+  it('sin repositorio en la config, Código queda deshabilitada con el motivo', async () => {
     config.repositorio = null;
     const falso = lanzadorFalso(() => envoltura([]));
     const v = verificador(falso.lanzar);
     const motivo = 'Falta "repositorio" en config.json: la ruta de la aplicación a comparar.';
-    expect(await v.estado()).toEqual({ estado: 'deshabilitada', motivo });
-    expect(await v.iniciar('todo', null)).toEqual({ tipo: 'invalido', mensaje: motivo });
+    expect(await v.estado()).toEqual({ ...LIBRE, motivos: { codigo: motivo, informe: null } });
+    expect(await v.iniciar('codigo', 'todo', null)).toEqual({ tipo: 'invalido', mensaje: motivo });
     expect(falso.llamadas).toHaveLength(0);
   });
 
@@ -412,7 +414,7 @@ describe('verificador', () => {
     fs.mkdirSync(path.join(temporales, 'otra-cosa'));
 
     const v = verificador(lanzadorFalso(() => envoltura([])).lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await v.terminada();
     expect(fs.readdirSync(temporales).sort()).toEqual(['editor-verificacion-reciente', 'otra-cosa']);
   });
@@ -422,22 +424,141 @@ describe('verificador', () => {
     let soltar: (s: SalidaDelAgente) => void = () => {};
     const falso = lanzadorFalso(() => new Promise<SalidaDelAgente>((r) => { soltar = r; }));
     const v = verificador(falso.lanzar);
-    await v.iniciar('capitulo', 'Cap3.tex');
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
     await falso.llamado;
     await new Promise((r) => setTimeout(r, 50));
     expect(falso.detenciones()).toBe(0);
     soltar(envoltura([]));
     await v.terminada();
-    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
+    expect(await v.estado()).toEqual(LIBRE);
+  });
+
+  describe('contra el informe', () => {
+    const seContradice = (principal: [string, string], referencia: [string, string], explicacion = 'No coincide.') => ({
+      tipo: 'se-contradice',
+      informe: { archivo: principal[0], linea: 1, cita: principal[1] },
+      referencia: { archivo: referencia[0], linea: 1, cita: referencia[1] },
+      explicacion,
+    });
+
+    it('guarda los hallazgos válidos con contra informe, sin rama ni commit', async () => {
+      const v = verificador(lanzadorFalso(() => envoltura([
+        seContradice(['Cap3.tex', CITA_CAP3], ['Cap2.tex', CITA_CAP2]),
+        seContradice(['Cap2.tex', CITA_CAP2], ['Cap3.tex', CITA_CAP3]),
+      ])).lanzar);
+      expect(await v.iniciar('informe', 'capitulo', 'Cap3.tex')).toEqual({ tipo: 'ok' });
+      await v.terminada();
+      const ultima = await verificaciones.ultima('informe');
+      expect(ultima).toMatchObject({ contra: 'informe', estado: 'ok', alcance: 'capitulo', archivos: ['Cap3.tex'], rama: null, commit: null, descartados: 1 });
+      expect(ultima!.hallazgos).toHaveLength(1);
+      expect(ultima!.hallazgos[0]).toMatchObject({ informe: { archivo: 'Cap3.tex' }, referencia: { archivo: 'Cap2.tex', cita: CITA_CAP2 }, repo: null });
+      expect(await verificaciones.ultima('codigo')).toBeNull();
+      expect(await v.estado()).toEqual(LIBRE);
+    });
+
+    it('funciona sin repositorio y no fotografía el repositorio', async () => {
+      config.repositorio = null;
+      const vistos: Record<string, boolean> = {};
+      const falso = lanzadorFalso(({ cwd }) => {
+        vistos.informe = fs.existsSync(path.join(cwd, 'informe', 'Cap3.tex'));
+        vistos.repo = fs.existsSync(path.join(cwd, 'repositorio'));
+        return envoltura([]);
+      });
+      const v = verificador(falso.lanzar);
+      expect(await v.iniciar('informe', 'todo', null)).toEqual({ tipo: 'ok' });
+      await v.terminada();
+      expect(vistos).toEqual({ informe: true, repo: false });
+      expect(await verificaciones.ultima('informe')).toMatchObject({ estado: 'ok', archivos: ['Cap2.tex', 'Cap3.tex'] });
+      expect(fs.readdirSync(temporales)).toEqual([]);
+    });
+
+    it('la foto tiene todos los capítulos aunque se revise uno', async () => {
+      let otroCapitulo = false;
+      const v = verificador(lanzadorFalso(({ cwd }) => {
+        otroCapitulo = fs.existsSync(path.join(cwd, 'informe', 'Cap2.tex'));
+        return envoltura([]);
+      }).lanzar);
+      await v.iniciar('informe', 'capitulo', 'Cap3.tex');
+      await v.terminada();
+      expect(otroCapitulo).toBe(true);
+    });
+
+    it('la prompt lleva el orden de los capítulos, el glosario y el marco teórico', async () => {
+      const falso = lanzadorFalso(() => envoltura([]));
+      const v = crearVerificador({
+        config, verificaciones, lanzar: falso.lanzar, rutasDelInforme: async () => ['Cap1.tex', 'Cap2.tex', 'Cap3.tex'],
+        rutaDelGlosario: async () => 'Cap1.tex', rutaDelMarcoTeorico: async () => 'Cap2.tex', dirTemporales: temporales, ahora: () => reloj,
+      });
+      await v.iniciar('informe', 'capitulo', 'Cap3.tex');
+      await v.terminada();
+      const { prompt } = falso.llamadas[0]!;
+      expect(prompt).toContain('1. informe/Cap1.tex\n2. informe/Cap2.tex\n3. informe/Cap3.tex');
+      expect(prompt).toContain('- Glosario: informe/Cap1.tex\n- Marco teórico: informe/Cap2.tex');
+      expect(prompt).toContain('tiene que estar en uno de estos:\n- informe/Cap3.tex\n');
+    });
+
+    it('a la prompt le llegan solo los ignorados de Informe de los archivos revisados', async () => {
+      const h = (id: string, tipo: Hallazgo['tipo'], archivo: string, cita: string, explicacion: string): Hallazgo =>
+        ({ id, tipo, informe: { archivo, linea: 1, cita }, repo: null, explicacion });
+      const corrida = (contra: 'codigo' | 'informe', hallazgos: Hallazgo[], minuto: number) => verificaciones.guardar({
+        fecha: new Date(2026, 9, 27, 10, minuto).toISOString(), contra, alcance: 'todo', archivos: ['Cap2.tex', 'Cap3.tex'],
+        rama: null, commit: contra === 'codigo' ? 'abc1234' : null, duracionMs: 0, costoUsd: null, estado: 'ok', crudo: null, descartados: 0, hallazgos,
+      });
+      await corrida('codigo', [h('c', 'sin-respaldo', 'Cap3.tex', CITA_CAP3, 'Del código.')], 0);
+      await corrida('informe', [h('i3', 'sin-definir', 'Cap3.tex', CITA_CAP3, 'Del tres.'), h('i2', 'sin-definir', 'Cap2.tex', CITA_CAP2, 'Del dos.')], 1);
+      for (const id of ['c', 'i3', 'i2']) await verificaciones.ignorar(id);
+
+      const falso = lanzadorFalso(() => envoltura([]));
+      const v = verificador(falso.lanzar);
+      await v.iniciar('informe', 'capitulo', 'Cap3.tex');
+      await v.terminada();
+      const { prompt } = falso.llamadas[0]!;
+      expect(prompt).toContain('Del tres.');
+      expect(prompt).not.toContain('Del dos.');
+      expect(prompt).not.toContain('Del código.');
+    });
+
+    it('hay una sola corrida a la vez entre los dos tipos', async () => {
+      const falso = lanzadorFalso(nunca);
+      const v = verificador(falso.lanzar);
+      await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
+      await falso.llamado;
+      expect(await v.iniciar('informe', 'capitulo', 'Cap3.tex')).toEqual({ tipo: 'ocupado' });
+      v.cancelar();
+      await v.terminada();
+      expect(falso.llamadas).toHaveLength(1);
+    });
+
+    it('en curso dice contra qué corre', async () => {
+      const falso = lanzadorFalso(nunca);
+      const v = verificador(falso.lanzar);
+      await v.iniciar('informe', 'todo', null);
+      expect(await v.estado()).toEqual({ estado: 'en-curso', contra: 'informe', alcance: 'todo', desde: 1_000 });
+      v.cancelar();
+      await v.terminada();
+    });
+
+    it('todo sin capítulos responde "El informe no tiene capítulos para verificar."', async () => {
+      const v = verificador(lanzadorFalso(() => envoltura([])).lanzar, async () => []);
+      expect(await v.iniciar('informe', 'todo', null)).toEqual({ tipo: 'invalido', mensaje: 'El informe no tiene capítulos para verificar.' });
+    });
+
+    it('el error de una corrida fallida dice de qué tipo fue', async () => {
+      config.limiteVerificacion.capitulo = 0.001;
+      const v = verificador(lanzadorFalso(nunca).lanzar);
+      await v.iniciar('informe', 'capitulo', 'Cap3.tex');
+      await v.terminada();
+      expect(await v.estado()).toEqual({ ...LIBRE, error: { contra: 'informe', motivo: 'limite', mensaje: MENSAJES.limite.replace('{n}', '0.001') } });
+    });
   });
 
   it('capítulo sin ruta o con una ruta que no está en el informe es invalido', async () => {
     const falso = lanzadorFalso(() => envoltura([]));
     const v = verificador(falso.lanzar);
     for (const ruta of [null, 'NoExiste.tex', '../afuera.tex', 'figs']) {
-      expect(await v.iniciar('capitulo', ruta)).toMatchObject({ tipo: 'invalido' });
+      expect(await v.iniciar('codigo', 'capitulo', ruta)).toMatchObject({ tipo: 'invalido' });
     }
     expect(falso.llamadas).toHaveLength(0);
-    expect(await v.estado()).toEqual({ estado: 'libre', error: null });
+    expect(await v.estado()).toEqual(LIBRE);
   });
 });

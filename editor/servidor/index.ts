@@ -10,7 +10,7 @@ import { crearGit } from './git';
 import { crearGuia } from './guia';
 import { crearImagenes } from './imagenes';
 import { crearCorrector } from './languagetool';
-import { describirProyecto, rutaDelGlosario } from './proyecto';
+import { describirProyecto, rutaDelGlosario, rutaDelMarcoTeorico } from './proyecto';
 import { crearReferencias } from './referencias';
 import { crearVerificaciones } from './verificaciones';
 import { crearVerificador } from './verificador';
@@ -43,6 +43,7 @@ const verificador = crearVerificador({
     : config.agente ? [config.agente] : undefined),
   rutasDelInforme: async () => (await describirProyecto(config.informe, config.principal)).capitulos.map((c) => c.ruta),
   rutaDelGlosario: async () => rutaDelGlosario((await describirProyecto(config.informe, config.principal)).capitulos),
+  rutaDelMarcoTeorico: async () => rutaDelMarcoTeorico((await describirProyecto(config.informe, config.principal)).capitulos),
 });
 
 // El corrector (LanguageTool) y el diccionario personal viven en editor/, nunca en el informe.
