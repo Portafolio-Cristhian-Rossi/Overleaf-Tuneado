@@ -38,13 +38,13 @@ describe('cargarSugerencias', () => {
       { archivo: 'Cap6 - Anexos/B.tex', cita: '\\chapter{Arquitectura}', explicacion: 'Nombre del archivo cruzado.' },
     ]);
     expect(r.descartadas).toEqual([]);
-    expect(r.corrida).toMatchObject({ autor: 'Claude', estado: 'ok', descartados: 0, archivos: ['Cap2.tex', 'Cap6 - Anexos/B.tex'] });
+    expect(r.corrida).toMatchObject({ contra: 'informe', autor: 'Claude', estado: 'ok', descartados: 0, archivos: ['Cap2.tex', 'Cap6 - Anexos/B.tex'] });
     expect(r.corrida!.hallazgos.map((h) => [h.tipo, h.informe.archivo, h.informe.linea, h.repo])).toEqual([
       ['sugerencia', 'Cap2.tex', 3, null],
       ['sugerencia', 'Cap6 - Anexos/B.tex', 1, null],
     ]);
     expect(fs.readdirSync(dirVerificaciones)).toEqual(['2026-10-26-2154-sugeren.json']);
-    expect(await v.ultima()).toEqual(r.corrida);
+    expect(await v.ultima('informe')).toEqual(r.corrida);
   });
 
   it('descarta las que no se pueden ubicar y dice cuáles', async () => {

@@ -1,16 +1,16 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { compararCorridas, type Corrida, type Ignorado } from '../compartido/verificacion';
+import { compararCorridas, contraDe, type Contra, type Corrida, type Ignorado } from '../compartido/verificacion';
 
-// Las corridas del verificador, una por archivo, y la lista de hallazgos ignorados. Viven fuera
-// de informe/ y del repositorio de la aplicación.
+// Las corridas de las dos verificaciones, una por archivo, y la lista de hallazgos ignorados.
+// Viven fuera de informe/ y del repositorio de la aplicación.
 export interface Verificaciones {
-  // Calcula la comparación con la corrida anterior del mismo alcance y los mismos archivos.
+  // Calcula la comparación con la corrida anterior del mismo tipo, alcance y archivos.
   guardar(c: Omit<Corrida, 'comparacion' | 'resueltos'>): Promise<Corrida>;
-  ultima(): Promise<Corrida | null>;
-  marcarResuelto(id: string): Promise<void>;   // en la última corrida
+  ultima(contra: Contra): Promise<Corrida | null>;
+  marcarResuelto(id: string): Promise<void>;   // en la última corrida de cada tipo
   ignorados(): Promise<Ignorado[]>;
-  ignorar(id: string): Promise<void>;          // toma el hallazgo de la última corrida
+  ignorar(id: string): Promise<void>;          // toma el hallazgo de la última corrida de cada tipo
   recuperar(id: string): Promise<void>;
 }
 
@@ -21,10 +21,11 @@ const NOMBRE = /^(\d{4}-\d{2}-\d{2}-\d{4})-(.+?)(?:-(\d+))?\.json$/;
 
 const dos = (n: number) => String(n).padStart(2, '0');
 
+// Las corridas contra el informe no tienen commit: llevan "informe" en su lugar.
 function nombreBase(c: Pick<Corrida, 'fecha' | 'commit'>): string {
   const f = new Date(c.fecha);
   const marca = `${f.getFullYear()}-${dos(f.getMonth() + 1)}-${dos(f.getDate())}-${dos(f.getHours())}${dos(f.getMinutes())}`;
-  return `${marca}-${c.commit.slice(0, 7)}`;
+  return `${marca}-${c.commit === null ? 'informe' : c.commit.slice(0, 7)}`;
 }
 
 // Orden por marca de tiempo y después por el sufijo numérico (-2 va después de nada, -10 después de -9):
@@ -70,7 +71,7 @@ export function crearVerificaciones(dir: string): Verificaciones {
     await fs.rename(temporal, archivo);
   }
 
-  // De la más nueva a la más vieja; las ilegibles se saltean.
+  // De la más nueva a la más vieja; las ilegibles se saltean. Las de antes de esta etapa no tienen contra.
   async function corridas(): Promise<Array<{ nombre: string; corrida: Corrida }>> {
     let nombres: string[];
     try {
@@ -83,9 +84,19 @@ export function crearVerificaciones(dir: string): Verificaciones {
     const lista: Array<{ nombre: string; corrida: Corrida }> = [];
     for (const nombre of validos) {
       const corrida = await leerJson<Corrida>(path.join(dir, nombre));
-      if (corrida && Array.isArray(corrida.hallazgos)) lista.push({ nombre, corrida });
+      if (corrida && Array.isArray(corrida.hallazgos)) lista.push({ nombre, corrida: { ...corrida, contra: contraDe(corrida) } });
     }
     return lista;
+  }
+
+  // La última corrida de cada tipo que tiene ese hallazgo.
+  async function ultimaCon(id: string): Promise<{ nombre: string; corrida: Corrida } | null> {
+    const lista = await corridas();
+    for (const contra of ['codigo', 'informe'] as const) {
+      const ultima = lista.find(({ corrida }) => corrida.contra === contra);
+      if (ultima?.corrida.hallazgos.some((h) => h.id === id)) return ultima;
+    }
+    return null;
   }
 
   async function leerIgnorados(): Promise<Ignorado[]> {
@@ -96,10 +107,10 @@ export function crearVerificaciones(dir: string): Verificaciones {
   return {
     guardar: (c) => enSerie(async () => {
       const previas = await corridas();
-      // Las sugerencias se comparan solo con sugerencias del mismo autor, y las del agente, entre sí.
+      // Se compara solo con corridas del mismo tipo; las sugerencias, solo con las del mismo autor.
       const anterior = previas.find(({ corrida }) =>
-        corrida.estado === 'ok' && corrida.alcance === c.alcance && mismosArchivos(corrida.archivos, c.archivos)
-        && corrida.autor === c.autor);
+        corrida.estado === 'ok' && corrida.contra === contraDe(c) && corrida.alcance === c.alcance
+        && mismosArchivos(corrida.archivos, c.archivos) && corrida.autor === c.autor);
       const completa: Corrida = {
         ...c,
         resueltos: [],
@@ -119,13 +130,13 @@ export function crearVerificaciones(dir: string): Verificaciones {
       return completa;
     }),
 
-    async ultima() {
-      return (await corridas())[0]?.corrida ?? null;
+    async ultima(contra) {
+      return (await corridas()).find(({ corrida }) => corrida.contra === contra)?.corrida ?? null;
     },
 
     marcarResuelto: (id) => enSerie(async () => {
-      const ultima = (await corridas())[0];
-      if (!ultima || !ultima.corrida.hallazgos.some((h) => h.id === id)) throw new HallazgoDesconocido(id);
+      const ultima = await ultimaCon(id);
+      if (!ultima) throw new HallazgoDesconocido(id);
       const resueltos = ultima.corrida.resueltos ?? [];
       if (resueltos.includes(id)) return;
       ultima.corrida.resueltos = [...resueltos, id];
@@ -137,7 +148,7 @@ export function crearVerificaciones(dir: string): Verificaciones {
     ignorar: (id) => enSerie(async () => {
       const lista = await leerIgnorados();
       if (lista.some((i) => i.id === id)) return;
-      const h = (await corridas())[0]?.corrida.hallazgos.find((x) => x.id === id);
+      const h = (await ultimaCon(id))?.corrida.hallazgos.find((x) => x.id === id);
       if (!h) throw new HallazgoDesconocido(id);
       lista.push({
         id,
@@ -145,6 +156,7 @@ export function crearVerificaciones(dir: string): Verificaciones {
         archivoInforme: h.informe.archivo,
         cita: h.informe.cita,
         archivoRepo: h.repo?.archivo ?? null,
+        archivoReferencia: h.referencia?.archivo ?? null,
         explicacion: h.explicacion,
         fecha: new Date().toISOString(),
       });

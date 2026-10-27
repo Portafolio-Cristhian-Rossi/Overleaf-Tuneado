@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { Alcance, Corrida, Hallazgo } from '../compartido/verificacion';
+import type { Alcance, Contra, Corrida, Hallazgo } from '../compartido/verificacion';
 import { dirTemporal } from '../pruebas/ayudas/temporales';
 import { crearVerificaciones, HallazgoDesconocido, type Verificaciones } from './verificaciones';
 
@@ -27,6 +27,7 @@ function corrida(parcial: Partial<Omit<Corrida, 'comparacion' | 'resueltos'>> & 
   const { ids = [], ...resto } = parcial;
   return {
     fecha: FECHA,
+    contra: 'codigo' as Contra,
     alcance: 'capitulo' as Alcance,
     archivos: ['Cap3.tex'],
     rama: 'main',
@@ -47,7 +48,7 @@ describe('verificaciones', () => {
     expect(fs.readdirSync(dir)).toEqual(['2026-10-18-1432-583d2cc.json']);
     expect(guardada.resueltos).toEqual([]);
     expect(guardada.comparacion).toBeNull();
-    expect(await v.ultima()).toEqual(guardada);
+    expect(await v.ultima('codigo')).toEqual(guardada);
   });
 
   it('dos corridas en el mismo minuto no se pisan', async () => {
@@ -60,23 +61,23 @@ describe('verificaciones', () => {
       '2026-10-18-1432-583d2cc.json',
     ]);
     expect(segunda.hallazgos[0]!.id).toBe('y');
-    expect((await v.ultima())!.hallazgos[0]!.id).toBe('z');
+    expect((await v.ultima('codigo'))!.hallazgos[0]!.id).toBe('z');
   });
 
   it('la última respeta el orden numérico del sufijo', async () => {
     for (let i = 0; i < 10; i++) await v.guardar(corrida({ ids: [`h${i}`] }));
     expect(fs.existsSync(path.join(dir, '2026-10-18-1432-583d2cc-10.json'))).toBe(true);
-    expect((await v.ultima())!.hallazgos[0]!.id).toBe('h9');
+    expect((await v.ultima('codigo'))!.hallazgos[0]!.id).toBe('h9');
   });
 
   it('en el mismo minuto con otro commit, la última es la guardada después', async () => {
     await v.guardar(corrida({ ids: ['x'], commit: 'bbbbbbb1' }));
     const b = await v.guardar(corrida({ ids: ['y'], commit: 'aaaaaaa1' }));
     expect(b.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 1 });
-    expect((await v.ultima())!.hallazgos[0]!.id).toBe('y');
+    expect((await v.ultima('codigo'))!.hallazgos[0]!.id).toBe('y');
     const c = await v.guardar(corrida({ ids: ['y', 'z'], commit: 'ccccccc1' }));
     expect(c.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 0 });
-    expect((await v.ultima())!.hallazgos.map((h) => h.id)).toEqual(['y', 'z']);
+    expect((await v.ultima('codigo'))!.hallazgos.map((h) => h.id)).toEqual(['y', 'z']);
   });
 
   it('marcar resuelto tolera una corrida sin lista de resueltos', async () => {
@@ -86,13 +87,13 @@ describe('verificaciones', () => {
     delete datos.resueltos;
     fs.writeFileSync(archivo, JSON.stringify(datos));
     await v.marcarResuelto('x');
-    expect((await v.ultima())!.resueltos).toEqual(['x']);
+    expect((await v.ultima('codigo'))!.resueltos).toEqual(['x']);
   });
 
   it('la última es la de fecha mayor', async () => {
     await v.guardar(corrida({ ids: ['viejo'], fecha: new Date(2026, 9, 18, 9, 5).toISOString() }));
     await v.guardar(corrida({ ids: ['nuevo'], fecha: new Date(2026, 9, 18, 14, 32).toISOString(), commit: 'aaaaaaa1' }));
-    expect((await v.ultima())!.hallazgos[0]!.id).toBe('nuevo');
+    expect((await v.ultima('codigo'))!.hallazgos[0]!.id).toBe('nuevo');
   });
 
   it('compara con la anterior del mismo alcance y los mismos archivos', async () => {
@@ -134,8 +135,8 @@ describe('verificaciones', () => {
     await v.guardar(corrida({ ids: ['x', 'y'] }));
     await v.marcarResuelto('x');
     await v.marcarResuelto('x');
-    expect((await v.ultima())!.resueltos).toEqual(['x']);
-    expect((await crearVerificaciones(dir).ultima())!.resueltos).toEqual(['x']);
+    expect((await v.ultima('codigo'))!.resueltos).toEqual(['x']);
+    expect((await crearVerificaciones(dir).ultima('codigo'))!.resueltos).toEqual(['x']);
   });
 
   it('ignorar guarda cita y explicación, y recuperar lo quita', async () => {
@@ -154,7 +155,7 @@ describe('verificaciones', () => {
     });
     expect(new Date(lista[0]!.fecha).getTime()).not.toBeNaN();
     expect(fs.existsSync(path.join(dir, 'ignorados.json'))).toBe(true);
-    expect((await v.ultima())!.hallazgos).toHaveLength(2);
+    expect((await v.ultima('codigo'))!.hallazgos).toHaveLength(2);
 
     await v.recuperar('x');
     expect(await v.ignorados()).toEqual([]);
@@ -180,7 +181,7 @@ describe('verificaciones', () => {
   });
 
   it('sin carpeta, ultima es null e ignorados es []', async () => {
-    expect(await v.ultima()).toBeNull();
+    expect(await v.ultima('codigo')).toBeNull();
     expect(await v.ignorados()).toEqual([]);
     expect(fs.existsSync(dir)).toBe(false);
   });
@@ -188,7 +189,58 @@ describe('verificaciones', () => {
   it('salta los archivos ilegibles al buscar la última', async () => {
     await v.guardar(corrida({ ids: ['x'] }));
     fs.writeFileSync(path.join(dir, '2026-10-18-1500-bbbbbbb.json'), '{ roto');
-    expect((await v.ultima())!.hallazgos[0]!.id).toBe('x');
+    expect((await v.ultima('codigo'))!.hallazgos[0]!.id).toBe('x');
+  });
+
+  it('una corrida de Informe se llama AAAA-MM-DD-HHmm-informe.json', async () => {
+    await v.guardar(corrida({ contra: 'informe', rama: null, commit: null, ids: ['x'] }));
+    await v.guardar(corrida({ contra: 'informe', rama: null, commit: null, ids: ['y'] }));
+    expect(fs.readdirSync(dir).sort()).toEqual(['2026-10-18-1432-informe-2.json', '2026-10-18-1432-informe.json']);
+    expect((await v.ultima('informe'))!.hallazgos[0]!.id).toBe('y');
+  });
+
+  it('ultima devuelve la última de cada tipo', async () => {
+    await v.guardar(corrida({ ids: ['codigo'], fecha: new Date(2026, 9, 18, 10, 0).toISOString() }));
+    await v.guardar(corrida({ contra: 'informe', commit: null, ids: ['informe'], fecha: new Date(2026, 9, 18, 10, 5).toISOString() }));
+    expect((await v.ultima('codigo'))!.hallazgos[0]!.id).toBe('codigo');
+    expect((await v.ultima('informe'))!.hallazgos[0]!.id).toBe('informe');
+  });
+
+  it('compara solo con la anterior del mismo tipo', async () => {
+    await v.guardar(corrida({ ids: ['x'] }));
+    const informe = await v.guardar(corrida({ contra: 'informe', commit: null, ids: ['x', 'y'] }));
+    expect(informe.comparacion).toBeNull();
+    const codigo = await v.guardar(corrida({ ids: ['x', 'z'] }));
+    expect(codigo.comparacion).toEqual({ nuevos: 1, yaNoAparecen: 0 });
+  });
+
+  it('lee corridas viejas sin contra: con autor son de Informe y sin autor de Código', async () => {
+    fs.mkdirSync(dir, { recursive: true });
+    const { contra: _, ...vieja } = { ...corrida({ ids: ['viejo'] }), resueltos: [], comparacion: null };
+    fs.writeFileSync(path.join(dir, '2026-10-18-0900-583d2cc.json'), JSON.stringify(vieja));
+    fs.writeFileSync(path.join(dir, '2026-10-18-0905-sugeren.json'), JSON.stringify({ ...vieja, autor: 'Claude', hallazgos: [hallazgo('sug')] }));
+    expect(await v.ultima('codigo')).toMatchObject({ contra: 'codigo', hallazgos: [{ id: 'viejo' }] });
+    expect(await v.ultima('informe')).toMatchObject({ contra: 'informe', hallazgos: [{ id: 'sug' }] });
+  });
+
+  it('resolver e ignorar encuentran el hallazgo en la última de Informe', async () => {
+    await v.guardar(corrida({ contra: 'informe', commit: null, ids: ['i'], fecha: new Date(2026, 9, 18, 10, 0).toISOString() }));
+    await v.guardar(corrida({ ids: ['c'], fecha: new Date(2026, 9, 18, 10, 5).toISOString() }));
+    await v.marcarResuelto('i');
+    await v.ignorar('i');
+    expect((await v.ultima('informe'))!.resueltos).toEqual(['i']);
+    expect((await v.ultima('codigo'))!.resueltos).toEqual([]);
+    expect((await v.ignorados()).map((x) => x.id)).toEqual(['i']);
+  });
+
+  it('ignorar guarda archivoReferencia, o null si no hay', async () => {
+    const conReferencia: Hallazgo = {
+      ...hallazgo('r'), tipo: 'se-contradice', repo: null, referencia: { archivo: 'Cap1.tex', linea: 2, cita: 'otra' },
+    };
+    await v.guardar({ ...corrida({ contra: 'informe', commit: null }), hallazgos: [conReferencia, hallazgo('s')] });
+    await v.ignorar('r');
+    await v.ignorar('s');
+    expect((await v.ignorados()).map((x) => x.archivoReferencia)).toEqual(['Cap1.tex', null]);
   });
 
   it('guardados simultáneos quedan en archivos distintos', async () => {

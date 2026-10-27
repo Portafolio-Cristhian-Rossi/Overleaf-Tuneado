@@ -4,7 +4,7 @@ import { normalizarEspacios, normalizarRuta, validarHallazgos, type Corrida } fr
 import { cargarConfig } from './config';
 import { crearVerificaciones, type Verificaciones } from './verificaciones';
 
-// Carga observaciones de redacción al panel de verificación, como una corrida de tipo «sugerencia».
+// Carga observaciones de redacción a la pestaña Informe, como una corrida de tipo «sugerencia».
 // Cada una dice en qué archivo del informe va, qué frase cita tal como está y qué propone:
 // [{ "archivo": "Cap2 - Antecedentes.tex", "cita": "frase del informe", "explicacion": "qué cambiar" }]
 
@@ -55,6 +55,7 @@ export async function cargarSugerencias(o: {
 
   const corrida = await o.verificaciones.guardar({
     fecha: (o.fecha ?? new Date()).toISOString(),
+    contra: 'informe',
     alcance: 'todo',
     archivos: [...new Set(hallazgos.map((h) => h.informe.archivo))],
     rama: '',
@@ -87,5 +88,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === import.meta.filename) {
     process.exit(1);
   }
   const n = r.corrida.hallazgos.length;
-  console.log(`${n} ${n === 1 ? 'sugerencia cargada' : 'sugerencias cargadas'}. Recargá la pestaña del editor para verlas en Verificación.`);
+  console.log(`${n} ${n === 1 ? 'sugerencia cargada' : 'sugerencias cargadas'}. Recargá la pestaña del editor para verlas en la pestaña Informe.`);
 }
