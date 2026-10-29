@@ -18,6 +18,9 @@ export interface Config {
   ramaRepositorio: string;
   agente: string | null;               // comando de Claude Code; null: `claude` del PATH
   limiteVerificacion: { capitulo: number; todo: number };   // minutos
+  proyecto: string;                    // ruta absoluta de la carpeta del proyecto (guía, diccionario, reglas)
+  glosario: string | null;             // título del capítulo que es el glosario; null: no hay
+  marcoTeorico: string[] | null;       // palabras del título del marco teórico; null: no hay
 }
 
 export interface ArchivoLeido {

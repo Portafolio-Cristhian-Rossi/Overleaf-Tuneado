@@ -8,3 +8,4 @@ editor/.entorno-prueba/
 editor/languagetool/
 .superpowers/
 .claude/worktrees/
+editor/config.json
