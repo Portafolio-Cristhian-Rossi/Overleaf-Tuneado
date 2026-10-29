@@ -17,11 +17,18 @@ hace falta además Java.
 Las carpetas quedan así:
 
 ```
-Tesis/
-├── editor/     esta aplicación
-├── informe/    el proyecto de Overleaf (lo clonás en el paso 3)
-└── build/      el PDF y los temporales de LaTeX (se crea sola)
+Editor-Informe/        este repositorio (lo clonás en el paso 3)
+├── editor/            esta aplicación
+├── proyecto/          lo propio de tu proyecto: viene con la rama del proyecto
+├── informe/           el proyecto de Overleaf (lo clonás en el paso 3)
+└── build/             el PDF y los temporales de LaTeX (se crea sola)
 ```
+
+En esta guía, "la carpeta del repositorio" es `Editor-Informe`, o el nombre
+que le hayas dado al clonarlo.
+
+Si vas a comparar el informe con el código de una aplicación, su repositorio va
+al lado, no adentro (sección 6 y `GUIA-CLAUDE.md`).
 
 Todos los comandos de esta guía se ejecutan en PowerShell.
 
@@ -94,13 +101,35 @@ comuniquen con Zotero". El editor solo lee tu biblioteca; nunca la modifica.
 Sin Zotero el editor funciona igual: cita lo que ya esté en el archivo de
 referencias del informe.
 
-## 3. Conectar con Overleaf
+## 3. Bajar el editor y conectar con Overleaf
+
+**El editor.** Parado en la carpeta donde quieras tenerlo (por ejemplo
+`Documentos\GitHub`), cloná este repositorio. Git abre el navegador para que
+inicies sesión en GitHub:
+
+```bash
+git clone <url-del-repositorio> Editor-Informe
+```
+
+La rama `main` tiene solo la herramienta. Lo propio de tu proyecto (su
+configuración, la guía de estilo, el diccionario y las reglas para Claude) está
+en la rama del proyecto: pasate a ella. Su nombre te lo da quien armó el
+proyecto:
+
+```bash
+git -C Editor-Informe checkout <rama-del-proyecto>
+```
+
+Si la rama trae `proyecto/LEEME.md`, leelo: dice el proyecto de Overleaf, el
+repositorio de la aplicación y lo demás que necesitás de ese proyecto.
+
+**Overleaf.**
 
 1. En Overleaf, entrá a **Account Settings → Git Integration** y creá un token.
    Empieza con `olp_`. Copialo: Overleaf lo muestra una sola vez.
 2. El identificador del proyecto es la parte final de su dirección:
    `https://www.overleaf.com/project/<id-del-proyecto>`.
-3. Parado en la carpeta `Tesis`, cloná el proyecto:
+3. Parado en la carpeta del repositorio, cloná el proyecto:
 
 ```bash
 git clone https://git@git.overleaf.com/<id-del-proyecto> informe
@@ -110,7 +139,7 @@ Cuando pida contraseña, pegá el token. Windows lo guarda y no lo vuelve a
 pedir.
 
 4. Decile a Git con qué nombre firmar tus cambios; es el que van a ver los
-   demás en el historial de Overleaf. Parado en la carpeta `Tesis`:
+   demás en el historial de Overleaf. Parado en la carpeta del repositorio:
 
 ```bash
 git -C informe config user.name "Tu Nombre"
@@ -306,7 +335,9 @@ gramática.
 - Nunca se revisa ni se toca lo que no es prosa: fórmulas, código, comandos,
   claves de citas y etiquetas.
 
-Tu diccionario queda en `editor/correccion.json`. No viaja a Overleaf.
+El diccionario queda en `proyecto/correccion.json` y es del equipo: no viaja a
+Overleaf, pero sí a tus compañeros cuando lo commiteás en la rama del proyecto
+(sección 12).
 
 El corrector ocupa unos 400 MB en disco y, mientras el editor está abierto,
 hasta 1 GB de memoria.
@@ -342,8 +373,8 @@ Tres cosas a tener en cuenta:
 
 Cada pedido lleva la **guía de estilo**: de qué trata el informe, en qué
 persona se escribe y qué términos usar. Viene con una inicial; corregila en
-**IA** → *Guía de estilo…*. Queda en `editor/guia-estilo.md` y no viaja a
-Overleaf.
+**IA** → *Guía de estilo…*. Queda en `proyecto/guia-estilo.md`: no viaja a
+Overleaf, y se comparte con el equipo como el diccionario.
 
 **Traer.** Baja lo que cambiaron los demás en Overleaf y lo combina con lo
 tuyo. Cuando hay algo nuevo, la barra avisa `Hay cambios nuevos en Overleaf`.
@@ -377,8 +408,8 @@ terminar.
 La barra tiene dos botones de verificación, y cada uno muestra lo que encontró
 en su pestaña del panel derecho:
 
-- **Contra código** compara el informe con el código de la aplicación
-  (`uy-social-topic-modeling`) y te dice dónde no coinciden: lo que el informe
+- **Contra código** compara el informe con el código de la aplicación que
+  describe y te dice dónde no coinciden: lo que el informe
   cuenta de una forma y el código hace de otra, lo que el informe afirma y no
   aparece en el código, y lo que está en el código y la sección debería
   contar. Sus hallazgos van a la pestaña **Código**.
@@ -388,50 +419,26 @@ en su pestaña del panel derecho:
 Para eso lanzan a Claude Code, un agente de IA, con tu cuenta de Claude. Hay
 una sola verificación a la vez, de cualquiera de los dos tipos.
 
-**Preparar, una sola vez.**
+**Preparar, una sola vez.** Instalá Claude Code, entrá con tu cuenta y cloná
+el repositorio de la aplicación al lado de la carpeta del repositorio: los
+pasos están en `GUIA-CLAUDE.md`, secciones 2 y 3.
 
-1. Instalá el CLI de Claude Code:
-
-```bash
-npm install -g @anthropic-ai/claude-code
-```
-
-2. Entrá con tu cuenta. Corré este comando, seguí los pasos que muestra y,
-   cuando termine, cerralo con `/exit`:
-
-```bash
-claude
-```
-
-   Si ya usás la extensión de Claude Code en VS Code y entraste con tu cuenta
-   ahí, podés saltear los pasos 1 y 2: la extensión trae su propio `claude.exe`.
-   Poné su ruta en `editor/config.json`, en `agente` (con barras `/`):
+Dónde está el repositorio de la aplicación lo dice `repositorio`. Lo habitual
+es que ya venga en `proyecto/config.json` de la rama del proyecto, con una
+ruta relativa a `proyecto/`:
 
 ```json
 {
-  "agente": "C:/Users/Cristhian Rossi/.vscode/extensions/anthropic.claude-code-2.1.300-win32-x64/resources/native-binary/claude.exe"
-}
-```
-
-   El número de versión de esa carpeta cambia cuando se actualiza la
-   extensión. Si la verificación dice que no encuentra Claude Code, buscá la
-   carpeta nueva en `.vscode/extensions` y corregí la ruta.
-
-3. Agregá a `editor/config.json`, junto a lo que ya tiene, dónde está el
-   repositorio de la aplicación. Escribí la ruta con barras `/`:
-
-```json
-{
-  "repositorio": "C:/Users/Cristhian Rossi/Documents/GitHub/uy-social-topic-modeling",
+  "repositorio": "../../<carpeta-de-la-aplicacion>",
   "ramaRepositorio": "main",
   "limiteVerificacion": { "capitulo": 15, "todo": 45 }
 }
 ```
 
 `ramaRepositorio` es la rama contra la que se compara, y `limiteVerificacion`
-cuántos minutos puede durar una verificación antes de cortarse. Si te sirven
-esos valores, alcanza con poner `repositorio`. Después cerrá el editor y
-volvé a abrirlo, como dice la sección 8.
+cuántos minutos puede durar una verificación antes de cortarse. Si clonaste la
+aplicación en otro lado, poné tu ruta en `editor/config.json`, que manda sobre
+la del proyecto (sección 8). Después cerrá el editor y volvé a abrirlo.
 
 Si falta algo, la pestaña **Código** dice qué: la carpeta no existe, no
 es un repositorio de Git o no tiene esa rama.
@@ -458,21 +465,27 @@ es un repositorio de Git o no tiene esa rama.
 - `la frase cambió` quiere decir que la cita ya no está en el texto: la
   editaste después de verificar.
 - Debajo de la fecha, el panel dice cuánto tardó la verificación y cuánto
-  costó en tu cuenta de Claude. Como referencia, verificar el capítulo de la
-  solución tardó unos dos minutos y costó alrededor de US$ 0,50.
+  costó en tu cuenta de Claude. Como referencia, verificar un capítulo de unas
+  quince páginas tardó unos dos minutos y costó alrededor de US$ 0,50.
 - Leé cada hallazgo antes de tocar el informe: el agente se puede equivocar.
   El editor comprueba que las citas existan (las que no, se descartan y el
   encabezado lo cuenta), pero no que la explicación sea cierta.
 
 **El glosario.** El agente recibe siempre el capítulo que se titula
-*Glosario*, aunque verifiques otro. Lo usa para explicar con los términos del
-equipo y para reconocer en el código lo que el informe llama de otra forma
-(por ejemplo, `processing_orchestrator` es un orquestador). Las definiciones de
-la sección *Programación* describen la aplicación, así que si el código las
-contradice aparece como contradicción, citando el glosario. Las de *IA* y
-*Texto* son conceptos generales y no se comparan con el código, salvo los
-modelos de tópicos. También avisa, como "el informe no lo cuenta", los
+*Glosario* (o el título que diga `glosario` en la configuración), aunque
+verifiques otro. Lo usa para explicar con los términos del equipo y para
+reconocer en el código lo que el informe llama de otra forma. Si una definición
+describe la aplicación y el código la contradice, aparece como contradicción,
+citando el glosario. También avisa, como "el informe no lo cuenta", los
 términos centrales del código que faltan en el glosario.
+
+**Reglas del proyecto.** Lo que el agente tiene que saber de tu proyecto en
+particular va en `proyecto/verificacion-codigo.md`, en prosa o en viñetas: por
+ejemplo, qué secciones del glosario describen la aplicación y cuáles son
+conceptos generales que no se comparan con el código, o cómo se llaman en el
+código las piezas que el informe nombra de otra forma. Se suma a cada
+verificación contra el código tal como está, hasta 20 000 caracteres, y se
+lee en cada corrida: un cambio no pide reiniciar el editor.
 
 **Qué lee el agente.** Solo la rama `ramaRepositorio` tal como está en Git:
 los archivos versionados, sin el `.env` ni nada de lo que Git ignora, y sin
@@ -482,11 +495,12 @@ herramientas Read, Grep y Glob, ningún servidor MCP, y no escribe en el
 informe ni en el repositorio. Lo que lee viaja a Claude con tu cuenta, como
 cualquier uso de Claude Code.
 
-Se compara la rama local (`main`, salvo que cambies `ramaRepositorio`) de
-`uy-social-topic-modeling`, no la de GitHub: antes de verificar conviene
+Se compara la rama local (`main`, salvo que cambies `ramaRepositorio`) del
+repositorio de la aplicación, no la de GitHub: antes de verificar conviene
 hacer `git pull` en esa carpeta. El panel muestra el commit que se usó.
 
-**Dónde quedan.** Cada verificación se guarda en `Tesis/verificaciones/`, un
+**Dónde quedan.** Cada verificación se guarda en `verificaciones/`, dentro de
+la carpeta del repositorio, un
 archivo por corrida con su fecha y su commit, junto con `ignorados.json`. No
 viajan a Overleaf ni a GitHub. Al abrir el editor, cada pestaña muestra la
 última verificación de su tipo.
@@ -501,8 +515,9 @@ cuatro tipos:
 - *Se contradice*: dos partes del informe dicen cosas incompatibles. Muestra
   las dos frases.
 - *Definición distinta*: un término se usa con otro sentido del que le dan el
-  glosario o el marco teórico (el capítulo cuyo título habla de antecedentes o
-  de marco teórico; hoy, *Revisión de antecedentes*). Muestra el uso y la
+  glosario o el marco teórico (el primer capítulo cuyo título contiene alguna
+  de las palabras de `marcoTeorico`; por defecto, *antecedentes* o *marco
+  teórico*). Muestra el uso y la
   definición.
 - *Corta el hilo*: da por sabido algo que no se presentó antes, salta sin
   conexión con lo anterior o repite lo ya dicho. "Antes" es el orden en que
@@ -522,7 +537,7 @@ pestaña **Informe**, agrupadas como *Sugerencia*. Van en un archivo JSON, una p
 entrada, con la frase citada tal como está en el informe:
 
 ```json
-[{ "archivo": "Cap2 - Antecedentes.tex", "cita": "frase del informe", "explicacion": "qué cambiar" }]
+[{ "archivo": "Cap2.tex", "cita": "frase del informe", "explicacion": "qué cambiar" }]
 ```
 
 Se cargan desde la carpeta `editor` con:
@@ -554,8 +569,27 @@ terminar de revisarlas antes.
 
 ## 8. Opciones de `config.json`
 
+La configuración se arma en tres capas. Para cada opción gana la última que la
+define:
+
+1. Los valores iniciales de la tabla.
+2. `proyecto/config.json`: la del equipo. Viene con la rama del proyecto y se
+   comparte con un commit.
+3. `editor/config.json`: la tuya. Git la ignora, así que no viaja a nadie.
+   `editor/config.ejemplo.json` muestra las opciones que suelen ir ahí.
+
+Cualquier opción puede ir en cualquiera de los dos archivos, salvo `proyecto`,
+que solo va en el tuyo. Lo del proyecto (`principal`, `repositorio`,
+`ramaRepositorio`, `limiteVerificacion`, `glosario`, `marcoTeorico`) conviene
+en `proyecto/config.json`; lo de tu máquina (`puerto`, `puertoCorrector`,
+`agente`, `corrector`, `compilarAlGuardar`), en `editor/config.json`.
+
+Una ruta relativa se resuelve desde la carpeta del archivo que la define:
+desde `proyecto/` en el del equipo y desde `editor/` en el tuyo.
+
 | Opción | Valor inicial | Qué hace |
 |---|---|---|
+| `proyecto` | `../proyecto` | Carpeta del proyecto, relativa a `editor`. Solo en `editor/config.json`. |
 | `informe` | `../informe` | Carpeta del proyecto de Overleaf, relativa a `editor`. |
 | `build` | `../build` | Carpeta donde se generan el PDF y los temporales. |
 | `principal` | `main.tex` | Archivo principal del informe. |
@@ -567,7 +601,9 @@ terminar de revisarlas antes.
 | `ramaRepositorio` | `main` | Rama de la aplicación contra la que se verifica. |
 | `limiteVerificacion` | `{ "capitulo": 15, "todo": 45 }` | Minutos que puede durar una verificación antes de cortarse. |
 | `verificaciones` | `../verificaciones` | Carpeta donde se guardan las verificaciones y los hallazgos ignorados. |
-| `agente` | sin valor | Ruta de `claude.exe`, si no está instalado el CLI (sección 6). Sin valor, se usa `claude`. |
+| `agente` | sin valor | Ruta de `claude.exe`, si no está instalado el CLI (`GUIA-CLAUDE.md`, sección 2). Sin valor, se usa `claude`. |
+| `glosario` | `"Glosario"` | Título del capítulo que es el glosario, sin importar tildes ni mayúsculas. `null`: no hay. |
+| `marcoTeorico` | `["antecedentes", "marco teórico"]` | Palabras: es marco teórico el primer capítulo cuyo título contiene alguna. `null`: no hay. |
 
 Después de cambiar una opción, cerrá las pestañas del editor, esperá a que se
 cierre (o reiniciá la máquina) y volvé a abrirlo.
@@ -681,45 +717,32 @@ npm run build
 Los cambios se ven la próxima vez que el editor arranque: cerrá sus pestañas y
 esperá diez minutos a que se cierre solo, o reiniciá la máquina.
 
-## 12. Trabajar desde otra computadora
+## 12. Trabajar en equipo y desde otra computadora
 
-Son dos cosas separadas, y cada una viaja por su lado:
+Hay tres cosas, y cada una viaja por su lado:
 
-| Qué | Dónde vive | Cómo llega a la otra máquina |
+| Qué | Dónde vive | Cómo llega a los demás y a otra máquina |
 |---|---|---|
 | El informe | Overleaf | Botones **Traer** y **Enviar** del editor |
-| El editor, tu diccionario y tu guía de estilo | Tu repositorio privado de GitHub | `git pull` y `git push` en la carpeta `Tesis` |
+| El editor, el diccionario, la guía de estilo y las reglas del proyecto | La rama del proyecto en GitHub | `git pull` y `git push` en la carpeta del repositorio |
+| Tu configuración (`editor/config.json`) | Tu máquina | No viaja: Git la ignora |
 | Los programas que usa el editor, el corrector y el ícono | Cada máquina | Se instalan una vez (secciones 2 y 4) |
 | El PDF | Cada máquina | Se genera de nuevo con **Compilar** |
-| Las verificaciones y los hallazgos ignorados | Cada máquina, en `Tesis/verificaciones/` | No viajan: se verifica de nuevo |
+| Las verificaciones y los hallazgos ignorados | Cada máquina, en `verificaciones/` | No viajan: se verifica de nuevo |
 
-**La primera vez en la máquina nueva**
+**La primera vez en una máquina** son las secciones 2, 3 y 4, en orden. Creá
+un token de Overleaf nuevo para cada máquina.
 
-1. Instalá los requisitos de la sección 2.
-2. Parado en la carpeta donde quieras tener todo (por ejemplo `Documentos`),
-   cloná tu repositorio. Git abre el navegador para que inicies sesión en
-   GitHub:
-
-```bash
-git clone https://github.com/Portafolio-Cristhian-Rossi/Overleaf-Tuneado.git Tesis
-```
-
-3. Seguí la sección 3 para clonar el informe dentro de `Tesis`. Creá un token
-   de Overleaf nuevo para esa máquina.
-4. Seguí la sección 4 para instalar el editor.
-
-**Al irte de una máquina**
-
-1. En el editor, **Enviar**: deja el informe en Overleaf.
-2. Si cambiaste algo del editor, agregaste palabras al diccionario o tocaste la
-   guía de estilo, parado en la carpeta `Tesis`:
+**Compartir el diccionario o la guía.** Cuando agregás palabras o cambiás la
+guía, el cambio queda en `proyecto/`. Para que lo vean los demás, parado en la
+carpeta del repositorio:
 
 ```bash
-git add -A
+git add proyecto
 ```
 
 ```bash
-git commit -m "Cambios del editor"
+git commit -m "Diccionario y guía"
 ```
 
 ```bash
@@ -727,18 +750,25 @@ git push
 ```
 
 Si `git commit` responde que no hay nada para confirmar, no había cambios: no
-hace falta el `git push`.
+hace falta el `git push`. Si `git push` dice que hay cambios que no tenés,
+hacé primero `git pull`. Si dos agregaron palabras a la vez, Git puede pedir que
+combines `proyecto/correccion.json` a mano: dejá las palabras de los dos.
 
-**Al sentarte en la otra**
-
-1. Parado en la carpeta `Tesis`:
+**Al sentarte a trabajar**, parado en la carpeta del repositorio:
 
 ```bash
 git pull
 ```
 
-2. Si trajo cambios de la carpeta `editor`, seguí la sección 11.
-3. En el editor, **Traer**.
+Si trajo cambios de la carpeta `editor`, seguí la sección 11. Después, en el
+editor, **Traer**.
 
-La carpeta `informe` no entra en tu repositorio de GitHub: el informe sigue
-viajando solo por Overleaf, y tus compañeros no ven nada del editor.
+**Las ramas.** `main` tiene solo la herramienta y no sabe nada de ningún
+proyecto. La rama de cada proyecto es `main` más su carpeta `proyecto/` y sus
+reglas para Claude. Las mejoras del editor se hacen en `main` y llegan a cada
+proyecto cuando alguien trae `main` a su rama; nunca al revés. Si encontrás
+algo para mejorar en el editor, avisale a quien lo mantiene en vez de
+cambiarlo en la rama del proyecto.
+
+La carpeta `informe` no entra en el repositorio de GitHub: el informe viaja
+solo por Overleaf.
