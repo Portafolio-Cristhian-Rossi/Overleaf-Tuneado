@@ -14,6 +14,12 @@ beforeEach(() => {
 });
 
 describe('crearGuia', () => {
+  it('guardar crea la carpeta si no existe', async () => {
+    const enProyecto = crearGuia(path.join(dirTemporal(), 'proyecto', 'guia-estilo.md'));
+    await enProyecto.guardar('x');
+    expect(await enProyecto.leer()).toBe('x');
+  });
+
   it('sin archivo devuelve la guía inicial y no lo crea por leer', async () => {
     expect(await g.leer()).toBe(GUIA_INICIAL);
     expect(fs.existsSync(archivo)).toBe(false);

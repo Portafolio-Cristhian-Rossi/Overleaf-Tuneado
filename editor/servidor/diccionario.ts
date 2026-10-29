@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 
-// Diccionario personal y excepciones de autocorrección. Vive en editor/, no en el informe.
+// Diccionario y excepciones de autocorrección del equipo. Vive en la carpeta del proyecto, no en el informe.
 export interface DatosDeCorreccion { palabras: string[]; excepciones: string[] }
 
 export interface Diccionario {
@@ -52,6 +53,8 @@ export function crearDiccionario(archivo: string): Diccionario {
         throw new Error(`El archivo ${archivo} está dañado. Corregilo o borralo para volver a usar el diccionario.`);
       }
       modificar(datos);
+      // La carpeta del proyecto puede no existir todavía: se crea con lo primero que se guarda.
+      await fs.mkdir(path.dirname(archivo), { recursive: true });
       const temporal = `${archivo}.tmp`;
       await fs.writeFile(temporal, `${JSON.stringify(datos, null, 2)}\n`);
       await fs.rename(temporal, archivo);

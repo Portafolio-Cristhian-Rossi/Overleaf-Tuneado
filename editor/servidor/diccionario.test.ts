@@ -13,6 +13,12 @@ beforeEach(() => {
 });
 
 describe('crearDiccionario', () => {
+  it('agregar una palabra crea la carpeta si no existe', async () => {
+    const enProyecto = crearDiccionario(path.join(dirTemporal(), 'proyecto', 'correccion.json'));
+    await enProyecto.agregarPalabra('LDA');
+    expect((await enProyecto.leer()).palabras).toEqual(['LDA']);
+  });
+
   it('sin archivo está vacío y no lo crea por leer', async () => {
     expect(await d.leer()).toEqual({ palabras: [], excepciones: [] });
     expect(fs.existsSync(archivo)).toBe(false);

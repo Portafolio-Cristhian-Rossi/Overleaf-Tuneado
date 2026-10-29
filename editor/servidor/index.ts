@@ -46,8 +46,8 @@ const verificador = crearVerificador({
   rutaDelMarcoTeorico: async () => rutaDelMarcoTeorico((await describirProyecto(config.informe, config.principal)).capitulos, config.marcoTeorico),
 });
 
-// El corrector (LanguageTool) y el diccionario personal viven en editor/, nunca en el informe.
-const diccionario = crearDiccionario(path.join(DIR_EDITOR, 'correccion.json'));
+// El corrector (LanguageTool) vive en editor/; el diccionario, en la carpeta del proyecto. Nunca en el informe.
+const diccionario = crearDiccionario(path.join(config.proyecto, 'correccion.json'));
 const corrector = crearCorrector({
   dir: path.join(DIR_EDITOR, 'languagetool'),
   puerto: config.puertoCorrector,
@@ -66,7 +66,7 @@ const app = crearApp({
   vigia,
   corrector,
   diccionario,
-  guia: crearGuia(path.join(DIR_EDITOR, 'guia-estilo.md')),
+  guia: crearGuia(path.join(config.proyecto, 'guia-estilo.md')),
   imagenes: crearImagenes(config.informe),
   referencias: crearReferencias(config.informe, async () => (await describirProyecto(config.informe, config.principal)).bibliografia),
   // EDITOR_ZOTERO permite probar contra un Zotero de mentira; normalmente no está definida.
