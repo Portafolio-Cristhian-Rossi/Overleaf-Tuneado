@@ -1,0 +1,3 @@
+- Usá los términos del glosario para relacionar los nombres del código con los del informe: por ejemplo, un servicio llamado processing_orchestrator es un "orquestador".
+- Las definiciones de la sección Programación del glosario describen la aplicación: si el código las contradice, es "contradiccion" y se cita la definición tal como está en el glosario.
+- Las definiciones de IA y de Texto son conceptos generales: no las compares con el código. La excepción son los modelos de tópicos: si el informe dice que la aplicación usa uno que el código no tiene, es "sin-respaldo".
