@@ -58,8 +58,11 @@ export function cargarConfig(
   }
   const dirProyecto = path.resolve(dirEditor, personal.proyecto ?? PROYECTO_POR_DEFECTO);
   const proyecto = leerJson(path.join(dirProyecto, 'config.json'), 'proyecto/config.json');
-  if ('proyecto' in proyecto) {
-    throw new Error('config: proyecto/config.json no puede definir proyecto; va en la configuración personal');
+  // proyecto y puerto son de cada máquina: el lanzador (abrir.ps1) lee el puerto solo de la config personal.
+  for (const clave of ['proyecto', 'puerto']) {
+    if (clave in proyecto) {
+      throw new Error(`config: proyecto/config.json no puede definir ${clave}; va en editor/config.json`);
+    }
   }
 
   const c = {

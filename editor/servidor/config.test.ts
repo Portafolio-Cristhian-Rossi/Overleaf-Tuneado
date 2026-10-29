@@ -108,8 +108,8 @@ describe('cargarConfig', () => {
   });
 
   it('proyecto/config.json se aplica debajo de editor/config.json', () => {
-    const { editor } = conProyecto({ principal: 'tesis.tex', puerto: 5000 }, { puerto: 5001 });
-    expect(cargarConfig(editor, 'config.json')).toMatchObject({ principal: 'tesis.tex', puerto: 5001 });
+    const { editor } = conProyecto({ principal: 'tesis.tex', compilarAlGuardar: true }, { compilarAlGuardar: false });
+    expect(cargarConfig(editor, 'config.json')).toMatchObject({ principal: 'tesis.tex', compilarAlGuardar: false });
   });
 
   it('las rutas de proyecto/config.json son relativas a proyecto/', () => {
@@ -138,6 +138,11 @@ describe('cargarConfig', () => {
     const c = cargarConfig(otro, 'config.json');
     expect(c.proyecto).toBe(path.resolve(otro, '../otro'));
     expect(c.principal).toBe('otro.tex');
+  });
+
+  it('rechaza puerto dentro de proyecto/config.json: el lanzador solo lo lee de editor/config.json', () => {
+    const { editor } = conProyecto({ puerto: 4318 });
+    expect(() => cargarConfig(editor, 'config.json')).toThrow(/proyecto\/config\.json.*puerto/);
   });
 
   it('rechaza la clave proyecto dentro de proyecto/config.json', () => {
