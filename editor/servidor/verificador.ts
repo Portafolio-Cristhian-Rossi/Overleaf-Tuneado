@@ -12,6 +12,7 @@ import { costoDe, interpretarSalida, type LanzarAgente, type ProcesoAgente } fro
 import { RutaInvalida, resolverEnInforme } from './archivos';
 import { fotografiarInforme, fotografiarRepositorio, problemaDelRepositorio } from './fotos';
 import { archivosDe } from './proyecto';
+import { ReglasDemasiadoLargas } from './reglasDelProyecto';
 import type { Verificaciones } from './verificaciones';
 
 // Una corrida de punta a punta, contra el código o contra el propio informe: fotos, prompt,
@@ -101,7 +102,8 @@ export function crearVerificador(o: {
   rutasDelInforme: () => Promise<string[]>;     // capítulos del proyecto en el orden de main.tex, sin el .bib
   rutaDelGlosario?: () => Promise<string | null>;
   rutaDelMarcoTeorico?: () => Promise<string | null>;
-  dirTemporales?: string;                       // por defecto os.tmpdir()
+  reglasDelProyecto?: () => Promise<string | null>;   // se pide en cada corrida contra el código
+  dirTemporales?: string;                      // por defecto os.tmpdir()
   ahora?: () => number;
 }): Verificador {
   const { config, verificaciones, lanzar } = o;
@@ -143,6 +145,13 @@ export function crearVerificador(o: {
   }
 
   async function prepararCodigo(cwd: string, rutas: string[]): Promise<Preparada | ErrorDeCorrida> {
+    let reglas: string | null;
+    try {
+      reglas = (await o.reglasDelProyecto?.()) ?? null;
+    } catch (e) {
+      if (e instanceof ReglasDemasiadoLargas) return falla(e.message);
+      throw e;
+    }
     const dirRepo = path.join(cwd, 'repositorio');
     const foto = await fotografiarRepositorio(config.repositorio!, config.ramaRepositorio, dirRepo);
     if (foto.tipo === 'error') return foto.motivo === 'rama' ? { motivo: 'rama', mensaje: foto.mensaje } : falla(foto.mensaje);
@@ -155,6 +164,7 @@ export function crearVerificador(o: {
       archivos: rutas.map((r) => ({ ruta: r, texto: textos.get(r) ?? '' })),
       rama: config.ramaRepositorio, commit: foto.commit, ignorados: await ignoradosPara('codigo', enFoto),
       glosario: glosario ? { ruta: glosario, texto: textos.get(glosario) ?? '' } : null,
+      reglas,
     });
     return {
       prompt, textos, revisados: undefined, lineasDelRepo: (archivo) => lineasEn(dirRepo, archivo),

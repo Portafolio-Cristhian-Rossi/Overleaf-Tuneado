@@ -7,6 +7,7 @@ import { copiarFixture, dirTemporal } from '../pruebas/ayudas/temporales';
 import type { Hallazgo } from '../compartido/verificacion';
 import type { LanzarAgente, SalidaDelAgente } from './agente';
 import { crearVerificaciones, type Verificaciones } from './verificaciones';
+import { ReglasDemasiadoLargas } from './reglasDelProyecto';
 import { crearVerificador, MENSAJES, type ConfigVerificador } from './verificador';
 
 const CITA_CAP3 = '\\section{Serie de pasos}';
@@ -209,6 +210,31 @@ describe('verificador', () => {
     expect(prompt).toContain('Definición que no coincide.');
     expect(await verificaciones.ultima('codigo')).toMatchObject({ archivos: ['Cap3.tex'], descartados: 0 });
     expect((await verificaciones.ultima('codigo'))!.hallazgos[0]).toMatchObject({ informe: { archivo: 'Cap1.tex', cita: CITA_GLOSARIO } });
+  });
+
+  it('las reglas del proyecto entran en la prompt contra el código', async () => {
+    const falso = lanzadorFalso(() => envoltura([]));
+    const v = crearVerificador({
+      config, verificaciones, lanzar: falso.lanzar, rutasDelInforme: async () => ['Cap3.tex'],
+      reglasDelProyecto: async () => 'Regla X.', dirTemporales: temporales, ahora: () => reloj,
+    });
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
+    await v.terminada();
+    expect(falso.llamadas[0]!.prompt).toContain('Regla X.');
+  });
+
+  it('reglas del proyecto demasiado largas: la corrida falla y lo dice', async () => {
+    const falso = lanzadorFalso(() => envoltura([]));
+    const v = crearVerificador({
+      config, verificaciones, lanzar: falso.lanzar, rutasDelInforme: async () => ['Cap3.tex'],
+      reglasDelProyecto: async () => { throw new ReglasDemasiadoLargas(); }, dirTemporales: temporales, ahora: () => reloj,
+    });
+    await v.iniciar('codigo', 'capitulo', 'Cap3.tex');
+    await v.terminada();
+    expect(falso.llamadas).toHaveLength(0);
+    const { errores } = await v.estado();
+    expect(errores.codigo).toMatchObject({ contra: 'codigo', motivo: 'otro' });
+    expect(errores.codigo!.mensaje).toContain('demasiado largo');
   });
 
   it('mientras corre, estado es en-curso y una segunda corrida es ocupado', async () => {

@@ -12,6 +12,7 @@ import { crearImagenes } from './imagenes';
 import { crearCorrector } from './languagetool';
 import { describirProyecto, rutaDelGlosario, rutaDelMarcoTeorico } from './proyecto';
 import { crearReferencias } from './referencias';
+import { leerReglasDelProyecto } from './reglasDelProyecto';
 import { crearVerificaciones } from './verificaciones';
 import { crearVerificador } from './verificador';
 import { crearVigia } from './vigia';
@@ -44,6 +45,7 @@ const verificador = crearVerificador({
   rutasDelInforme: async () => (await describirProyecto(config.informe, config.principal)).capitulos.map((c) => c.ruta),
   rutaDelGlosario: async () => rutaDelGlosario((await describirProyecto(config.informe, config.principal)).capitulos, config.glosario),
   rutaDelMarcoTeorico: async () => rutaDelMarcoTeorico((await describirProyecto(config.informe, config.principal)).capitulos, config.marcoTeorico),
+  reglasDelProyecto: () => leerReglasDelProyecto(path.join(config.proyecto, 'verificacion-codigo.md')),
 });
 
 // El corrector (LanguageTool) vive en editor/; el diccionario, en la carpeta del proyecto. Nunca en el informe.
