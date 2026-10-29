@@ -173,16 +173,20 @@ export async function describirProyecto(dirInforme: string, principal: string): 
   };
 }
 
-// El glosario es el capítulo que se titula exactamente "Glosario" (hoy Cap0 - Glosario.tex).
-export function rutaDelGlosario(capitulos: Capitulo[]): string | null {
-  return capitulos.find((c) => c.titulo.trim().toLowerCase() === 'glosario')?.ruta ?? null;
+const sinTildes = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
+
+// El glosario es el capítulo cuyo título es exactamente el configurado, sin mirar tildes ni mayúsculas.
+export function rutaDelGlosario(capitulos: Capitulo[], titulo: string | null): string | null {
+  if (titulo === null) return null;
+  const buscado = sinTildes(titulo);
+  return capitulos.find((c) => sinTildes(c.titulo) === buscado)?.ruta ?? null;
 }
 
-// El marco teórico es el primer capítulo cuyo título habla de antecedentes o de marco teórico
-// (hoy Cap2 - Antecedentes.tex, "Revisión de antecedentes").
-export function rutaDelMarcoTeorico(capitulos: Capitulo[]): string | null {
-  const sinTildes = (t: string) => t.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-  return capitulos.find((c) => /antecedentes|marco teorico/.test(sinTildes(c.titulo)))?.ruta ?? null;
+// El marco teórico es el primer capítulo cuyo título contiene alguna de las palabras configuradas.
+export function rutaDelMarcoTeorico(capitulos: Capitulo[], palabras: string[] | null): string | null {
+  if (palabras === null) return null;
+  const buscadas = palabras.map(sinTildes);
+  return capitulos.find((c) => buscadas.some((p) => sinTildes(c.titulo).includes(p)))?.ruta ?? null;
 }
 
 function paquetesDe(raiz: string, principal: Fuente): string[] {

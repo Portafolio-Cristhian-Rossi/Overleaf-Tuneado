@@ -42,8 +42,8 @@ const verificador = crearVerificador({
     ? process.env.EDITOR_AGENTE.split(' ').filter((p) => p !== '')
     : config.agente ? [config.agente] : undefined),
   rutasDelInforme: async () => (await describirProyecto(config.informe, config.principal)).capitulos.map((c) => c.ruta),
-  rutaDelGlosario: async () => rutaDelGlosario((await describirProyecto(config.informe, config.principal)).capitulos),
-  rutaDelMarcoTeorico: async () => rutaDelMarcoTeorico((await describirProyecto(config.informe, config.principal)).capitulos),
+  rutaDelGlosario: async () => rutaDelGlosario((await describirProyecto(config.informe, config.principal)).capitulos, config.glosario),
+  rutaDelMarcoTeorico: async () => rutaDelMarcoTeorico((await describirProyecto(config.informe, config.principal)).capitulos, config.marcoTeorico),
 });
 
 // El corrector (LanguageTool) y el diccionario personal viven en editor/, nunca en el informe.

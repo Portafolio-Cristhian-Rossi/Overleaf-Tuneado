@@ -232,11 +232,17 @@ describe('describirProyecto en otros proyectos', () => {
 describe('rutaDelGlosario', () => {
   const capitulo = (ruta: string, titulo: string) => ({ ruta, titulo, numero: null });
   it('es el capítulo titulado Glosario, sin importar mayúsculas ni espacios', () => {
-    expect(rutaDelGlosario([capitulo('main.tex', 'Portada'), capitulo('Cap0 - Glosario.tex', ' Glosario ')])).toBe('Cap0 - Glosario.tex');
-    expect(rutaDelGlosario([capitulo('G.tex', 'GLOSARIO')])).toBe('G.tex');
+    expect(rutaDelGlosario([capitulo('main.tex', 'Portada'), capitulo('Cap0 - Glosario.tex', ' Glosario ')], 'Glosario')).toBe('Cap0 - Glosario.tex');
+    expect(rutaDelGlosario([capitulo('G.tex', 'GLOSARIO')], 'Glosario')).toBe('G.tex');
   });
   it('null si no hay, y no confunde un título que solo lo menciona', () => {
-    expect(rutaDelGlosario([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap9.tex', 'Glosario de siglas')])).toBeNull();
+    expect(rutaDelGlosario([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap9.tex', 'Glosario de siglas')], 'Glosario')).toBeNull();
+  });
+  it('usa el título configurado, sin tildes ni mayúsculas', () => {
+    expect(rutaDelGlosario([capitulo('Cap1.tex', 'Glosario'), capitulo('T.tex', ' TERMINOS ')], 'Términos')).toBe('T.tex');
+  });
+  it('con null no hay glosario aunque un capítulo se llame así', () => {
+    expect(rutaDelGlosario([capitulo('G.tex', 'Glosario')], null)).toBeNull();
   });
 });
 
@@ -263,8 +269,14 @@ describe('archivosDe', () => {
 describe('rutaDelMarcoTeorico', () => {
   const capitulo = (ruta: string, titulo: string) => ({ ruta, titulo, numero: null });
   it('reconoce "Revisión de antecedentes" y "Marco Teórico", y null si no hay', () => {
-    expect(rutaDelMarcoTeorico([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap2.tex', 'Revisión de antecedentes')])).toBe('Cap2.tex');
-    expect(rutaDelMarcoTeorico([capitulo('Cap2.tex', 'MARCO TEORICO'), capitulo('Cap3.tex', 'Marco Teórico')])).toBe('Cap2.tex');
-    expect(rutaDelMarcoTeorico([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap0.tex', 'Glosario')])).toBeNull();
+    expect(rutaDelMarcoTeorico([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap2.tex', 'Revisión de antecedentes')], ['antecedentes', 'marco teórico'])).toBe('Cap2.tex');
+    expect(rutaDelMarcoTeorico([capitulo('Cap2.tex', 'MARCO TEORICO'), capitulo('Cap3.tex', 'Marco Teórico')], ['antecedentes', 'marco teórico'])).toBe('Cap2.tex');
+    expect(rutaDelMarcoTeorico([capitulo('Cap1.tex', 'Introducción'), capitulo('Cap0.tex', 'Glosario')], ['antecedentes', 'marco teórico'])).toBeNull();
+  });
+  it('usa las palabras configuradas', () => {
+    expect(rutaDelMarcoTeorico([capitulo('Cap1.tex', 'Antecedentes'), capitulo('Cap2.tex', 'Estado del Arte')], ['estado del arte'])).toBe('Cap2.tex');
+  });
+  it('con null no hay marco teórico', () => {
+    expect(rutaDelMarcoTeorico([capitulo('Cap2.tex', 'Antecedentes')], null)).toBeNull();
   });
 });
