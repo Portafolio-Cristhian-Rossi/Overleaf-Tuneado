@@ -1,5 +1,6 @@
 {
   "permissions": {
-    "additionalDirectories": ["../uy-social-topic-modeling"]
+    "additionalDirectories": ["../uy-social-topic-modeling"],
+    "deny": ["Read(//**/.env)"]
   }
 }

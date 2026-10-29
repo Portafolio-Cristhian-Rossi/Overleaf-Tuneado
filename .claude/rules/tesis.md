@@ -10,6 +10,9 @@ proyecto (Overleaf, repositorio de la aplicación, Zotero) están en `proyecto/L
   `main.tex`. La clase no carga amsmath: usar `\mathrm`, `\mbox`, `\[ \]`.
 - El repositorio de la aplicación que describe el informe es `../uy-social-topic-modeling`
   (carpeta hermana de este repositorio). Se lee libremente; no se modifica desde acá.
+- Nunca leer, mostrar ni pedir el `.env` de la aplicación: tiene contraseñas y API keys. Para
+  saber qué variables existen, usar `.env.example`. `.claude/settings.json` bloquea leer
+  cualquier `.env`.
 
 ## Redactar en `informe/*.tex`
 
