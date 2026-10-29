@@ -56,7 +56,7 @@ export function editarGuia(o: OpcionesDeGuia): Promise<boolean> {
 
     dialogo.append(
       el('h2', { clase: 'selector-titulo' }, 'Guía de estilo'),
-      el('p', { clase: 'dialogo-detalle' }, 'Va completa en cada prompt: de qué trata el informe, cómo se escribe y qué términos usar. Se guarda en tu máquina, no viaja a Overleaf. Si la dejás vacía, vuelve la inicial.'),
+      el('p', { clase: 'dialogo-detalle' }, 'Va completa en cada prompt: de qué trata el informe, cómo se escribe y qué términos usar. Se guarda en proyecto/guia-estilo.md: no viaja a Overleaf, y la ve todo el equipo cuando la commiteás. Si la dejás vacía, vuelve la guía genérica.'),
       campo, aviso,
       el('div', { clase: 'dialogo-botones' }, botonGuardar, botonCancelar),
     );

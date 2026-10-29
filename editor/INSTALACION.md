@@ -578,8 +578,8 @@ define:
 3. `editor/config.json`: la tuya. Git la ignora, así que no viaja a nadie.
    `editor/config.ejemplo.json` muestra las opciones que suelen ir ahí.
 
-Cualquier opción puede ir en cualquiera de los dos archivos, salvo `proyecto`,
-que solo va en el tuyo. Lo del proyecto (`principal`, `repositorio`,
+Cualquier opción puede ir en cualquiera de los dos archivos, salvo `proyecto` y
+`puerto`, que solo van en el tuyo (el ícono lee el puerto de ahí). Lo del proyecto (`principal`, `repositorio`,
 `ramaRepositorio`, `limiteVerificacion`, `glosario`, `marcoTeorico`) conviene
 en `proyecto/config.json`; lo de tu máquina (`puerto`, `puertoCorrector`,
 `agente`, `corrector`, `compilarAlGuardar`), en `editor/config.json`.
@@ -590,10 +590,10 @@ desde `proyecto/` en el del equipo y desde `editor/` en el tuyo.
 | Opción | Valor inicial | Qué hace |
 |---|---|---|
 | `proyecto` | `../proyecto` | Carpeta del proyecto, relativa a `editor`. Solo en `editor/config.json`. |
-| `informe` | `../informe` | Carpeta del proyecto de Overleaf, relativa a `editor`. |
+| `informe` | `../informe` | Carpeta del proyecto de Overleaf. |
 | `build` | `../build` | Carpeta donde se generan el PDF y los temporales. |
 | `principal` | `main.tex` | Archivo principal del informe. |
-| `puerto` | `4317` | Puerto local del editor. Cambialo solo si está ocupado. |
+| `puerto` | `4317` | Puerto local del editor. Cambialo solo si está ocupado. Solo en `editor/config.json`. |
 | `compilarAlGuardar` | `false` | Con `true`, compila el PDF cada vez que se guarda. |
 | `corrector` | `true` | Con `false`, no se usa el corrector propio. |
 | `puertoCorrector` | `4319` | Puerto local del corrector. Cambialo solo si está ocupado. |
@@ -643,13 +643,16 @@ reiniciá la máquina.
 
 **Dice "El corrector no pudo iniciar".** Cerrá las pestañas del editor, esperá
 a que se cierre y abrilo de nuevo. Si se repite, puede que el puerto 4319 esté
-ocupado: cambiá `puertoCorrector` en `config.json`.
+ocupado: cambiá `puertoCorrector` en `editor/config.json` (si no existe, copiá
+`editor/config.ejemplo.json` con ese nombre).
 
 **El corrector marca una palabra que está bien.** Pasá el cursor por encima y
 elegí *Agregar al diccionario*.
 
 **"El puerto 4317 está ocupado por otro programa".** Cambiá `puerto` en
-`config.json` por otro número, por ejemplo `4318`.
+`editor/config.json` por otro número, por ejemplo `4318`. Si no existe, copiá
+`editor/config.ejemplo.json` con ese nombre. No lo pongas en
+`proyecto/config.json`: el editor no arranca y avisa.
 
 **"Este archivo cambió por fuera del editor".** Alguien, u otro programa,
 modificó el archivo mientras lo tenías abierto con cambios sin guardar. Elegí

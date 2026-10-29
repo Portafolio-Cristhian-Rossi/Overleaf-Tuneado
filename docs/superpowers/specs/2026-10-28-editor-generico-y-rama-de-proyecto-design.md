@@ -74,7 +74,9 @@ Cada clave se resuelve en este orden; gana la última que la define:
 
 Reglas:
 
-- Cualquier clave puede ir en cualquiera de los dos archivos. La guía
+- Cualquier clave puede ir en cualquiera de los dos archivos, salvo `proyecto` y
+  `puerto`, que solo van en la personal (el lanzador lee el puerto de ahí; se
+  agregó en la revisión final). La guía
   recomienda poner en `proyecto/config.json` lo del proyecto (`principal`,
   `repositorio`, `ramaRepositorio`, `limiteVerificacion`, `glosario`,
   `marcoTeorico`) y en `editor/config.json` lo de la máquina (`puerto`,
