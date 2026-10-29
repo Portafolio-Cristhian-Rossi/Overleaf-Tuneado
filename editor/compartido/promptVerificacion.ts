@@ -55,7 +55,7 @@ export function armarPromptDeVerificacion(o: {
     ? `## Ya ignorados\nNo vuelvas a reportar estos:\n${o.ignorados.map(lineaDeIgnorado).join('\n')}\n\n`
     : '';
   const reglas = o.reglas ? `## Reglas de este proyecto\n${o.reglas.replace(/\n+$/, '')}\n\n` : '';
-  return `Sos un revisor técnico. Compará el informe de un proyecto de grado con el código de la aplicación que describe y devolvé solo los lugares donde no coinciden.
+  return `Sos un revisor técnico. Compará el informe con el código de la aplicación que describe y devolvé solo los lugares donde no coinciden.
 
 En la carpeta de trabajo hay dos carpetas:
 - informe/: los archivos LaTeX a revisar. Solo los de la lista de abajo.

@@ -49,7 +49,7 @@ export function armarPromptDeVerificacionInforme(o: {
     ? `## Ya ignorados\nNo vuelvas a reportar estos:\n${o.ignorados.map(lineaDeIgnorado).join('\n')}\n\n`
     : '';
 
-  return `Sos un revisor de un proyecto de grado. Revisá que el informe sea coherente consigo mismo y devolvé solo los problemas que encuentres, con las frases citadas.
+  return `Sos un revisor de informes. Revisá que el informe sea coherente consigo mismo y devolvé solo los problemas que encuentres, con las frases citadas.
 
 En la carpeta de trabajo está informe/, con todos los archivos LaTeX del informe. Leé los que necesites.
 

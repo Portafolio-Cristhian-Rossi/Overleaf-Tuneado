@@ -56,7 +56,7 @@ export interface Obra { doi: string | null; titulo: string; anio: string | null;
 
 const sinTildes = (texto: string) => texto.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 const doiNormal = (doi: string) => doi.trim().toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, '');
-// Sin comandos, tildes, mayúsculas ni signos: 'Extracci{\'o}n de {Tópicos}' → 'extraccion de topicos'
+// Sin comandos, tildes, mayúsculas ni signos: 'Revisi{\'o}n de {Métodos}' → 'revision de metodos'
 export const tituloNormal = (titulo: string) => sinTildes(sinLatex(titulo)).replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 export function obraDe(entrada: EntradaBib): Obra {

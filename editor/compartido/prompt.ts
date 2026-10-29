@@ -16,7 +16,8 @@ export const FIN_DEL_TEXTO = '===== FIN DEL TEXTO =====';
 
 const R = String.raw;
 
-const PRESENTACION = 'Estoy escribiendo, en LaTeX y en español, el informe de un proyecto de grado de Ingeniería en Computación. Necesito tu ayuda con una parte.';
+// De qué trata el informe lo cuenta la guía de estilo de cada proyecto.
+const PRESENTACION = 'Estoy escribiendo un informe en LaTeX y en español. Necesito tu ayuda con una parte.';
 
 // Sin esto un modelo completa lo que no sabe con algo verosímil, y en un informe eso es un dato falso.
 const NO_INVENTAR = 'No inventes datos, cifras, resultados, ejemplos ni citas. Donde haga falta algo que el texto no trae, escribí [FALTA: qué falta] en ese lugar y seguí.';
@@ -84,12 +85,11 @@ export function armarPrompt(d: DatosDePrompt): string {
   return `${apartados.filter(Boolean).join('\n\n')}\n`;
 }
 
-// La guía con la que arranca el editor. Quien escribe la corrige desde "Guía de estilo…".
+// La guía con la que arranca un proyecto que todavía no tiene la suya. Quien escribe la completa
+// desde "Guía de estilo…" y queda en proyecto/guia-estilo.md.
 export const GUIA_INICIAL = R`## De qué trata
 
-Informe de proyecto de grado de Ingeniería en Computación (Facultad de Ingeniería, UdelaR): "Análisis de tópicos en sitios con participación uruguaya".
-
-Estudia cómo identificar los temas de los que se habla en mensajes de redes sociales de Uruguay, que son textos cortos y con lenguaje ruidoso. Compara combinaciones de preprocesamiento y distintos modelos de tópicos (LDA, BERTopic, BTM, entre otros).
+(Contá en dos o tres oraciones de qué trata el informe: el problema, qué se hizo y para quién se escribe.)
 
 ## Voz
 
@@ -100,15 +100,11 @@ Estudia cómo identificar los temas de los que se habla en mensajes de redes soc
 
 ## Tiempos verbales
 
-- Presente para lo que el informe dice y para hechos generales: "en este capítulo presentamos", "LDA modela cada documento como una mezcla de tópicos".
-- Pretérito para lo que hicimos: "entrenamos", "evaluamos".
+- Presente para lo que el informe dice y para hechos generales: "en este capítulo presentamos", "el método divide los datos en dos conjuntos".
+- Pretérito para lo que hicimos: "implementamos", "evaluamos".
 
 ## Términos
 
-- "tópico" para lo que devuelve un modelo; no "tema" ni "topic".
-- "Procesamiento de Lenguaje Natural (PLN)" la primera vez; después, "PLN".
-- "Aprendizaje Automático"; no "machine learning".
-- Modelos: LDA, BERTopic, BTM.
-- Términos en inglés sin traducción habitual, en cursiva: \textit{embeddings}.
+- Términos en inglés sin traducción habitual, en cursiva: \textit{framework}.
 - Toda sigla se define la primera vez que aparece.
 `;

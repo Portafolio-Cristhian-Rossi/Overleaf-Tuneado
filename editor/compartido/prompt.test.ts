@@ -88,8 +88,10 @@ describe('armarPrompt', () => {
 });
 
 describe('GUIA_INICIAL', () => {
-  it('dice de qué trata el informe y en qué persona se escribe', () => {
-    expect(GUIA_INICIAL).toContain('Análisis de tópicos en sitios con participación uruguaya');
+  it('es genérica: pide contar de qué trata y trae las reglas de voz y de siglas', () => {
+    expect(GUIA_INICIAL).toContain('## De qué trata');
     expect(GUIA_INICIAL).toMatch(/primera persona del plural/i);
+    expect(GUIA_INICIAL).toContain('Toda sigla se define la primera vez que aparece.');
+    expect(GUIA_INICIAL).not.toContain('tópicos');
   });
 });
