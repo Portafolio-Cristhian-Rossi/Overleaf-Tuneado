@@ -137,8 +137,13 @@ Overleaf, usá el botón **Enviar** del editor.
   con tu cuenta, como cualquier uso de Claude Code.
 - El agente de los botones no lee el `.env` ni nada de lo que Git ignora en el
   repositorio de la aplicación. En una sesión propia, Claude puede leer lo que
-  haya en tus carpetas: si la aplicación tiene secretos en archivos, decíselo o
-  configurá permisos para excluirlos.
+  haya en tus carpetas. Si la aplicación tiene secretos en un `.env`, la rama
+  del proyecto debería bloquearlo en `.claude/settings.json`; esta regla impide
+  leer cualquier `.env`, en cualquier carpeta:
+
+```json
+{ "permissions": { "deny": ["Read(//**/.env)"] } }
+```
 - Como referencia, verificar un capítulo de unas quince páginas con el botón
   tardó unos dos minutos y costó alrededor de US$ 0,50. El panel muestra cuánto
   costó cada verificación.
